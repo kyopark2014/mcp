@@ -17,6 +17,7 @@ import asyncio
 import random
 import string
 import aws_cost.implementation as aws_cost
+import agent
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -409,11 +410,6 @@ if uploaded_file is not None and clear_button==False:
         kb.sync_data_source()  # sync uploaded files
             
         status = f'선택한 "{file_name}"의 내용을 요약합니다.'
-        # my_bar = st.sidebar.progress(0, text=status)
-        
-        # for percent_complete in range(100):
-        #     time.sleep(0.2)
-        #     my_bar.progress(percent_complete + 1, text=status)
         if debugMode=='Enable':
             logger.info(f"status: {status}")
             st.info(status)
@@ -467,11 +463,25 @@ if prompt := st.chat_input("메시지를 입력하세요."):
             
             show_references(reference_docs) 
         
-        elif mode == 'Agent':
+        elif mode == 'Agent' or mode == 'Agent (Chat)':
             sessionState = ""
-            chat.references = []
-            chat.image_url = []
-            response, image_url = asyncio.run(chat.run_agent(prompt, "Disable", st))
+
+            if mode == 'Agent':
+                history_mode = "Disable"
+            else:
+                history_mode = "Enable"
+
+            with st.status("thinking...", expanded=True, state="running") as status:
+                containers = {
+                    "tools": st.empty(),
+                    "status": st.empty(),
+                    "notification": [st.empty() for _ in range(100)]
+                }
+                response, image_url = asyncio.run(agent.run_agent(prompt, history_mode, containers))
+            
+            if agent.response_msg:
+                with st.expander(f"수행 결과"):
+                    st.markdown('\n\n'.join(agent.response_msg))
 
             st.session_state.messages.append({
                 "role": "assistant", 
@@ -484,24 +494,6 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                     logger.info(f"url: {url}")
                     file_name = url[url.rfind('/')+1:]
                     st.image(url, caption=file_name, use_container_width=True)
-
-        elif mode == 'Agent (Chat)':
-            sessionState = ""
-            chat.references = []
-            chat.image_url = []
-            response, image_url = asyncio.run(chat.run_agent(prompt, "Enable", st))
-
-            st.session_state.messages.append({
-                "role": "assistant", 
-                "content": response,
-                "images": image_url if image_url else []
-            })
-
-            st.write(response)
-            for url in image_url:
-                logger.info(f"url: {url}")
-                file_name = url[url.rfind('/')+1:]
-                st.image(url, caption=file_name, use_container_width=True)            
 
         elif mode == "Multi-agent Supervisor (Router)":
             sessionState = ""

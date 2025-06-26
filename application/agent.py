@@ -12,6 +12,12 @@ from typing_extensions import Annotated, TypedDict
 from langgraph.graph.message import add_messages
 from langchain_core.prompts import MessagesPlaceholder, ChatPromptTemplate
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+from langchain_mcp_adapters.client import MultiServerMCPClient
+from langgraph.prebuilt import ToolNode
+from typing import Literal
+from langgraph.graph import START, END, StateGraph
+from typing_extensions import Annotated, TypedDict
+from langgraph.graph.message import add_messages
 
 logging.basicConfig(
     level=logging.INFO,  
@@ -28,6 +34,9 @@ s3_prefix = "docs"
 capture_prefix = "captures"
 
 status_msg = []
+response_msg = []
+references = []
+image_urls = []
 
 index = 0
 def add_notification(container, message):
@@ -45,10 +54,6 @@ def get_status_msg(status):
     else: 
         status = " -> ".join(status_msg)
         return "[status]\n" + status
-
-response_msg = []
-references = []
-image_urls = []
 
 def get_tool_info(tool_name, tool_content):
     tool_references = []    
@@ -451,136 +456,121 @@ def buildChatAgentWithHistory(tools):
         store=chat.memorystore
     )
 
-def extract_reference(response):
-    references = []
-    for i, re in enumerate(response):
-        if isinstance(re, ToolMessage):
-            logger.info(f"###### extract_reference ######")
-            try: 
-                
-                # check json format
-                if isinstance(re.content, str) and (re.content.strip().startswith('{') or re.content.strip().startswith('[')):
-                    tool_result = json.loads(re.content)
-                    # logger.info(f"tool_result: {tool_result}")
-                else:
-                    tool_result = re.content
-                    # logger.info(f"tool_result (not JSON): {tool_result[:200]}")
-                                
-                if isinstance(tool_result, list):
-                    logger.info(f"size of tool_result: {len(tool_result)}")
-                    for i, item in enumerate(tool_result):
-                        logger.info(f'item[{i}]: {item}')
-                        
-                        # RAG
-                        if "reference" in item:
-                            logger.info(f"reference: {item['reference']}")
+def load_multiple_mcp_server_parameters():
+    logger.info(f"mcp_json: {chat.mcp_json}")
 
-                            infos = item['reference']
-                            url = infos['url']
-                            title = infos['title']
-                            source = infos['from']
-                            logger.info(f"url: {url}, title: {title}, source: {source}")
+    mcpServers = chat.mcp_json.get("mcpServers")
+    logger.info(f"mcpServers: {mcpServers}")
+  
+    server_info = {}
+    if mcpServers is not None:
+        command = ""
+        args = []
+        for server in mcpServers:
+            logger.info(f"server: {server}")
 
-                            references.append({
-                                "url": url,
-                                "title": title,
-                                "content": item['contents'][:100].replace("\n", "")
-                            })
+            config = mcpServers.get(server)
+            logger.info(f"config: {config}")
 
-                        # Others               
-                        if isinstance(item, str):
-                            try:
-                                item = json.loads(item)
+            if "command" in config:
+                command = config["command"]
+            if "args" in config:
+                args = config["args"]
+            if "env" in config:
+                env = config["env"]
 
-                                # AWS Document
-                                if "rank_order" in item:
-                                    references.append({
-                                        "url": item['url'],
-                                        "title": item['title'],
-                                        "content": item['context'][:100].replace("\n", "")
-                                  })
-                            except json.JSONDecodeError:
-                                logger.info(f"JSON parsing error: {item}")
-                                continue
+                server_info[server] = {
+                    "command": command,
+                    "args": args,
+                    "env": env,
+                    "transport": "stdio"
+                }
+            else:
+                server_info[server] = {
+                    "command": command,
+                    "args": args,
+                    "transport": "stdio"
+                }
+    logger.info(f"server_info: {server_info}")
 
-            except:
-                logger.info(f"fail to parsing..")
-                pass
-    return references
+    return server_info
 
-async def run(question, tools, containers, historyMode):
-    global status_msg, response_msg, references, image_urls
+async def run_agent(query, historyMode, containers):
+    global status_msg, response_msg, image_urls, references
     status_msg = []
     response_msg = []
-    references = []
     image_urls = []
-
+    references = []
+    
     if chat.debug_mode == "Enable":
         containers["status"].info(get_status_msg("(start"))
 
-    if historyMode == "Enable":
-        app = buildChatAgentWithHistory(tools)
-        config = {
-            "recursion_limit": 50,
-            "configurable": {"thread_id": chat.userId},
-            "containers": containers,
-            "tools": tools
+    server_params = load_multiple_mcp_server_parameters()
+    logger.info(f"server_params: {server_params}")
+
+    async with MultiServerMCPClient(server_params) as client:        
+        tools = client.get_tools()
+
+        if chat.debug_mode == "Enable":
+            tool_list = [tool.name for tool in tools]
+            containers["tools"].info(f"Tools: {tool_list}")
+            logger.info(f"tool_list: {tool_list}")
+
+        if historyMode == "Enable":
+            app = buildChatAgentWithHistory(tools)
+            config = {
+                "recursion_limit": 50,
+                "configurable": {"thread_id": chat.userId},
+                "containers": containers,
+                "tools": tools
+            }
+        else:
+            app = buildChatAgent(tools)
+            config = {
+                "recursion_limit": 50,
+                "containers": containers,
+                "tools": tools
+            }
+        
+        inputs = {
+            "messages": [HumanMessage(content=query)]
         }
-    else:
-        app = buildChatAgent(tools)
-        config = {
-            "recursion_limit": 50,
-            "containers": containers,
-            "tools": tools
-        }
+        
+        global index
+        index = 0
+
+        value = result = None
+        final_output = None
+        async for output in app.astream(inputs, config):
+            for key, value in output.items():
+                logger.info(f"--> key: {key}, value: {value}")
+
+                if key == "messages" or key == "agent":
+                    if isinstance(value, dict) and "messages" in value:
+                        final_output = value
+                    elif isinstance(value, list):
+                        final_output = {"messages": value, "image_url": []}
+                    else:
+                        final_output = {"messages": [value], "image_url": []}
+
+        if final_output and "messages" in final_output and len(final_output["messages"]) > 0:
+            result = final_output["messages"][-1].content
+        else:
+            result = "답변을 찾지 못하였습니다."
+
+        logger.info(f"result: {final_output}")
+        logger.info(f"references: {references}")
+        if references:
+            ref = "\n\n### Reference\n"
+            for i, reference in enumerate(references):
+                ref += f"{i+1}. [{reference['title']}]({reference['url']}), {reference['content']}...\n"    
+            result += ref
+
+        image_url = final_output["image_url"] if final_output and "image_url" in final_output else []
+
+        logger.info(f"result: {result}")       
+        logger.info(f"image_url: {image_url}")
     
-    inputs = {
-        "messages": [HumanMessage(content=question)]
-    }
-    
-    global index
-    index = 0
-
-    value = result = None
-    final_output = None
-    async for output in app.astream(inputs, config):
-        for key, value in output.items():
-            logger.info(f"--> key: {key}, value: {value}")
-
-            if key == "messages" or key == "agent":
-                if isinstance(value, dict) and "messages" in value:
-                    message = value["messages"]
-                    final_output = value
-                elif isinstance(value, list):
-                    value = {"messages": value, "image_url": []}
-                    message = value["messages"]
-                    final_output = value
-                else:
-                    value = {"messages": [value], "image_url": []}
-                    message = value["messages"]
-                    final_output = value
-
-                refs = extract_reference(message)
-                if refs:
-                    for r in refs:
-                        references.append(r)
-                        logger.info(f"r: {r}")
-                
-    if final_output and "messages" in final_output and len(final_output["messages"]) > 0:
-        result = final_output["messages"][-1].content
-    else:
-        result = "답변을 찾지 못하였습니다."
-
-    logger.info(f"result: {final_output}")
-    logger.info(f"references: {references}")
-    if references:
-        ref = "\n\n### Reference\n"
-        for i, reference in enumerate(references):
-            ref += f"{i+1}. [{reference['title']}]({reference['url']}), {reference['content']}...\n"    
-        result += ref
-
-    image_url = final_output["image_url"] if final_output and "image_url" in final_output else []
-
     return result, image_url
 
 async def run_task(question, tools, system_prompt, containers, historyMode, previous_status_msg, previous_response_msg):
@@ -621,22 +611,11 @@ async def run_task(question, tools, system_prompt, containers, historyMode, prev
             
             if key == "messages" or key == "agent":
                 if isinstance(value, dict) and "messages" in value:
-                    message = value["messages"]
                     final_output = value
                 elif isinstance(value, list):
-                    value = {"messages": value, "image_url": []}
-                    message = value["messages"]
-                    final_output = value
+                    final_output = {"messages": value, "image_url": []}
                 else:
-                    value = {"messages": [value], "image_url": []}
-                    message = value["messages"]
-                    final_output = value
-
-                refs = extract_reference(message)
-                if refs:
-                    for r in refs:
-                        references.append(r)
-                        logger.info(f"r: {r}")
+                    final_output = {"messages": [value], "image_url": []}
                 
     if final_output and "messages" in final_output and len(final_output["messages"]) > 0:
         result = final_output["messages"][-1].content
@@ -646,3 +625,4 @@ async def run_task(question, tools, system_prompt, containers, historyMode, prev
     image_url = final_output["image_url"] if final_output and "image_url" in final_output else []
 
     return result, image_url, status_msg, response_msg
+
