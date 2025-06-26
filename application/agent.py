@@ -308,7 +308,8 @@ async def call_model(state: State, config):
         logger.info(f"tool_name: {tool_name}, content: {tool_content[:800]}")
 
         if chat.debug_mode == "Enable":
-            add_notification(containers, f"{tool_name}: {str(tool_content)}")
+            # add_notification(containers, f"{tool_name}: {str(tool_content)}")
+            add_notification(containers, f"tool result: {str(tool_content)}")
             response_msg.append(f"{tool_name}: {str(tool_content)}")
 
         global references
@@ -396,7 +397,8 @@ async def should_continue(state: State, config) -> Literal["continue", "end"]:
 
         logger.info(f"tool_name: {tool_name}, tool_args: {tool_args}")
         if chat.debug_mode == "Enable":
-            add_notification(containers, f"{tool_name}: {tool_args}")
+            # add_notification(containers, f"{tool_name}: {tool_args}")
+            add_notification(containers, f"tool name: {tool_name}, arg: {tool_args}")
         
         if chat.debug_mode == "Enable":
             containers['status'].info(get_status_msg(f"{tool_name}"))
