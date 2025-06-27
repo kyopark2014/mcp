@@ -477,63 +477,6 @@ except Exception as e:
 if code_interpreter_api_key:
     os.environ["RIZA_API_KEY"] = code_interpreter_api_key
     
-# api key to use Tavily Search
-tavily_key = tavily_api_wrapper = ""
-try:
-    get_tavily_api_secret = secretsmanager.get_secret_value(
-        SecretId=f"tavilyapikey-{projectName}"
-    )
-    #print('get_tavily_api_secret: ', get_tavily_api_secret)
-    secret = json.loads(get_tavily_api_secret['SecretString'])
-    #print('secret: ', secret)
-
-    if "tavily_api_key" in secret:
-        tavily_key = secret['tavily_api_key']
-        #print('tavily_api_key: ', tavily_api_key)
-
-        if tavily_key:
-            tavily_api_wrapper = TavilySearchAPIWrapper(tavily_api_key=tavily_key)
-            #     os.environ["TAVILY_API_KEY"] = tavily_key
-
-        else:
-            logger.info(f"tavily_key is required.")
-except Exception as e: 
-    logger.info(f"Tavily credential is required: {e}")
-    raise e
-
-# api key to use perplexity Search
-perplexity_key = ""
-try:
-    get_perplexity_api_secret = secretsmanager.get_secret_value(
-        SecretId=f"perplexityapikey-{projectName}"
-    )
-    #print('get_perplexity_api_secret: ', get_perplexity_api_secret)
-    secret = json.loads(get_perplexity_api_secret['SecretString'])
-    #print('secret: ', secret)
-
-    if "perplexity_api_key" in secret:
-        perplexity_key = secret['perplexity_api_key']
-        #print('perplexity_api_key: ', perplexity_api_key)
-
-except Exception as e: 
-    logger.info(f"perplexity credential is required: {e}")
-    raise e
-
-# api key to use firecrawl Search
-firecrawl_key = ""
-try:
-    get_firecrawl_secret = secretsmanager.get_secret_value(
-        SecretId=f"firecrawlapikey-{projectName}"
-    )
-    secret = json.loads(get_firecrawl_secret['SecretString'])
-
-    if "firecrawl_api_key" in secret:
-        firecrawl_key = secret['firecrawl_api_key']
-        # print('firecrawl_api_key: ', firecrawl_key)
-except Exception as e: 
-    logger.info(f"Firecrawl credential is required: {e}")
-    raise e
-
 def tavily_search(query, k):
     docs = []    
     try:

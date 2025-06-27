@@ -20,10 +20,11 @@ opensearch_username = config["opensearch_username"] if "opensearch_username" in 
 opensearch_password = config["opensearch_password"] if "opensearch_password" in config else None
 
 aws_region = config["region"] if "region" in config else "us-west-2"
+projectName = config["projectName"] if "projectName" in config else "mcp"
 
 mcp_user_config = {}    
 def load_config(mcp_type):
-    if mcp_type == "default":
+    if mcp_type == "basic":
         return {
             "mcpServers": {
                 "search": {
@@ -174,7 +175,7 @@ def load_config(mcp_type):
                     "command": "npx",
                     "args": ["-y", "firecrawl-mcp"],
                     "env": {
-                        "FIRECRAWL_API_KEY": chat.firecrawl_key
+                        "FIRECRAWL_API_KEY": utils.firecrawl_key
                     }
                 }
             }
@@ -223,7 +224,7 @@ def load_config(mcp_type):
                     "command": "npx",
                     "args": ["-y", "tavily-mcp@0.1.4"],
                     "env": {
-                        "TAVILY_API_KEY": chat.tavily_key
+                        "TAVILY_API_KEY": utils.tavily_key
                     },
                 }
             }
@@ -284,7 +285,7 @@ def load_config(mcp_type):
                         "perplexity-mcp"
                     ],
                     "env": {
-                        "PERPLEXITY_API_KEY": chat.perplexity_key,
+                        "PERPLEXITY_API_KEY": utils.perplexity_key,
                         "PERPLEXITY_MODEL": "sonar"
                     }
                 }
@@ -407,7 +408,7 @@ def load_config(mcp_type):
                         "application/mcp_server_kb.py"
                     ],
                     "env": {
-                        "KB_INCLUSION_TAG_KEY": "mcp-rag"
+                        "KB_INCLUSION_TAG_KEY": projectName
                     }
                 }
             }

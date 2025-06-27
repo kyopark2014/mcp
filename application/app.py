@@ -208,7 +208,7 @@ with st.sidebar:
         # Change radio to checkbox
         if environment == "user":        
             mcp_options = [
-                "default", "code interpreter", "aws document", "aws cost", "aws cli", 
+                "basic", "code interpreter", "aws document", "aws cost", "aws cli", 
                 "use_aws", "aws cloudwatch", "aws storage", "image generation", "aws diagram",
                 "knowledge base", "tavily", "perplexity", "ArXiv", "wikipedia", 
                 "filesystem", "terminal", "text editor", "context7", "puppeteer", 
@@ -217,7 +217,7 @@ with st.sidebar:
             ]
         else:
             mcp_options = [ 
-                "default", "code interpreter", "aws document", "aws cost", "aws cli", 
+                "basic", "code interpreter", "aws document", "aws cost", "aws cli", 
                 "use_aws", "aws cloudwatch", "aws storage", "image generation", "aws diagram",
                 "knowledge base", "tavily", "ArXiv", "wikipedia", 
                 "filesystem", "terminal", "text editor", "playwright", "airbnb",

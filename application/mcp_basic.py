@@ -7,6 +7,8 @@ import chat
 import traceback
 import json
 import re
+import utils
+
 from pytz import timezone
 from bs4 import BeautifulSoup
 
@@ -78,8 +80,8 @@ def get_weather_info(city: str) -> str:
     logger.info(f"place: {place}")
     
     weather_str: str = f"{city}에 대한 날씨 정보가 없습니다."
-    if chat.weather_api_key: 
-        apiKey = chat.weather_api_key
+    if utils.weather_api_key: 
+        apiKey = utils.weather_api_key
         lang = 'en' 
         units = 'metric' 
         api = f"https://api.openweathermap.org/data/2.5/weather?q={place}&APPID={apiKey}&lang={lang}&units={units}"
