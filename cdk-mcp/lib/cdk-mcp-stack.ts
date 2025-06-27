@@ -650,22 +650,6 @@ export class CdkMcpStack extends cdk.Stack {
       }),
     );  
     
-    // const lambdaRag = new lambda.DockerImageFunction(this, `lambda-rag-for-${projectName}`, {
-    //   description: 'RAG based on Knoeledge Base',
-    //   functionName: `lambda-rag-for-${projectName}`,
-    //   code: lambda.DockerImageCode.fromImageAsset(path.join(__dirname, '../../lambda-rag')),
-    //   timeout: cdk.Duration.seconds(120),
-    //   memorySize: 4096,
-    //   role: roleLambdaRag,
-    //   environment: {
-    //     bedrock_region: String(region),
-    //     projectName: projectName,
-    //     "sharing_url": 'https://'+distribution.domainName,
-    //   }
-    // });     
-    
-    // lambdaRag.grantInvoke(new cdk.aws_iam.ServicePrincipal("bedrock.amazonaws.com")); 
-
     const lambdaKnowledgeBase = new lambda.DockerImageFunction(this, `knowledge-base-for-${projectName}`, {
       description: 'RAG based on Knoeledge Base',
       functionName: `knowledge-base-for-${projectName}`,
