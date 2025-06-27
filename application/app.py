@@ -17,7 +17,8 @@ import asyncio
 import random
 import string
 import aws_cost.implementation as aws_cost
-import agent
+import langgraph_agent as langgraph_agent
+import strands_agent as strands_agent
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -224,7 +225,12 @@ with st.sidebar:
                 "pubmed", "chembl", "clinicaltrial", "arxiv-manual", "tavily-manual", "사용자 설정"
             ]
         mcp_selections = {}
-        default_selections = ["default", "code interpreter", "use_aws", "tavily"]
+        default_selections = ["basic", "code interpreter", "use_aws", "tavily"]
+
+        if mode=='Agent' or mode=='Agent (Chat)':
+            agent_type = st.radio(
+                label="Agent 타입을 선택하세요. ",options=["LangGraph", "Strands"], index=0
+            )
 
         with st.expander("MCP 옵션 선택", expanded=True):            
             # Create two columns
@@ -328,6 +334,10 @@ with st.sidebar:
         uploaded_file = st.file_uploader("RAG를 위한 파일을 선택합니다.", type=["pdf", "txt", "py", "md", "csv", "json"], key=chat.fileId)
 
     chat.update(modelName, debugMode, multiRegion, mcp, reasoningMode, gradingMode)
+    
+    # Convert mcp_selections dict to list of selected tools
+    selected_mcp_tools = [tool for tool, selected in mcp_selections.items() if selected]
+    strands_agent.update([], selected_mcp_tools)
 
     st.success(f"Connected to {modelName}", icon="💚")
     clear_button = st.button("대화 초기화", key="clear")
@@ -477,19 +487,26 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                     "status": st.empty(),
                     "notification": [st.empty() for _ in range(100)]
                 }
-                response, image_url = asyncio.run(agent.run_agent(prompt, history_mode, containers))
-            
-            if agent.response_msg:
-                with st.expander(f"수행 결과"):
-                    st.markdown('\n\n'.join(agent.response_msg))
 
+                if agent_type == "LangGraph":
+                    response, image_url = asyncio.run(langgraph_agent.run_agent(prompt, history_mode, containers))
+
+                    if langgraph_agent.response_msg:
+                        st.info("### 수행 결과")
+                        st.info('\n\n'.join(langgraph_agent.response_msg))
+                    
+                else:
+                    response, image_url = asyncio.run(strands_agent.run_agent(prompt, history_mode, containers))
+            
             st.session_state.messages.append({
                 "role": "assistant", 
                 "content": response,
                 "images": image_url if image_url else []
             })
 
-            st.write(response)
+            if agent_type == "LangGraph":
+                st.write(response)
+            
             for url in image_url:
                     logger.info(f"url: {url}")
                     file_name = url[url.rfind('/')+1:]

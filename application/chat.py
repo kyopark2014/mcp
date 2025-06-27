@@ -4,7 +4,6 @@ import os
 import json
 import re
 import uuid
-import time
 import base64
 import info 
 import PyPDF2
@@ -22,7 +21,6 @@ from tavily import TavilyClient
 from urllib import parse
 from pydantic.v1 import BaseModel, Field
 from langchain_core.output_parsers import StrOutputParser
-from langchain_community.utilities.tavily_search import TavilySearchAPIWrapper
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_core.messages import HumanMessage
 
@@ -163,9 +161,9 @@ def update(modelName, debugMode, multiRegion, mcp, reasoningMode, gradingMode):
         model_type = models[0]["model_type"]
                                 
     if debug_mode != debugMode:
-        debug_mode = debugMode
-        
+        debug_mode = debugMode        
         logger.info(f"debug_mode: {debug_mode}")
+
     mcp_json = mcp
     logger.info(f"mcp_json: {mcp_json}")
 
