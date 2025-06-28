@@ -32,7 +32,7 @@ tool_list = []
 update_required = False
 initiated = False
 strands_tools = []
-mcp_tools = []
+mcp_servers = []
 
 status_msg = []
 response_msg = []
@@ -42,8 +42,8 @@ image_url = []
 s3_prefix = "docs"
 capture_prefix = "captures"
 
-def update(selected_strands_tools, selected_mcp_tools):    
-    global strands_tools, mcp_tools, update_required
+def update(selected_strands_tools, selected_mcp_servers):    
+    global strands_tools, mcp_servers, update_required
     
     if selected_strands_tools != strands_tools:
         logger.info("strands_tools update!")
@@ -51,23 +51,23 @@ def update(selected_strands_tools, selected_mcp_tools):
         update_required = True
         logger.info(f"strands_tools: {strands_tools}")
 
-    if selected_mcp_tools != mcp_tools:
-        logger.info("mcp_tools update!")
-        logger.info(f"selected_mcp_tools: {selected_mcp_tools}")
-        logger.info(f"mcp_tools: {mcp_tools}")
-        mcp_tools = selected_mcp_tools
+    if selected_mcp_servers != mcp_servers:
+        logger.info("mcp_servers update!")
+        logger.info(f"selected_mcp_servers: {selected_mcp_servers}")
+        logger.info(f"mcp_servers: {mcp_servers}")
+        mcp_servers = selected_mcp_servers
         update_required = True        
-        logger.info(f"mcp_tools: {mcp_tools}")
+        logger.info(f"mcp_servers: {mcp_servers}")
 
 index = 0
-def add_notification(container, message):
+def add_notification(containers, message):
     global index
-    container['notification'][index].info(message)
+    containers['notification'][index].info(message)
     index += 1
 
-def add_response(container, message):
+def add_response(containers, message):
     global index
-    container['notification'][index].markdown(message)
+    containers['notification'][index].markdown(message)
     index += 1
 
 status_msg = []
@@ -108,7 +108,6 @@ def load_config_by_name(name):
     else:
         config = mcp_config.load_config(name)
     logger.info(f"config: {config}")
-    # logger.info(f"config: {config}")
     return config
 
 #########################################################
@@ -248,10 +247,10 @@ class MCPClientManager:
 mcp_manager = MCPClientManager()
 
 # Set up MCP clients
-def init_mcp_clients(selected_mcp_tools):
-    logger.info(f"selected_mcp_tools: {selected_mcp_tools}")
+def init_mcp_clients(selected_mcp_servers):
+    logger.info(f"selected_mcp_servers: {selected_mcp_servers}")
     
-    for tool in selected_mcp_tools:
+    for tool in selected_mcp_servers:
         logger.info(f"Initializing MCP client for tool: {tool}")
         config = load_config_by_name(tool)
         # logger.info(f"config: {config}")
@@ -289,39 +288,39 @@ def initiate_tools():
     }
 
     logger.info(f"strands_tools: {strands_tools}")
-    logger.info(f"mcp_tools: {mcp_tools}")
+    logger.info(f"mcp_servers: {mcp_servers}")
 
     for tool_name in strands_tools:
         if tool_name in tool_map:
             tools.append(tool_map[tool_name])
 
     # MCP tools
-    mcp_tools_loaded = 0
-    for mcp_tool in mcp_tools:
-        logger.info(f"Processing MCP tool: {mcp_tool}")        
+    mcp_servers_loaded = 0
+    for mcp_server in mcp_servers:
+        logger.info(f"Processing MCP Server: {mcp_server}")        
         try:
-            with mcp_manager.get_active_clients([mcp_tool]) as _:
-                client = mcp_manager.get_client(mcp_tool)
+            with mcp_manager.get_active_clients([mcp_server]) as _:
+                client = mcp_manager.get_client(mcp_server)
                 if client:
-                    logger.info(f"Got client for {mcp_tool}, attempting to list tools...")
+                    logger.info(f"Got client for {mcp_server}, attempting to list tools...")
                     mcp_tools_list = client.list_tools_sync()
-                    logger.info(f"{mcp_tool}_tools: {mcp_tools_list}")
+                    logger.info(f"{mcp_server}_tools: {mcp_tools_list}")
                     if mcp_tools_list:
                         tools.extend(mcp_tools_list)
-                        mcp_tools_loaded += 1
-                        logger.info(f"Successfully added {len(mcp_tools_list)} tools from {mcp_tool}")
+                        mcp_servers_loaded += 1
+                        logger.info(f"Successfully added {len(mcp_tools_list)} tools from {mcp_server}")
                     else:
-                        logger.warning(f"No tools returned from {mcp_tool}")
+                        logger.warning(f"No tools returned from {mcp_server}")
                 else:
-                    logger.error(f"Failed to get client for {mcp_tool}")
+                    logger.error(f"Failed to get client for {mcp_server}")
         except Exception as e:
-            logger.error(f"Error getting tools for {mcp_tool}: {e}")
+            logger.error(f"Error getting tools for {mcp_server}: {e}")
             logger.error(f"Exception type: {type(e)}")
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
             continue
 
-    logger.info(f"Successfully loaded {mcp_tools_loaded} out of {len(mcp_tools)} MCP tools")
+    logger.info(f"Successfully loaded {mcp_servers_loaded} out of {len(mcp_servers)} MCP tools")
     logger.info(f"tools: {tools}")
 
     return tools
@@ -340,20 +339,20 @@ def update_tools():
             tools.append(tool_map[tool_name])
 
     # MCP tools
-    mcp_tools_loaded = 0
-    for mcp_tool in mcp_tools:
+    mcp_servers_loaded = 0
+    for mcp_tool in mcp_servers:
         logger.info(f"Processing MCP tool: {mcp_tool}")        
         try:
             with mcp_manager.get_active_clients([mcp_tool]) as _:
                 client = mcp_manager.get_client(mcp_tool)
                 if client:
                     logger.info(f"Got client for {mcp_tool}, attempting to list tools...")
-                    mcp_tools_list = client.list_tools_sync()
-                    logger.info(f"{mcp_tool}_tools: {mcp_tools_list}")
-                    if mcp_tools_list:
-                        tools.extend(mcp_tools_list)
-                        mcp_tools_loaded += 1
-                        logger.info(f"Successfully added {len(mcp_tools_list)} tools from {mcp_tool}")
+                    mcp_servers_list = client.list_tools_sync()
+                    logger.info(f"{mcp_tool}_tools: {mcp_servers_list}")
+                    if mcp_servers_list:
+                        tools.extend(mcp_servers_list)
+                        mcp_servers_loaded += 1
+                        logger.info(f"Successfully added {len(mcp_servers_list)} tools from {mcp_tool}")
                     else:
                         logger.warning(f"No tools returned from {mcp_tool}")
                 else:
@@ -365,12 +364,12 @@ def update_tools():
             logger.error(f"Traceback: {traceback.format_exc()}")
             continue
 
-    logger.info(f"Successfully loaded {mcp_tools_loaded} out of {len(mcp_tools)} MCP tools")
+    logger.info(f"Successfully loaded {mcp_servers_loaded} out of {len(mcp_servers)} MCP tools")
     logger.info(f"tools: {tools}")
 
     return tools
 
-def create_agent(tools, history_mode, containers):
+def create_agent(tools, history_mode):
     system = (
         "당신의 이름은 서연이고, 질문에 대해 친절하게 답변하는 사려깊은 인공지능 도우미입니다."
         "상황에 맞는 구체적인 세부 정보를 충분히 제공합니다." 
@@ -393,23 +392,7 @@ def create_agent(tools, history_mode, containers):
             tools=tools
             #max_parallel_tools=2
         )
-
-    # get tool_list
-    tool_list = []
-    for tool in tools:
-        if hasattr(tool, 'tool_name'):  # MCP tool
-            tool_list.append(tool.tool_name)
-                
-        if str(tool).startswith("<module 'strands_tools."):   # strands_tools 
-            module_name = str(tool).split("'")[1].split('.')[-1]
-            tool_list.append(module_name)
-
-    logger.info(f"tool_list: {tool_list}")
-
-    if chat.debug_mode == 'Enable':
-        containers['tools'].info(f"Tools: {tool_list}")
-
-    return agent, tool_list
+    return agent
 
 def get_tool_info(tool_name, tool_content):
     tool_references = []    
@@ -642,7 +625,18 @@ def get_tool_info(tool_name, tool_content):
 
     return content, urls, tool_references
 
-async def run_agent(question, history_mode, containers):
+def get_tool_list(tools):
+    tool_list = []
+    for tool in tools:
+        if hasattr(tool, 'tool_name'):  # MCP tool
+            tool_list.append(tool.tool_name)
+                
+        if str(tool).startswith("<module 'strands_tools."):   # strands_tools 
+            module_name = str(tool).split("'")[1].split('.')[-1]
+            tool_list.append(module_name)
+    return tool_list
+
+async def run_agent(question, historyMode, containers):
     result = ""
     current_response = ""
 
@@ -656,25 +650,35 @@ async def run_agent(question, history_mode, containers):
     global agent, initiated, update_required, tool_list
     if not initiated: 
         logger.info("create agent!")
-        init_mcp_clients(mcp_tools)
+        init_mcp_clients(mcp_servers)
         tools = initiate_tools()
-        agent, tool_list = create_agent(tools, history_mode, containers)
+        logger.info(f"tools: {tools}")
+
+        agent = create_agent(tools, historyMode)
+        tool_list = get_tool_list(tools)
+        if chat.debug_mode == 'Enable':
+            containers['tools'].info(f"Tools: {tool_list}")
         initiated = True
     elif update_required:      
         logger.info(f"update_required: {update_required}")
         logger.info("update agent!")
-        init_mcp_clients(mcp_tools)
+        init_mcp_clients(mcp_servers)
         tools = update_tools()
-        agent, tool_list = create_agent(tools, history_mode, containers)
+        logger.info(f"tools: {tools}")
+
+        agent = create_agent(tools, historyMode)
+        tool_list = get_tool_list(tools)
+        if chat.debug_mode == 'Enable':
+            containers['tools'].info(f"Tools: {tool_list}")
         update_required = False
     else:
         if chat.debug_mode == 'Enable':
-            containers['tools'].info(f"Tools: {tool_list}")
+            containers['tools'].info(f"tool_list: {tool_list}")
     
     if chat.debug_mode == 'Enable':
-        containers['status'].info(get_status_msg(f"(start"))
+        containers['status'].info(get_status_msg(f"(start"))    
 
-    with mcp_manager.get_active_clients(mcp_tools) as _:
+    with mcp_manager.get_active_clients(mcp_servers) as _:
         agent_stream = agent.stream_async(question)
         
         tool_name = ""
@@ -781,3 +785,137 @@ async def run_agent(question, history_mode, containers):
 
     return result+ref, image_url
             
+
+async def run_task(question, mcp_servers, system_prompt, containers, historyMode, previous_status_msg, previous_response_msg):
+    global status_msg, response_msg
+    status_msg = previous_status_msg
+    response_msg = previous_response_msg
+
+    result = ""
+    current_response = ""
+
+    global references, image_url
+    image_url = []    
+    references = []
+
+    logger.info(f"mcp_servers: {mcp_servers}")
+    init_mcp_clients(mcp_servers)
+    tools = update_tools()
+    logger.info(f"tools: {tools}")
+    agent = create_agent(tools, historyMode)
+
+    tool_list = get_tool_list(tools)
+    logger.info(f"tool_list: {tool_list}")
+
+    if chat.debug_mode == 'Enable':
+        containers['tools'].info(f"Tools: {tool_list}")
+
+    logger.info(f"tool_list: {tool_list}")
+
+    with mcp_manager.get_active_clients(mcp_servers) as _:
+        agent_stream = agent.stream_async(question)
+        
+        tool_name = ""
+        async for event in agent_stream:
+            # logger.info(f"event: {event}")
+            if "message" in event:
+                message = event["message"]
+                logger.info(f"message: {message}")
+
+                for content in message["content"]:                
+                    if "text" in content:
+                        logger.info(f"text: {content["text"]}")
+                        if chat.debug_mode == 'Enable':
+                            add_response(containers, content["text"])
+
+                        result = content["text"]
+                        current_response = ""
+
+                    if "toolUse" in content:
+                        tool_use = content["toolUse"]
+                        logger.info(f"tool_use: {tool_use}")
+                        
+                        tool_name = tool_use["name"]
+                        input = tool_use["input"]
+                        
+                        logger.info(f"tool_nmae: {tool_name}, arg: {input}")
+                        if chat.debug_mode == 'Enable':       
+                            add_notification(containers, f"tool name: {tool_name}, arg: {input}")
+                            containers['status'].info(get_status_msg(f"{tool_name}"))
+                
+                    if "toolResult" in content:
+                        tool_result = content["toolResult"]
+                        logger.info(f"tool_name: {tool_name}")
+                        logger.info(f"tool_result: {tool_result}")
+                        if "content" in tool_result:
+                            tool_content = tool_result["content"]
+                            for content in tool_content:
+                                if "text" in content:
+                                    if chat.debug_mode == 'Enable':
+                                        add_notification(containers, f"tool result: {content["text"]}")
+
+                                    try:
+                                        json_data = json.loads(content["text"])
+                                        if isinstance(json_data, dict) and "path" in json_data:
+                                            paths = json_data["path"]
+                                            logger.info(f"paths: {paths}")
+                                            for path in paths:
+                                                if path.startswith("http"):
+                                                    image_url.append(path)
+                                                    logger.info(f"Added image URL: {path}")
+                                    except json.JSONDecodeError:
+                                        pass
+
+                                    content, urls, refs = get_tool_info(tool_name, content["text"])
+                                    logger.info(f"content: {content}")
+                                    logger.info(f"urls: {urls}")
+                                    logger.info(f"refs: {refs}")
+
+                                    if refs:
+                                        for r in refs:
+                                            references.append(r)
+                                        logger.info(f"refs: {refs}")
+                                    if urls:
+                                        for url in urls:
+                                            image_url.append(url)
+                                        logger.info(f"urls: {urls}")
+
+                                        if chat.debug_mode == "Enable":
+                                            add_notification(containers, f"Added path to image_url: {urls}")
+                                            response_msg.append(f"Added path to image_url: {urls}")
+                                        
+            if "event_loop_metrics" in event and \
+                hasattr(event["event_loop_metrics"], "tool_metrics") and \
+                "generate_image_with_colors" in event["event_loop_metrics"].tool_metrics:
+                tool_info = event["event_loop_metrics"].tool_metrics["generate_image_with_colors"].tool
+                if "input" in tool_info and "filename" in tool_info["input"]:
+                    fname = tool_info["input"]["filename"]
+                    if fname:
+                        url = f"{chat.path}/{chat.s3_image_prefix}/{parse.quote(fname)}.png"
+                        if url not in image_url:
+                            image_url.append(url)
+                            logger.info(f"Added image URL: {url}")
+
+            if "data" in event:
+                text_data = event["data"]
+                current_response += text_data
+
+                if chat.debug_mode == 'Enable':
+                    containers["notification"][index].markdown(current_response)
+                continue
+
+    if chat.debug_mode == 'Enable':
+        containers['status'].info(get_status_msg(f"end)"))
+
+    ref = ""
+    if references:
+        ref = "\n\n### Reference\n"
+        for i, reference in enumerate(references):
+            ref += f"{i+1}. [{reference['title']}]({reference['url']}), {reference['content']}...\n"    
+
+        # show reference
+        if chat.debug_mode == 'Enable':
+            containers['notification'][index-1].markdown(result+ref)
+
+    return result, image_url, status_msg, response_msg
+
