@@ -101,7 +101,7 @@ def load_image_generator_config():
     try:
         with open("image_generator_config.json", "r", encoding="utf-8") as f:
             config = json.load(f)
-            logger.info(f"loaded image_generator_config: {config}")
+            # logger.info(f"loaded image_generator_config: {config}")
     except FileNotFoundError:
         config = {"seed_image": ""}
         with open("image_generator_config.json", "w", encoding="utf-8") as f:
@@ -176,9 +176,9 @@ def cost_analysis_with_reflection():
     st.session_state.messages.append({"role": "assistant", "content": response})
 
 seed_config = load_image_generator_config()
-logger.info(f"seed_config: {seed_config}")
+# logger.info(f"seed_config: {seed_config}")
 seed_image_url = seed_config.get("seed_image", "") if seed_config else ""
-logger.info(f"seed_image_url from config: {seed_image_url}")
+#logger.info(f"seed_image_url from config: {seed_image_url}")
 
 uploaded_seed_image = None
 with st.sidebar:
@@ -225,7 +225,7 @@ with st.sidebar:
                 "pubmed", "chembl", "clinicaltrial", "arxiv-manual", "tavily-manual", "사용자 설정"
             ]
         mcp_selections = {}
-        default_selections = ["basic", "code interpreter", "use_aws", "tavily"]
+        default_selections = ["basic", "code interpreter", "use_aws", "tavily", "filesystem"]
 
         if mode=='Agent' or mode=='Agent (Chat)':
             agent_type = st.radio(
@@ -254,7 +254,7 @@ with st.sidebar:
                     mcp_selections[option] = st.checkbox(option, key=f"mcp_{option}", value=default_value)
         
         if not any(mcp_selections.values()):
-            mcp_selections["default"] = True
+            mcp_selections["basic"] = True
 
         if mcp_selections["사용자 설정"]:
             mcp_info = st.text_area(
@@ -334,9 +334,8 @@ with st.sidebar:
         uploaded_file = st.file_uploader("RAG를 위한 파일을 선택합니다.", type=["pdf", "txt", "py", "md", "csv", "json"], key=chat.fileId)
 
     chat.update(modelName, debugMode, multiRegion, mcp, reasoningMode, gradingMode)
-    
-    # Convert mcp_selections dict to list of selected tools
-    selected_mcp_tools = [tool for tool, selected in mcp_selections.items() if selected]
+
+    selected_mcp_tools = [tool for tool in mcp_options if mcp_selections.get(tool, False)]
     strands_agent.update([], selected_mcp_tools)
 
     st.success(f"Connected to {modelName}", icon="💚")
@@ -451,6 +450,7 @@ if prompt := st.chat_input("메시지를 입력하세요."):
 
     st.session_state.messages.append({"role": "user", "content": prompt})  # add user message to chat history
     prompt = prompt.replace('"', "").replace("'", "")
+    logger.info(f"prompt: {prompt}")
 
     with st.chat_message("assistant"):
         if mode == '일상적인 대화':
@@ -473,9 +473,8 @@ if prompt := st.chat_input("메시지를 입력하세요."):
             
             show_references(reference_docs) 
         
-        elif mode == 'Agent' or mode == 'Agent (Chat)':
+        elif mode == 'Agent' or mode == 'Agent (Chat)':            
             sessionState = ""
-
             if mode == 'Agent':
                 history_mode = "Disable"
             else:

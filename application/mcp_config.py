@@ -451,12 +451,12 @@ def load_selected_config(mcp_selections: dict[str, bool]):
             config = load_config('text_editor')
         else:
             config = load_config(server)
-        logger.info(f"config: {config}")
+        # logger.info(f"config: {config}")
         
         if config:
             loaded_config.update(config["mcpServers"])
 
-    logger.info(f"loaded_config: {loaded_config}")
+    # logger.info(f"loaded_config: {loaded_config}")
         
     return {
         "mcpServers": loaded_config
