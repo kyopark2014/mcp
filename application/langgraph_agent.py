@@ -350,6 +350,14 @@ async def call_model(state: State, config):
             "상황에 맞는 구체적인 세부 정보를 충분히 제공합니다."
             "모르는 질문을 받으면 솔직히 모른다고 말합니다."
             "한국어로 답변하세요."
+
+            "An agent orchestrates the following workflow:"
+            "1. Receives user input"
+            "2. Processes the input using a language model"
+            "3. Decides whether to use tools to gather information or perform actions"
+            "4. Executes those tools and receives results"
+            "5. Continues reasoning with the new information"
+            "6. Produces a final response"
         )
 
     chatModel = chat.get_chat(extended_thinking=chat.reasoning_mode)

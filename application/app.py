@@ -225,7 +225,7 @@ with st.sidebar:
                 "pubmed", "chembl", "clinicaltrial", "arxiv-manual", "tavily-manual", "사용자 설정"
             ]
         mcp_selections = {}
-        default_selections = ["basic", "code interpreter", "use_aws", "tavily", "filesystem"]
+        default_selections = ["basic", "use_aws", "tavily-manual", "filesystem"]
 
         if mode=='Agent' or mode=='Agent (Chat)':
             agent_type = st.radio(
@@ -316,9 +316,11 @@ with st.sidebar:
     #print('multiRegion: ', multiRegion)
 
     # extended thinking of claude 3.7 sonnet
-    select_reasoning = st.checkbox('Reasoning', value=False)
-    reasoningMode = 'Enable' if select_reasoning else 'Disable'
-    # logger.info(f"reasoningMode: {reasoningMode}")
+    reasoningMode = "Disable"
+    if mode == "일상적인 대화" or mode == "RAG":
+        select_reasoning = st.checkbox('Reasoning', value=False)
+        reasoningMode = 'Enable' if select_reasoning else 'Disable'
+        # logger.info(f"reasoningMode: {reasoningMode}")
 
     # RAG grading
     select_grading = st.checkbox('Grading', value=False)
