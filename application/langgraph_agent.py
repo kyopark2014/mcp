@@ -4,6 +4,7 @@ import json
 import traceback
 import chat
 import utils
+import mcp_config
 
 from langgraph.prebuilt import ToolNode
 from typing import Literal
@@ -465,11 +466,8 @@ def buildChatAgentWithHistory(tools):
         store=chat.memorystore
     )
 
-def load_multiple_mcp_server_parameters():
-    logger.info(f"mcp_json: {chat.mcp_json}")
-
-    mcpServers = chat.mcp_json.get("mcpServers")
-    logger.info(f"mcpServers: {mcpServers}")
+def load_multiple_mcp_server_parameters(mcp_json: dict):
+    mcpServers = mcp_json.get("mcpServers")
   
     server_info = {}
     if mcpServers is not None:
@@ -519,7 +517,7 @@ def get_mcp_server_list():
         server_lists.append(server_name)
     return server_lists
 
-async def run_agent(query, historyMode, containers):
+async def run_agent(query, mcp_servers, historyMode, containers):
     global status_msg, response_msg, image_urls, references, mcp_server_info
     status_msg = []
     response_msg = []
@@ -529,19 +527,23 @@ async def run_agent(query, historyMode, containers):
     if chat.debug_mode == "Enable":
         containers["status"].info(get_status_msg("(start"))
 
-    server_params = load_multiple_mcp_server_parameters()
+    mcp_json = mcp_config.load_selected_config(mcp_servers)
+    logger.info(f"mcp_json: {mcp_json}")        
+
+    server_params = load_multiple_mcp_server_parameters(mcp_json)
     logger.info(f"server_params: {server_params}")    
 
     async with MultiServerMCPClient(server_params) as client:        
         mcp_server_info = client.server_name_to_tools.items()
 
-        tools = client.get_tools()
+        tools = client.get_tools()        
+        
+        tool_list = [tool.name for tool in tools]
+        logger.info(f"tool_list: {tool_list}")
 
-        if chat.debug_mode == "Enable":
-            tool_list = [tool.name for tool in tools]
+        if chat.debug_mode == "Enable":    
             containers["tools"].info(f"Tools: {tool_list}")
-            logger.info(f"tool_list: {tool_list}")
-
+                    
         if historyMode == "Enable":
             app = buildChatAgentWithHistory(tools)
             config = {

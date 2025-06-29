@@ -142,12 +142,11 @@ client = boto3.client(
     region_name=bedrock_region
 )  
 
-mcp_json = ""
 reasoning_mode = 'Disable'
 grading_mode = 'Disable'
-def update(modelName, debugMode, multiRegion, mcp, reasoningMode, gradingMode):    
+def update(modelName, debugMode, multiRegion, reasoningMode, gradingMode):    
     global model_name, model_id, model_type, debug_mode, multi_region, reasoning_mode, grading_mode
-    global models, mcp_json
+    global models
 
     # load mcp.env    
     mcp_env = utils.load_mcp_env()
@@ -163,9 +162,6 @@ def update(modelName, debugMode, multiRegion, mcp, reasoningMode, gradingMode):
     if debug_mode != debugMode:
         debug_mode = debugMode        
         logger.info(f"debug_mode: {debug_mode}")
-
-    mcp_json = mcp
-    logger.info(f"mcp_json: {mcp_json}")
 
     if reasoning_mode != reasoningMode:
         reasoning_mode = reasoningMode
@@ -458,7 +454,7 @@ if langsmith_api_key:
 def tavily_search(query, k):
     docs = []    
     try:
-        tavily_client = TavilyClient(api_key=tavily_key)
+        tavily_client = TavilyClient(api_key=utils.tavily_key)
         response = tavily_client.search(query, max_results=k)
         # print('tavily response: ', response)
             

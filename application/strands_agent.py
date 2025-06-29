@@ -42,22 +42,8 @@ image_url = []
 s3_prefix = "docs"
 capture_prefix = "captures"
 
-def update(selected_strands_tools, selected_mcp_servers):    
-    global strands_tools, mcp_servers, update_required
-    
-    if selected_strands_tools != strands_tools:
-        logger.info("strands_tools update!")
-        strands_tools = selected_strands_tools
-        update_required = True
-        logger.info(f"strands_tools: {strands_tools}")
-
-    if selected_mcp_servers != mcp_servers:
-        logger.info("mcp_servers update!")
-        logger.info(f"selected_mcp_servers: {selected_mcp_servers}")
-        logger.info(f"mcp_servers: {mcp_servers}")
-        mcp_servers = selected_mcp_servers
-        update_required = True        
-        logger.info(f"mcp_servers: {mcp_servers}")
+selected_strands_tools = []
+selected_mcp_servers = []
 
 index = 0
 def add_notification(containers, message):
@@ -247,10 +233,10 @@ class MCPClientManager:
 mcp_manager = MCPClientManager()
 
 # Set up MCP clients
-def init_mcp_clients(selected_mcp_servers):
-    logger.info(f"selected_mcp_servers: {selected_mcp_servers}")
+def init_mcp_clients(mcp_servers: list):
+    logger.info(f"mcp_servers: {mcp_servers}")
     
-    for tool in selected_mcp_servers:
+    for tool in mcp_servers:
         logger.info(f"Initializing MCP client for tool: {tool}")
         config = load_config_by_name(tool)
         # logger.info(f"config: {config}")
@@ -278,54 +264,7 @@ def init_mcp_clients(selected_mcp_servers):
             logger.error(f"Failed to add MCP client for {name}: {e}")
             continue
 
-def initiate_tools():
-    tools = []
-    tool_map = {
-        "calculator": calculator,
-        "current_time": current_time,
-        "use_aws": use_aws
-        # "python_repl": python_repl  # Temporarily disabled
-    }
-
-    logger.info(f"strands_tools: {strands_tools}")
-    logger.info(f"mcp_servers: {mcp_servers}")
-
-    for tool_name in strands_tools:
-        if tool_name in tool_map:
-            tools.append(tool_map[tool_name])
-
-    # MCP tools
-    mcp_servers_loaded = 0
-    for mcp_server in mcp_servers:
-        logger.info(f"Processing MCP Server: {mcp_server}")        
-        try:
-            with mcp_manager.get_active_clients([mcp_server]) as _:
-                client = mcp_manager.get_client(mcp_server)
-                if client:
-                    logger.info(f"Got client for {mcp_server}, attempting to list tools...")
-                    mcp_tools_list = client.list_tools_sync()
-                    logger.info(f"{mcp_server}_tools: {mcp_tools_list}")
-                    if mcp_tools_list:
-                        tools.extend(mcp_tools_list)
-                        mcp_servers_loaded += 1
-                        logger.info(f"Successfully added {len(mcp_tools_list)} tools from {mcp_server}")
-                    else:
-                        logger.warning(f"No tools returned from {mcp_server}")
-                else:
-                    logger.error(f"Failed to get client for {mcp_server}")
-        except Exception as e:
-            logger.error(f"Error getting tools for {mcp_server}: {e}")
-            logger.error(f"Exception type: {type(e)}")
-            import traceback
-            logger.error(f"Traceback: {traceback.format_exc()}")
-            continue
-
-    logger.info(f"Successfully loaded {mcp_servers_loaded} out of {len(mcp_servers)} MCP tools")
-    logger.info(f"tools: {tools}")
-
-    return tools
-
-def update_tools():
+def update_tools(strands_tools: list, mcp_servers: list):
     tools = []
     tool_map = {
         "calculator": calculator,
@@ -636,7 +575,7 @@ def get_tool_list(tools):
             tool_list.append(module_name)
     return tool_list
 
-async def run_agent(question, historyMode, containers):
+async def run_agent(question, strands_tools, mcp_servers, historyMode, containers):
     result = ""
     current_response = ""
 
@@ -648,10 +587,24 @@ async def run_agent(question, historyMode, containers):
     status_msg = []
 
     global agent, initiated, update_required, tool_list
+    global selected_strands_tools, selected_mcp_servers
+
+    if selected_strands_tools != strands_tools:
+        logger.info("strands_tools update!")
+        selected_strands_tools = strands_tools
+        update_required = True
+        logger.info(f"strands_tools: {strands_tools}")
+
+    if selected_mcp_servers != mcp_servers:
+        logger.info("mcp_servers update!")
+        selected_mcp_servers = mcp_servers
+        update_required = True
+        logger.info(f"mcp_servers: {mcp_servers}")
+
     if not initiated: 
         logger.info("create agent!")
         init_mcp_clients(mcp_servers)
-        tools = initiate_tools()
+        tools = update_tools(strands_tools, mcp_servers)
         logger.info(f"tools: {tools}")
 
         agent = create_agent(tools, historyMode)
@@ -663,7 +616,7 @@ async def run_agent(question, historyMode, containers):
         logger.info(f"update_required: {update_required}")
         logger.info("update agent!")
         init_mcp_clients(mcp_servers)
-        tools = update_tools()
+        tools = update_tools(strands_tools, mcp_servers)
         logger.info(f"tools: {tools}")
 
         agent = create_agent(tools, historyMode)
@@ -784,9 +737,8 @@ async def run_agent(question, historyMode, containers):
             containers['notification'][index-1].markdown(result+ref)
 
     return result+ref, image_url
-            
 
-async def run_task(question, mcp_servers, system_prompt, containers, historyMode, previous_status_msg, previous_response_msg):
+async def run_task(question, strands_tools, mcp_servers, system_prompt, containers, historyMode, previous_status_msg, previous_response_msg):
     global status_msg, response_msg
     status_msg = previous_status_msg
     response_msg = previous_response_msg
@@ -800,7 +752,7 @@ async def run_task(question, mcp_servers, system_prompt, containers, historyMode
 
     logger.info(f"mcp_servers: {mcp_servers}")
     init_mcp_clients(mcp_servers)
-    tools = update_tools()
+    tools = update_tools(strands_tools, mcp_servers)
     logger.info(f"tools: {tools}")
     agent = create_agent(tools, historyMode)
 
