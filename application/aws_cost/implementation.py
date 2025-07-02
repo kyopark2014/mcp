@@ -665,7 +665,7 @@ def run(request_id: str, status_container=None, response_container=None, key_con
         for key, value in output.items():
             logger.info(f"--> key: {key}, value: {value}")
             # if status_container:
-            #     status_container.info(f"현재 실행 중: {key}")
+            #     status_container.info(f"Currently running: {key}")
             # if response_container and value and "final_response" in value:
             #     response_container.write(value["final_response"])
     

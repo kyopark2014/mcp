@@ -1017,7 +1017,7 @@ def extract_text(img_base64):
             logger.info(f"error message: {err_msg}")                    
             # raise Exception ("Not able to request to LLM")
     
-    logger.info(f"xtracted_text: {extracted_text}")
+    logger.info(f"Extracted_text: {extracted_text}")
     if len(extracted_text)<10:
         extracted_text = "텍스트를 추출하지 못하였습니다."    
 
@@ -1097,8 +1097,12 @@ def get_summary_of_uploaded_file(file_name, st):
         width, height = img.size 
         logger.info(f"width: {width}, height: {height}, size: {width*height}")
         
+        # Image resizing and size verification
         isResized = False
-        while(width*height > 5242880):                    
+        max_size = 5 * 1024 * 1024  # 5MB in bytes
+        
+        # Initial resizing (based on pixel count)
+        while(width*height > 2000000):  # Limit to approximately 2M pixels
             width = int(width/2)
             height = int(height/2)
             isResized = True
@@ -1107,9 +1111,30 @@ def get_summary_of_uploaded_file(file_name, st):
         if isResized:
             img = img.resize((width, height))
         
-        buffer = BytesIO()
-        img.save(buffer, format="PNG")
-        img_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+        # Base64 크기 확인 및 추가 리사이징
+        max_attempts = 5
+        for attempt in range(max_attempts):
+            buffer = BytesIO()
+            img.save(buffer, format="PNG", optimize=True)
+            img_bytes = buffer.getvalue()
+            img_base64 = base64.b64encode(img_bytes).decode("utf-8")
+            
+            # Base64 크기 확인 (실제 전송될 크기)
+            base64_size = len(img_base64.encode('utf-8'))
+            logger.info(f"attempt {attempt + 1}: base64_size = {base64_size} bytes")
+            
+            if base64_size <= max_size:
+                break
+            else:
+                # 크기가 여전히 크면 더 작게 리사이징
+                width = int(width * 0.8)
+                height = int(height * 0.8)
+                img = img.resize((width, height))
+                logger.info(f"resizing to {width}x{height} due to size limit")
+        
+        if base64_size > max_size:
+            logger.warning(f"Image still too large after {max_attempts} attempts: {base64_size} bytes")
+            raise Exception(f"이미지 크기가 너무 큽니다. 5MB 이하의 이미지를 사용해주세요.")
                
         # extract text from the image
         if debug_mode=="Enable":
@@ -1177,8 +1202,12 @@ def get_image_summarization(object_name, prompt, st):
     width, height = img.size 
     logger.info(f"width: {width}, height: {height}, size: {width*height}")
     
+    # 이미지 리사이징 및 크기 확인
     isResized = False
-    while(width*height > 5242880):                    
+    max_size = 5 * 1024 * 1024  # 5MB in bytes
+    
+    # Initial resizing (based on pixel count)
+    while(width*height > 2000000):  # Limit to approximately 2M pixels
         width = int(width/2)
         height = int(height/2)
         isResized = True
@@ -1187,9 +1216,30 @@ def get_image_summarization(object_name, prompt, st):
     if isResized:
         img = img.resize((width, height))
     
-    buffer = BytesIO()
-    img.save(buffer, format="PNG")
-    img_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+    # Base64 size verification and additional resizing
+    max_attempts = 5
+    for attempt in range(max_attempts):
+        buffer = BytesIO()
+        img.save(buffer, format="PNG", optimize=True)
+        img_bytes = buffer.getvalue()
+        img_base64 = base64.b64encode(img_bytes).decode("utf-8")
+        
+        # Base64 size verification (actual transmission size)
+        base64_size = len(img_base64.encode('utf-8'))
+        logger.info(f"attempt {attempt + 1}: base64_size = {base64_size} bytes")
+        
+        if base64_size <= max_size:
+            break
+        else:
+            # Resize smaller if still too large
+            width = int(width * 0.8)
+            height = int(height * 0.8)
+            img = img.resize((width, height))
+            logger.info(f"resizing to {width}x{height} due to size limit")
+    
+    if base64_size > max_size:
+        logger.warning(f"Image still too large after {max_attempts} attempts: {base64_size} bytes")
+        raise Exception(f"이미지 크기가 너무 큽니다. 5MB 이하의 이미지를 사용해주세요.")
 
     # extract text from the image
     if debug_mode=="Enable":

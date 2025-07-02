@@ -172,7 +172,7 @@ def get_tool_info(tool_name, tool_content):
                                 # logger.info(f"uri (list): {uri}")
                                 ext = uri.split(".")[-1]
 
-                                # ext가 이미지라면 
+                                # if ext is an image 
                                 url = sharing_url + "/" + s3_prefix + "/" + uri.split("/")[-1]
                                 if ext in ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "ico", "webp"]:
                                     url = sharing_url + "/" + capture_prefix + "/" + uri.split("/")[-1]

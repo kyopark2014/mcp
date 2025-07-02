@@ -101,7 +101,7 @@ def get_weather_info(city: str) -> str:
                 wind_speed = result['wind']['speed']
                 cloud = result['clouds']['all']
                 
-                #weather_str = f"{city}의 현재 날씨의 특징은 {overall}이며, 현재 온도는 {current_temp}도 이고, 최저온도는 {min_temp}도, 최고 온도는 {max_temp}도 입니다. 현재 습도는 {humidity}% 이고, 바람은 초당 {wind_speed} 미터 입니다. 구름은 {cloud}% 입니다."
+                #weather_str = f"The current weather in {city} is characterized by {overall}, with current temperature of {current_temp}°C, minimum temperature of {min_temp}°C, and maximum temperature of {max_temp}°C. Current humidity is {humidity}% and wind speed is {wind_speed} meters per second. Cloud coverage is {cloud}%."
                 weather_str = f"{city}의 현재 날씨의 특징은 {overall}이며, 현재 온도는 {current_temp} 입니다. 현재 습도는 {humidity}% 이고, 바람은 초당 {wind_speed} 미터 입니다. 구름은 {cloud}% 입니다."
                 #weather_str = f"Today, the overall of {city} is {overall}, current temperature is {current_temp} degree, min temperature is {min_temp} degree, highest temperature is {max_temp} degree. huminity is {humidity}%, wind status is {wind_speed} meter per second. the amount of cloud is {cloud}%."            
         except Exception:

@@ -188,7 +188,7 @@ def extract_reference(response):
                         # logger.info(f"item[{i}]: {item}")
                         if "Title:" in item and "URL:" in item and "Content:" in item:
                             try:
-                                # 정규식 대신 문자열 분할 방법 사용
+                                # Use string splitting method instead of regex
                                 title_part = item.split("Title:")[1].split("URL:")[0].strip()
                                 url_part = item.split("URL:")[1].split("Content:")[0].strip()
                                 content_part = item.split("Content:")[1].strip().replace("\n", "")

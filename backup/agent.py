@@ -175,7 +175,7 @@ def get_tool_info(tool_name, tool_content):
                                 # logger.info(f"uri (list): {uri}")
                                 ext = uri.split(".")[-1]
 
-                                # ext가 이미지라면 
+                                # if ext is an image 
                                 url = sharing_url + "/" + s3_prefix + "/" + uri.split("/")[-1]
                                 if ext in ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "ico", "webp"]:
                                     url = sharing_url + "/" + capture_prefix + "/" + uri.split("/")[-1]
@@ -856,7 +856,7 @@ def load_multiple_mcp_server_parameters():
 def tool_info(tools, st):
     tool_info = ""
     tool_list = []
-    # st.info("Tool 정보를 가져옵니다.")
+    # st.info("Getting tool information.")
     for tool in tools:
         tool_info += f"name: {tool.name}\n"    
         if hasattr(tool, 'description'):

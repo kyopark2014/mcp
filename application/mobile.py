@@ -20,7 +20,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("streamlit")
 
-# 모바일 환경에 최적화된 페이지 설정
+# Mobile-optimized page configuration
 st.set_page_config(
     page_title='MCP Mobile',
     page_icon=None,
@@ -29,7 +29,7 @@ st.set_page_config(
     menu_items=None
 )
 
-# 모바일 환경에 최적화된 CSS
+    # Mobile-optimized CSS
 st.markdown("""
     <style>
     /* 모바일 환경에 맞는 폰트 크기 조정 */
@@ -82,7 +82,7 @@ mode_descriptions = {
     ]
 }
 
-# 모바일 환경에 최적화된 모드 선택
+    # Mobile-optimized mode selection
 mode = st.selectbox(
     "대화 모드 선택",
     ["일상적인 대화", "RAG", "Agent", "번역하기", "문법 검토하기", "이미지 분석"]
@@ -90,14 +90,14 @@ mode = st.selectbox(
 
 st.info(mode_descriptions[mode][0])
 
-# 모델 선택
+    # Model selection
 modelName = st.selectbox(
     '사용 모델',
     ("Nova Premier", 'Nova Pro', 'Nova Lite', 'Nova Micro', 'Claude 3.7 Sonnet', 'Claude 3.5 Sonnet', 'Claude 3.0 Sonnet', 'Claude 3.5 Haiku'),
     index=5
 )
 
-# MCP 설정 (Agent 모드일 때만)
+    # MCP configuration (only for Agent mode)
 mcp = ""
 if mode == 'Agent':
     mcp_options = ["default", "code interpreter", "aws document", "aws cost", "aws cli", "tavily"]
@@ -114,17 +114,17 @@ if mode == 'Agent':
     
     mcp = mcp_config.load_selected_config(mcp_selections)
 
-# 디버그 모드
+    # Debug mode
 select_debugMode = st.checkbox('Debug Mode', value=False)
 debugMode = 'Enable' if select_debugMode else 'Disable'
 
-# 멀티 리전 설정
+    # Multi-region configuration
 select_multiRegion = st.checkbox('Multi Region', value=False)
 multiRegion = 'Enable' if select_multiRegion else 'Disable'
 
 chat.update(modelName, debugMode, multiRegion, mcp)
 
-# 파일 업로드 처리
+    # File upload processing
 uploaded_file = None
 if mode in ['이미지 분석', 'RAG']:
     uploaded_file = st.file_uploader(
@@ -132,12 +132,12 @@ if mode in ['이미지 분석', 'RAG']:
         type=["png", "jpg", "jpeg", "pdf", "txt", "py", "md", "csv", "json"] if mode == 'RAG' else ["png", "jpg", "jpeg"]
     )
 
-# 채팅 히스토리 초기화
+    # Chat history initialization
 if "messages" not in st.session_state:
     st.session_state.messages = []
     st.session_state.greetings = False
 
-# 채팅 메시지 표시
+    # Display chat messages
 def display_chat_messages():
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
@@ -148,7 +148,7 @@ def display_chat_messages():
 
 display_chat_messages()
 
-# 초기 인사말
+    # Initial greeting
 if not st.session_state.greetings:
     with st.chat_message("assistant"):
         intro = "모바일 환경에서 MCP를 이용해 주셔서 감사합니다. 편안한 대화를 즐기실 수 있습니다."
@@ -156,7 +156,7 @@ if not st.session_state.greetings:
         st.session_state.messages.append({"role": "assistant", "content": intro})
         st.session_state.greetings = True
 
-# 채팅 입력 처리
+    # Chat input processing
 if prompt := st.chat_input("메시지를 입력하세요"):
     with st.chat_message("user"):
         st.markdown(prompt)

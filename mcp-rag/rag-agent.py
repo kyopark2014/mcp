@@ -284,8 +284,8 @@ import asyncio
 if __name__ == "__main__":
     #query = "What is the capital of France?"
     query = "what's (4 + 6) x 14?"
-    # query = "보일러 에러 코드의 종류는?"
-    #query = "안녕"
+    # query = "What are the types of boiler error codes?"
+    #query = "Hello"
 
     result = asyncio.run(mcp_rag_agent(query))
     print(f"result: {result}")
