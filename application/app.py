@@ -225,7 +225,7 @@ with st.sidebar:
                 "pubmed", "chembl", "clinicaltrial", "arxiv-manual", "tavily-manual", "사용자 설정"
             ]
         mcp_selections = {}
-        default_selections = ["basic", "use_aws", "tavily-manual", "filesystem"]
+        default_selections = ["basic", "use_aws", "tavily-manual", "filesystem", "terminal"]
 
         if mode=='Agent' or mode=='Agent (Chat)':
             agent_type = st.radio(

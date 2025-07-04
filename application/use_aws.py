@@ -1,3 +1,5 @@
+# modifed from: https://github.com/strands-agents/tools/blob/main/src/strands_tools/use_aws.py
+
 import io
 import os
 
