@@ -15,10 +15,6 @@ logger = logging.getLogger("mcp-cost")
 config = utils.load_config()
 print(f"config: {config}")
 
-managed_opensearch_url = config["managed_opensearch_url"] if "managed_opensearch_url" in config else None
-opensearch_username = config["opensearch_username"] if "opensearch_username" in config else None
-opensearch_password = config["opensearch_password"] if "opensearch_password" in config else None
-
 aws_region = config["region"] if "region" in config else "us-west-2"
 projectName = config["projectName"] if "projectName" in config else "mcp"
 

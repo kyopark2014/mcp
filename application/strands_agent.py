@@ -615,11 +615,11 @@ async def run_agent(question, strands_tools, mcp_servers, historyMode, container
 
                 for content in message["content"]:                
                     if "text" in content:
-                        logger.info(f"text: {content["text"]}")
+                        logger.info(f"text: {content['text']}")
                         if chat.debug_mode == 'Enable':
-                            add_response(containers, content["text"])
+                            add_response(containers, content['text'])
 
-                        result = content["text"]
+                        result = content['text']
                         current_response = ""
 
                     if "toolUse" in content:
@@ -639,14 +639,14 @@ async def run_agent(question, strands_tools, mcp_servers, historyMode, container
                         logger.info(f"tool_name: {tool_name}")
                         logger.info(f"tool_result: {tool_result}")
                         if "content" in tool_result:
-                            tool_content = tool_result["content"]
+                            tool_content = tool_result['content']
                             for content in tool_content:
                                 if "text" in content:
                                     if chat.debug_mode == 'Enable':
-                                        add_notification(containers, f"tool result: {content["text"]}")
+                                        add_notification(containers, f"tool result: {content['text']}")
 
                                     try:
-                                        json_data = json.loads(content["text"])
+                                        json_data = json.loads(content['text'])
                                         if isinstance(json_data, dict) and "path" in json_data:
                                             paths = json_data["path"]
                                             logger.info(f"paths: {paths}")
@@ -657,7 +657,7 @@ async def run_agent(question, strands_tools, mcp_servers, historyMode, container
                                     except json.JSONDecodeError:
                                         pass
 
-                                    content, urls, refs = get_tool_info(tool_name, content["text"])
+                                    content, urls, refs = get_tool_info(tool_name, content['text'])
                                     logger.info(f"content: {content}")
                                     logger.info(f"urls: {urls}")
                                     logger.info(f"refs: {refs}")
@@ -748,11 +748,11 @@ async def run_task(question, strands_tools, mcp_servers, system_prompt, containe
 
                 for content in message["content"]:                
                     if "text" in content:
-                        logger.info(f"text: {content["text"]}")
+                        logger.info(f"text: {content['text']}")
                         if chat.debug_mode == 'Enable':
-                            add_response(containers, content["text"])
+                            add_response(containers, content['text'])
 
-                        result = content["text"]
+                        result = content['text']
                         current_response = ""
 
                     if "toolUse" in content:
@@ -772,14 +772,14 @@ async def run_task(question, strands_tools, mcp_servers, system_prompt, containe
                         logger.info(f"tool_name: {tool_name}")
                         logger.info(f"tool_result: {tool_result}")
                         if "content" in tool_result:
-                            tool_content = tool_result["content"]
+                            tool_content = tool_result['content']
                             for content in tool_content:
                                 if "text" in content:
                                     if chat.debug_mode == 'Enable':
-                                        add_notification(containers, f"tool result: {content["text"]}")
+                                        add_notification(containers, f"tool result: {content['text']}")
 
                                     try:
-                                        json_data = json.loads(content["text"])
+                                        json_data = json.loads(content['text'])
                                         if isinstance(json_data, dict) and "path" in json_data:
                                             paths = json_data["path"]
                                             logger.info(f"paths: {paths}")
@@ -790,7 +790,7 @@ async def run_task(question, strands_tools, mcp_servers, system_prompt, containe
                                     except json.JSONDecodeError:
                                         pass
 
-                                    content, urls, refs = get_tool_info(tool_name, content["text"])
+                                    content, urls, refs = get_tool_info(tool_name, content['text'])
                                     logger.info(f"content: {content}")
                                     logger.info(f"urls: {urls}")
                                     logger.info(f"refs: {refs}")
