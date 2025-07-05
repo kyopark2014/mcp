@@ -68,6 +68,7 @@ RUN pip install PyPDF2==3.0.1 opensearch-py
 RUN pip install mcp langchain-mcp-adapters==0.0.9 wikipedia
 RUN pip install aioboto3 requests uv kaleido diagrams reportlab
 RUN pip install graphviz sarif-om==1.0.4
+RUN pip install strands-agents strands-agents-tools
 
 RUN mkdir -p /root/.streamlit
 COPY config.toml /root/.streamlit/
