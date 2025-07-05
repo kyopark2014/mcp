@@ -16,7 +16,7 @@ logger = logging.getLogger("rag")
 
 try:
     mcp = FastMCP(
-        name = "rag",
+        name = "knowledge_base",
         instructions=(
             "You are a helpful assistant. "
             "You retrieve documents in RAG."

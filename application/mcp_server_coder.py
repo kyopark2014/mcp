@@ -12,11 +12,11 @@ logging.basicConfig(
         logging.StreamHandler(sys.stderr)
     ]
 )
-logger = logging.getLogger("aws-s3")
+logger = logging.getLogger("coder")
 
 try:
     mcp = FastMCP(
-        name = "tools",
+        name = "coder",
         instructions=(
             "You are a helpful assistant. "
             "You can generate a code or draw a graph using python code"

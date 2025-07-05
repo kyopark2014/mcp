@@ -19,7 +19,7 @@ aws_region = os.environ.get("AWS_REGION", "us-west-2")
 
 try:
     mcp = FastMCP(
-        name = "AWSLogs",
+        name = "aws_log",
         instructions=(
             "You are a helpful assistant. "
             "You can load logs of AWS CloudWatch and retrieve insights."

@@ -14,18 +14,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("mcp-rag")
 
-def load_config():
-    config = None
-    try:
-        with open("application/config.json", "r", encoding="utf-8") as f:
-            config = json.load(f)
-            # logger.info(f"config: {config}")
-    except Exception:
-        err_msg = traceback.format_exc()
-        logger.info(f"error message: {err_msg}")    
-    return config
-
-config = load_config()
+config = utils.load_config()
 
 bedrock_region = config["region"] if "region" in config else "us-west-2"
 projectName = config["projectName"] if "projectName" in config else "mcp-rag"

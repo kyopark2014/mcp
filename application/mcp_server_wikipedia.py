@@ -13,7 +13,7 @@ logging.basicConfig(
 logger = logging.getLogger("rag")
 
 mcp = FastMCP(
-    "Wikipedia",
+    name="Wikipedia",
     dependencies=["wikipedia"],
 )
 

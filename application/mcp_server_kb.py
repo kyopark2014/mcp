@@ -74,7 +74,7 @@ logger.info(
 )
 
 mcp = FastMCP(
-    'awslabs.bedrock-kb-retrieval-mcp-server',
+    name='awslabs.bedrock-kb-retrieval-mcp-server',
     instructions="""
     The AWS Labs Bedrock Knowledge Bases Retrieval MCP Server provides access to Amazon Bedrock Knowledge Bases for retrieving relevant information through natural language queries.
 

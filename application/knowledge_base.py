@@ -1,4 +1,5 @@
 import traceback
+import json
 import time
 import boto3
 import utils
@@ -89,7 +90,7 @@ os_client = OpenSearch(
 def is_not_exist(index_name):    
     logger.info(f"index_name: {index_name}")
         
-    if os_client.indices.exists(index_name):
+    if os_client.indices.exists(index=index_name):
         logger.info(f"use exist index: {index_name}")
         return False
     else:
@@ -158,7 +159,7 @@ def initiate_knowledge_base():
 
         try: # create index
             response = os_client.indices.create(
-                vectorIndexName,
+                index=vectorIndexName,
                 body=body
             )
             logger.info(f"opensearch index was created: {response}")
@@ -218,6 +219,14 @@ def initiate_knowledge_base():
                                 'bedrockEmbeddingModelConfiguration': {
                                     'dimensions': 1024
                                 }
+                            },
+                            'supplementalDataStorageConfiguration': {
+                            'storageLocations': [{
+                                    'type': 'S3',
+                                    's3Location': {
+                                        'uri': f"s3://{s3_bucket}"
+                                    }
+                                }]
                             }
                         }
                     },
@@ -307,7 +316,7 @@ def initiate_knowledge_base():
                     'parsingConfiguration': {
                         'bedrockFoundationModelConfiguration': {
                             'modelArn': parsingModelArn,
-                            # 'parsingModality': 'MULTIMODAL'
+                            'parsingModality': 'MULTIMODAL'
                         },
                         'parsingStrategy': 'BEDROCK_FOUNDATION_MODEL'
                         # 'bedrockDataAutomationConfiguration': {
@@ -347,7 +356,7 @@ def retrieve_documents_from_knowledge_base(query, top_k):
         
         try: 
             documents = retriever.invoke(query)
-            # logger.info('documents: ', documents)
+            # print('documents: ', documents)
             logger.info(f"--> docs from knowledge base")
             for i, doc in enumerate(documents):
                 print_doc(i, doc)
@@ -368,11 +377,11 @@ def retrieve_documents_from_knowledge_base(query, top_k):
             if "s3Location" in doc.metadata["location"]:
                 link = doc.metadata["location"]["s3Location"]["uri"] if doc.metadata["location"]["s3Location"]["uri"] is not None else ""
                 
-                # logger.info('link:', link)    
+                # print('link:', link)    
                 pos = link.find(f"/{doc_prefix}")
                 name = link[pos+len(doc_prefix)+1:]
                 encoded_name = parse.quote(name)
-                # logger.info('name:', name)
+                # print('name:', name)
                 link = f"{path}/{doc_prefix}{encoded_name}"
                 
             elif "webLocation" in doc.metadata["location"]:

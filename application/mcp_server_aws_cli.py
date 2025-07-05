@@ -1,9 +1,17 @@
+import json
 import logging
+import os
+import aws_cli as aws_utils
 import sys
-import subprocess
 
-from mcp.server.fastmcp import FastMCP 
-from typing import List, Optional
+from mcp.server.fastmcp import FastMCP
+from typing import Any, Dict, List, Optional
+
+import boto3
+from botocore.exceptions import ParamValidationError, ValidationError
+from botocore.response import StreamingBody
+from colorama import Fore, Style, init
+from rich.panel import Panel
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -12,364 +20,323 @@ logging.basicConfig(
         logging.StreamHandler(sys.stderr)
     ]
 )
-logger = logging.getLogger("aws-cli")
+logger = logging.getLogger("mcp-server-aws-cost")
 
 try:
     mcp = FastMCP(
-        name = "tools",
+        name = "aws_cli",
         instructions=(
             "You are a helpful assistant. "
-            "You can use tools for the user's question and provide the answer."
-        ),
+            "You can check the status of Amazon S3 and retrieve insights."
+        )
     )
     logger.info("MCP server initialized successfully")
 except Exception as e:
         err_msg = f"Error: {str(e)}"
         logger.info(f"{err_msg}")
 
+aws_region = os.environ.get("AWS_REGION", "us-west-2")    
 
-######################################
-# AWS CLI
-######################################
+MUTATIVE_OPERATIONS = [
+    "create",
+    "put",
+    "delete",
+    "update",
+    "terminate",
+    "revoke",
+    "disable",
+    "deregister",
+    "stop",
+    "add",
+    "modify",
+    "remove",
+    "attach",
+    "detach",
+    "start",
+    "enable",
+    "register",
+    "set",
+    "associate",
+    "disassociate",
+    "allocate",
+    "release",
+    "cancel",
+    "reboot",
+    "accept",
+]
 
-@mcp.tool()    
-def run_aws_cli(command: str, subcommand: str, options: str) -> str:
+def get_boto3_client(
+    service_name: str,
+    region_name: str,
+    profile_name: Optional[str] = None,
+) -> Any:
     """
-    run aws command using aws cli and then return the result
-    command: AWS CLI command (e.g., s3, ec2, dynamodb)
-    subcommand: subcommand for the AWS CLI command (e.g., ls, cp, get-object)
-    options: additional options for the command (e.g., --bucket mybucket)
-    return: command output as string
-    """   
-    logger.info(f"run_aws_cli_command --> command: {command}, subcommand: {subcommand}, options: {options}")
-    
-    # Build command list
-    cmd = ['aws', command, subcommand]
-    logger.info(f"run_aws_cli_command --> cmd: {cmd}")
-    
-    if options:
-        options_list = options.split()
-        cmd.extend(options_list)
-    
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            error_message = f"execution error: {result.stderr}"
-            logger.error(error_message)
-            return error_message
-        return result.stdout
-    except Exception as e:
-        error_message = f"{str(e)}"
-        logger.error(error_message)
-        return error_message
+    Create an AWS boto3 client for the specified service and region.
 
-@mcp.tool()    
-def retrieve_aws_cost(start_date: str, end_date: str, granularity: str = "MONTHLY") -> str:
-    """
-    Retrieve AWS costs using AWS Cost Explorer for the specified period.
-    
     Args:
-        start_date: Start date in YYYY-MM-DD format
-        end_date: End date in YYYY-MM-DD format
-        granularity: Data grouping unit (DAILY, MONTHLY, HOURLY)
-    
-    Returns:
-        AWS cost information in JSON format
-    """
-    logger.info(f"retrieve_aws_cost --> start_date: {start_date}, end_date: {end_date}, granularity: {granularity}")
-    
-    cmd = [
-        'aws', 'ce', 'get-cost-and-usage',
-        '--time-period', f'Start={start_date},End={end_date}',
-        '--granularity', granularity,
-        '--metrics', 'UnblendedCost',
-        '--group-by', 'Type=DIMENSION,Key=SERVICE'
-    ]
-    
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        return result.stdout
-    except subprocess.CalledProcessError as e:
-        error_message = f"Cost retrieval execution error: {e.stderr}"
-        logger.error(error_message)
-        return error_message
-    except Exception as e:
-        error_message = f"{str(e)}"
-        logger.error(error_message)
-        return error_message
+        service_name: Name of the AWS service (e.g., 's3', 'ec2', 'dynamodb')
+        region_name: AWS region name (e.g., 'us-west-2', 'us-east-1')
+        profile_name: Optional AWS profile name from ~/.aws/credentials
 
-@mcp.tool()    
-def list_objects_by_cli(bucket_name: str, prefix: Optional[str] = None, delimiter: Optional[str] = None, region: str = "us-west-2") -> str:
+    Returns:
+        A boto3 client object for the specified service
     """
-    List objects in an S3 bucket using list-objects-v2 command.
-    
+    session = boto3.Session(profile_name=profile_name)
+    return session.client(service_name=service_name, region_name=region_name)
+
+def handle_streaming_body(response: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Process streaming body responses from AWS into regular Python objects.
+
+    Some AWS APIs return StreamingBody objects that need special handling to
+    convert them into regular Python dictionaries or strings for proper JSON serialization.
+
     Args:
-        bucket_name: Name of the S3 bucket
-        prefix: Optional prefix to filter objects (e.g., 'folder/'). Default is None.
-        delimiter: Optional delimiter to group objects (e.g., '/'). Default is None.
-        region: AWS region (e.g., 'us-west-2'). Default is us-west-2.
-    
-    Returns:
-        List of objects in the bucket in JSON format
-    """
-    logger.info(f"list_objects --> bucket_name: {bucket_name}, prefix: {prefix}, delimiter: {delimiter}, region: {region}")
-    
-    # First check if bucket exists
-    check_cmd = ['aws', 's3api', 'head-bucket', '--bucket', bucket_name, '--region', region]
-    try:
-        subprocess.run(check_cmd, capture_output=True, text=True, check=True)
-    except subprocess.CalledProcessError as e:
-        error_message = f"Bucket {bucket_name} does not exist or is not accessible: {e.stderr}"
-        logger.error(error_message)
-        return error_message
-    
-    # If bucket exists, list objects
-    cmd = ['aws', 's3api', 'list-objects-v2', '--bucket', bucket_name, '--region', region]
-    
-    if prefix:
-        cmd.extend(['--prefix', prefix])
-    if delimiter:
-        cmd.extend(['--delimiter', delimiter])
-    
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            error_message = f"Failed to list objects: {result.stderr}"
-            logger.error(error_message)
-            return error_message
-        return result.stdout
-    except Exception as e:
-        error_message = f"Error executing S3 command: {str(e)}"
-        logger.error(error_message)
-        return error_message
+        response: AWS API response that may contain StreamingBody objects
 
-@mcp.tool()    
-def get_ec2_instances(region: str = "us-west-2") -> str:
+    Returns:
+        Processed response with StreamingBody objects converted to Python objects
     """
-    Retrieve EC2 instance information using AWS CLI.
-    
+    for key, value in response.items():
+        if isinstance(value, StreamingBody):
+            content = value.read()
+            try:
+                response[key] = json.loads(content.decode("utf-8"))
+            except json.JSONDecodeError:
+                response[key] = content.decode("utf-8")
+    return response
+
+
+def get_available_services() -> List[str]:
+    """
+    Get a list of all available AWS services supported by boto3.
+
+    Returns:
+        List of service names as strings
+    """
+    services = boto3.Session().get_available_services()
+    return list(services)
+
+
+def get_available_operations(service_name: str) -> List[str]:
+    """
+    Get a list of all available operations for a specific AWS service.
+
     Args:
-        region: AWS region (e.g., 'us-west-2'). Default is us-west-2.
-    
-    Returns:
-        EC2 instance information in JSON format
-    """
-    logger.info(f"get_ec2_instances --> region: {region}")
-    
-    cmd = ['aws', 'ec2', 'describe-instances', '--region', region]
-    logger.info(f"get_ec2_instances --> cmd: {cmd}")
-    
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        return result.stdout
-    except subprocess.CalledProcessError as e:
-        error_message = f"Failed to get EC2 instances: {e.stderr}"
-        logger.error(error_message)
-        return error_message
-    except Exception as e:
-        error_message = f"Error executing EC2 command: {str(e)}"
-        logger.error(error_message)
-        return error_message
+        service_name: Name of the AWS service (e.g., 's3', 'ec2')
 
-@mcp.tool()    
-def list_secrets(region: str = "us-west-2") -> str:
+    Returns:
+        List of operation names as strings
     """
-    List secrets in AWS Secrets Manager.
-    
+
+    aws_region = os.environ.get("AWS_REGION", "us-west-2")
+    try:
+        client = boto3.client(service_name, region_name=aws_region)
+        return [op for op in dir(client) if not op.startswith("_")]
+    except Exception as e:
+        logger.error(f"Error getting operations for service {service_name}: {str(e)}")
+        return []
+
+
+TOOL_SPEC = {
+    "name": "aws_cli",
+    "description": (
+        "Make a boto3 client call with the specified service, operation, and parameters. "
+        "Boto3 operations are snake_case."
+    ),
+    "inputSchema": {
+        "json": {
+            "type": "object",
+            "properties": {
+                "service_name": {
+                    "type": "string",
+                    "description": "The name of the AWS service",
+                },
+                "operation_name": {
+                    "type": "string",
+                    "description": "The name of the operation to perform",
+                },
+                "parameters": {
+                    "type": "object",
+                    "description": "The parameters for the operation",
+                },
+                "region": {
+                    "type": "string",
+                    "description": "Region name for calling the operation on AWS boto3",
+                },
+                "label": {
+                    "type": "string",
+                    "description": (
+                        "Label of AWS API operations human readable explanation. "
+                        "This is useful for communicating with human."
+                    ),
+                },
+                "profile_name": {
+                    "type": "string",
+                    "description": (
+                        "Optional: AWS profile name to use from ~/.aws/credentials. "
+                        "Defaults to default profile if not specified."
+                    ),
+                },
+            },
+            "required": [
+                "region",
+                "service_name",
+                "operation_name",
+                "parameters",
+                "label",
+            ],
+        }
+    },
+}
+
+from typing_extensions import TypedDict
+class ToolUse(TypedDict):
+    """A request from the model to use a specific tool with the provided input.
+
+    Attributes:
+        input: The input parameters for the tool.
+            Can be any JSON-serializable type.
+        name: The name of the tool to invoke.
+    """
+    input: Any
+    name: str
+
+from strands.types.tools import ToolResult, ToolUse
+
+@mcp.tool()
+def aws_cli(
+    service_name: str,
+    operation_name: str,
+    parameters: Dict[str, Any],
+    region: str = aws_region,
+    label: str = "AWS Operation Details",
+    profile_name: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Execute AWS service operations using boto3 with comprehensive error handling and validation.
+
+    This tool provides a universal interface to AWS services, allowing you to execute
+    any operation supported by boto3. It handles authentication, parameter validation,
+    response formatting, and provides helpful error messages with schema recommendations
+    when invalid parameters are provided.
+
+    How It Works:
+    ------------
+    1. The tool validates the provided service and operation names against available APIs
+    2. For potentially disruptive operations (create, delete, etc.), it prompts for confirmation
+    3. It sets up a boto3 client with appropriate region and credentials
+    4. The requested operation is executed with the provided parameters
+    5. Responses are processed to handle special data types (e.g., streaming bodies)
+    6. If errors occur, helpful messages and expected parameter schemas are returned
+
+    Common Usage Scenarios:
+    ---------------------
+    - Resource Management: Create, list, modify or delete AWS resources
+    - Data Operations: Store, retrieve, or process data in AWS services
+    - Configuration: Update settings or permissions for AWS services
+    - Monitoring: Retrieve metrics, logs or status information
+    - Security Operations: Manage IAM roles, policies or security settings
+
     Args:
-        region: AWS region (e.g., 'us-west-2'). Default is us-west-2.
-    
-    Returns:
-        List of secrets in JSON format
-    """
-    logger.info(f"list_secrets --> region: {region}")
-    
-    cmd = ['aws', 'secretsmanager', 'list-secrets', '--region', region]
-    logger.info(f"list_secrets --> cmd: {cmd}")
-    
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        return result.stdout
-    except subprocess.CalledProcessError as e:
-        error_message = f"Failed to list secrets: {e.stderr}"
-        logger.error(error_message)
-        return error_message
-    except Exception as e:
-        error_message = f"Error executing Secrets Manager command: {str(e)}"
-        logger.error(error_message)
-        return error_message
+        service_name: AWS service name (e.g., 's3', 'ec2', 'dynamodb')
+        operation_name: Operation to perform in snake_case (e.g., 'list_buckets')
+        parameters: Dictionary of parameters for the operation
+        region: AWS region (e.g., 'us-west-2')
+        label: Human-readable description of the operation
+        profile_name: Optional AWS profile name for credentials
 
-@mcp.tool()    
-def create_secret(name: str, secret_value: str, description: str = "", region: str = "us-west-2") -> str:
-    """
-    Create a new secret in AWS Secrets Manager.
-    
-    Args:
-        name: Name of the secret (e.g., 'my-db-password')
-        secret_value: The secret value to store (e.g., '{"username":"admin","password":"secret123"}')
-        description: Optional description for the secret
-        region: AWS region (e.g., 'us-west-2'). Default is us-west-2.
-    
     Returns:
-        Result of the create-secret operation in JSON format
-    """
-    logger.info(f"create_secret --> name: {name}, region: {region}")
-    
-    cmd = [
-        'aws', 'secretsmanager', 'create-secret',
-        '--name', name,
-        '--secret-string', secret_value,
-        '--region', region
-    ]
-    
-    if description:
-        cmd.extend(['--description', description])
-    
-    logger.info(f"create_secret --> cmd: {cmd}")
-    
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        return result.stdout
-    except subprocess.CalledProcessError as e:
-        error_message = f"Failed to create secret: {e.stderr}"
-        logger.error(error_message)
-        return error_message
-    except Exception as e:
-        error_message = f"Error executing Secrets Manager command: {str(e)}"
-        logger.error(error_message)
-        return error_message
+        ToolResult dictionary with:
+        - status: 'success' or 'error'
+        - content: List of content dictionaries with response text
 
-@mcp.tool()    
-def list_s3_buckets(region: str = "us-west-2") -> str:
+    Notes:
+        - Mutative operations (create, delete, etc.) require user confirmation in non-dev environments
+        - You can disable confirmation by setting the environment variable BYPASS_TOOL_CONSENT=true
+        - The tool automatically handles special response types like streaming bodies
+        - For validation errors, the tool attempts to generate the correct input schema
+        - All datetime objects are automatically converted to strings for proper JSON serialization
     """
-    List all S3 buckets in the specified region.
-    
-    Args:
-        region: AWS region (e.g., 'us-west-2'). Default is us-west-2.
-    
-    Returns:
-        List of S3 buckets in JSON format
-    """
-    logger.info(f"list_s3_buckets --> region: {region}")
-    
-    cmd = ['aws', 's3api', 'list-buckets', '--region', region]
-    logger.info(f"list_s3_buckets --> cmd: {cmd}")
-    
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            error_message = f"Failed to list S3 buckets: {result.stderr}"
-            logger.error(error_message)
-            return error_message
-        return result.stdout
-    except Exception as e:
-        error_message = f"Error executing S3 command: {str(e)}"
-        logger.error(error_message)
-        return error_message
+    console = aws_utils.create()
 
-@mcp.tool()    
-def check_bucket_contents(bucket_name: str, region: str = "us-west-2") -> str:
-    """
-    Check if a bucket is empty by listing its objects.
-    
-    Args:
-        bucket_name: Name of the S3 bucket
-        region: AWS region (e.g., 'us-west-2'). Default is us-west-2.
-    
-    Returns:
-        List of objects in the bucket in JSON format
-    """
-    logger.info(f"check_bucket_contents --> bucket_name: {bucket_name}, region: {region}")
-    
-    cmd = [
-        'aws', 's3api', 'list-objects-v2',
-        '--bucket', bucket_name,
-        '--region', region
-    ]
-    logger.info(f"check_bucket_contents --> cmd: {cmd}")
-    
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            error_message = f"Failed to check bucket contents: {result.stderr}"
-            logger.error(error_message)
-            return error_message
-        return result.stdout
-    except Exception as e:
-        error_message = f"Error executing S3 command: {str(e)}"
-        logger.error(error_message)
-        return error_message
+    # Create a panel for AWS Operation Details
+    operation_details = f"{Fore.CYAN}Service:{Style.RESET_ALL} {service_name}\n"
+    operation_details += f"{Fore.CYAN}Operation:{Style.RESET_ALL} {operation_name}\n"
+    operation_details += f"{Fore.CYAN}Parameters:{Style.RESET_ALL}\n"
+    for key, value in parameters.items():
+        operation_details += f"  - {key}: {value}\n"
 
-@mcp.tool()    
-def delete_bucket_object(bucket_name: str, object_key: str, region: str = "us-west-2") -> str:
-    """
-    Delete an object from an S3 bucket.
-    
-    Args:
-        bucket_name: Name of the S3 bucket
-        object_key: Key (path) of the object to delete
-        region: AWS region (e.g., 'us-west-2'). Default is us-west-2.
-    
-    Returns:
-        Result of the delete operation in JSON format
-    """
-    logger.info(f"delete_bucket_object --> bucket_name: {bucket_name}, object_key: {object_key}, region: {region}")
-    
-    cmd = [
-        'aws', 's3api', 'delete-object',
-        '--bucket', bucket_name,
-        '--key', object_key,
-        '--region', region
-    ]
-    logger.info(f"delete_bucket_object --> cmd: {cmd}")
-    
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            error_message = f"Failed to delete object: {result.stderr}"
-            logger.error(error_message)
-            return error_message
-        return result.stdout
-    except Exception as e:
-        error_message = f"Error executing S3 command: {str(e)}"
-        logger.error(error_message)
-        return error_message
+    console.print(Panel(operation_details, title=label, expand=False))
 
-@mcp.tool()    
-def delete_bucket(bucket_name: str, region: str = "us-west-2") -> str:
-    """
-    Delete an empty S3 bucket.
+    logger.debug(
+        "Invoking: service_name = %s, operation_name = %s, parameters = %s" % (service_name, operation_name, parameters)
+    )
     
-    Args:
-        bucket_name: Name of the S3 bucket to delete
-        region: AWS region (e.g., 'us-west-2'). Default is us-west-2.
-    
-    Returns:
-        Result of the delete operation in JSON format
-    """
-    logger.info(f"delete_bucket --> bucket_name: {bucket_name}, region: {region}")
-    
-    cmd = [
-        'aws', 's3api', 'delete-bucket',
-        '--bucket', bucket_name,
-        '--region', region
-    ]
-    logger.info(f"delete_bucket --> cmd: {cmd}")
-    
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            error_message = f"Failed to delete bucket: {result.stderr}"
-            logger.error(error_message)
-            return error_message
-        return result.stdout
-    except Exception as e:
-        error_message = f"Error executing S3 command: {str(e)}"
-        logger.error(error_message)
-        return error_message
+    # Check AWS service
+    available_services = get_available_services()
+    logger.info(f"Available services: {available_services}")
 
+    if service_name not in available_services:
+        logger.debug(f"{Fore.RED}Invalid AWS service: {service_name}{Style.RESET_ALL}")
+        return {
+            "status": "error",
+            "content": [
+                {"text": f"Invalid AWS service: {service_name}\nAvailable services: {str(available_services)}"}
+            ],
+        }
+
+    # Check AWS operation
+    available_operations = get_available_operations(service_name)
+    if operation_name not in available_operations:
+        logger.debug(f"{Fore.RED}Invalid AWS operation: {operation_name}{Style.RESET_ALL}")
+        return {
+            "status": "error",
+            "content": [
+                {"text": f"Invalid AWS operation: {operation_name}, Available operations:\n{available_operations}\n"}
+            ],
+        }
+
+    # Set up the boto3 client
+    client = get_boto3_client(service_name, region, profile_name)
+    operation_method = getattr(client, operation_name)
+
+    try:
+        response = operation_method(**parameters)
+        response = handle_streaming_body(response)
+        response = aws_utils.convert_datetime_to_str(response)
+
+        return {
+            "status": "success",
+            "content": [{"text": f"Success: {str(response)}"}],
+        }
+    except (ValidationError, ParamValidationError) as val_ex:
+        # Handle validation errors with schema
+        try:
+            schema = aws_utils.generate_input_schema(service_name, operation_name)
+            logger.info(f"Schema: {schema}")
+
+            return {
+                "status": "error",
+                "content": [
+                    {"text": f"Validation error: {str(val_ex)}"},
+                    {"text": f"Expected input schema for {operation_name}:"},
+                    {"text": json.dumps(schema, indent=2)},
+                ],
+            }
+        except Exception as schema_ex:
+            logger.error(f"Failed to generate schema: {str(schema_ex)}")
+            return {
+                "status": "error",
+                "content": [{"text": f"Validation error: {str(val_ex)}"}],
+            }
+    except Exception as ex:
+        logger.warning(f"AWS call threw exception: {type(ex).__name__}")
+        return {
+            "status": "error",
+            "content": [{"text": f"AWS call threw exception: {str(ex)}"}],
+        }
+    
 if __name__ =="__main__":
     print(f"###### main ######")
-    mcp.run(transport="stdio")
-
-
+    mcp.run(transport="stdio")    

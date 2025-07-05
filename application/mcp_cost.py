@@ -126,9 +126,6 @@ def get_service_cost(start_date: str, end_date: str, granularity: str = "MONTHLY
             
             service_costs.append(period_data)
             
-        global service_cost_data
-        service_cost_data = service_costs
-
         return {
             'service_costs': service_costs,
             'granularity': granularity,
@@ -264,10 +261,6 @@ def get_url(figure, prefix):
 def create_service_cost_visualizations():
     """Cost Visualization of aws services"""
     logger.info("Creating cost visualizations...")
-
-    if not cost_data['service_costs']:
-        logger.info("No cost data available")
-        return None
         
     paths = []
     

@@ -16,7 +16,7 @@ logger = logging.getLogger("aws-s3")
 
 try:
     mcp = FastMCP(
-        name = "tools",
+        name = "aws_storage",
         instructions=(
             "You are a helpful assistant. "
             "You can check the status of Amazon S3 and retrieve insights."
