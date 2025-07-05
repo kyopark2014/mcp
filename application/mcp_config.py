@@ -24,6 +24,30 @@ projectName = config["projectName"] if "projectName" in config else "mcp"
 
 mcp_user_config = {}    
 def load_config(mcp_type):
+    if mcp_type == "image generation":
+        mcp_type = 'image_generation'
+    elif mcp_type == "aws diagram":
+        mcp_type = 'aws_diagram'
+    elif mcp_type == "aws document":
+        mcp_type = 'aws_documentation'
+    elif mcp_type == "aws cost":
+        mcp_type = 'aws_cost'
+    elif mcp_type == "ArXiv":
+        mcp_type = 'arxiv'
+    elif mcp_type == "aws cloudwatch":
+        mcp_type = 'aws_cloudwatch'
+    elif mcp_type == "aws storage":
+        mcp_type = 'aws_storage'
+    elif mcp_type == "knowledge base":
+        mcp_type = 'knowledge_base_lambda'
+    elif mcp_type == "code interpreter":
+        mcp_type = 'code_interpreter'
+    elif mcp_type == "aws cli":
+        mcp_type = 'aws_cli'
+    elif mcp_type == "text editor":
+        mcp_type = 'text_editor'
+    logger.info(f"mcp_type: {mcp_type}")
+
     if mcp_type == "basic":
         return {
             "mcpServers": {
@@ -424,30 +448,7 @@ def load_selected_config(mcp_servers: dict):
     for server in mcp_servers:
         logger.info(f"server: {server}")
 
-        if server == "image generation":
-            config = load_config('image_generation')
-        elif server == "aws diagram":
-            config = load_config('aws_diagram')
-        elif server == "aws document":
-            config = load_config('aws_documentation')
-        elif server == "aws cost":
-            config = load_config('aws_cost')
-        elif server == "ArXiv":
-            config = load_config('arxiv')
-        elif server == "aws cloudwatch":
-            config = load_config('aws_cloudwatch')
-        elif server == "aws storage":
-            config = load_config('aws_storage')
-        elif server == "knowledge base":
-            config = load_config('knowledge_base_lambda')
-        elif server == "code interpreter":
-            config = load_config('code_interpreter')
-        elif server == "aws cli":
-            config = load_config('aws_cli')
-        elif server == "text editor":
-            config = load_config('text_editor')
-        else:
-            config = load_config(server)
+        config = load_config(server)
         # logger.info(f"config: {config}")
         
         if config:
