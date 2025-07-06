@@ -276,7 +276,7 @@ def extract_reference(response):
                 pass
     return references
 
-async def run(draft, reflection, mcp_servers, containers, previous_status_msg, previous_response_msg):
+async def run_reflection_agent(draft, reflection, mcp_servers, containers, previous_status_msg, previous_response_msg):
     global status_msg, response_msg
     status_msg = previous_status_msg
     response_msg = previous_response_msg

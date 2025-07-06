@@ -32,6 +32,9 @@ import json
 import traceback
 import asyncio
 import aws_cost.reflection_agent as reflection_agent
+import string
+import trans
+import utils
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -236,8 +239,8 @@ def service_cost(state: CostState, config) -> dict:
 
     if chat.debug_mode == "Enable":
         value = service_costs.to_string()
-        add_notification(containers, value[:800])
-        response_msg.append(value[:800])
+        add_notification(containers, value)
+        response_msg.append(value)
     
     # service cost (pie chart)
     fig_pie = px.pie(
@@ -261,13 +264,13 @@ def service_cost(state: CostState, config) -> dict:
     instruction = f"이 이미지는 {task}에 대한 그래프입니다. 하나의 문장으로 이 그림에 대해 500자로 설명하세요."
     summary = get_summary(fig_pie, instruction)
 
-    body = f"## {task}\n\n{output_images}\n\n{summary}\n\n"
+    body = f"### {task}\n\n{output_images}\n\n{summary}\n\n"
     chat.updata_object(key, time + body, 'append')
 
     if chat.debug_mode == "Enable":
         value = body
-        add_notification(containers, value[:800])
-        response_msg.append(value[:800])
+        add_notification(containers, value)
+        response_msg.append(value)
 
     appendix = state["appendix"] if "appendix" in state else []
     appendix.append(body)
@@ -333,8 +336,8 @@ def region_cost(state: CostState, config) -> dict:
 
     if chat.debug_mode == "Enable":
         value = region_costs.to_string()
-        add_notification(containers, f"region_cost: {value[:800]}")
-        response_msg.append(value[:800])
+        add_notification(containers, f"region_cost: {value}")
+        response_msg.append(value)
 
     # region cost (bar chart)
     fig_bar = px.bar(
@@ -356,13 +359,13 @@ def region_cost(state: CostState, config) -> dict:
     instruction = f"이 이미지는 {task}에 대한 그래프입니다. 하나의 문장으로 이 그림에 대해 500자로 설명하세요. 여기서 비용 단위는 dollar 입니다."
     summary = get_summary(fig_bar, instruction)
 
-    body = f"## {task}\n\n{output_images}\n\n{summary}\n\n"
+    body = f"### {task}\n\n{output_images}\n\n{summary}\n\n"
     chat.updata_object(key, time + body, 'append')
 
     if chat.debug_mode == "Enable":
         value = body
-        add_notification(containers, f"region_cost: {value[:800]}")
-        response_msg.append(time + value[:200])
+        add_notification(containers, f"{value}")
+        response_msg.append(time + value)
 
     appendix = state["appendix"] if "appendix" in state else []
     appendix.append(body)
@@ -431,8 +434,8 @@ def daily_cost(state: CostState, config) -> dict:
 
     if chat.debug_mode == "Enable":
         value = daily_costs_df.to_string()
-        add_notification(containers, f"daily_cost: {value[:800]}")
-        response_msg.append(value[:800])
+        add_notification(containers, f"daily_cost: {value}")
+        response_msg.append(value)
 
     # daily trend cost (line chart)
     fig_line = px.line(
@@ -456,13 +459,13 @@ def daily_cost(state: CostState, config) -> dict:
     instruction = f"이 이미지는 {task}에 대한 그래프입니다. 하나의 문장으로 이 그림에 대해 500자로 설명하세요. 여기서 비용 단위는 dollar 입니다."
     summary = get_summary(fig_line, instruction)
 
-    body = f"## {task}\n\n{output_images}\n\n{summary}\n\n"
+    body = f"### {task}\n\n{output_images}\n\n{summary}\n\n"
     chat.updata_object(key, time + body, 'append')
 
     if chat.debug_mode == "Enable":
         value = body
-        add_notification(containers, f"{value[:800]}")
-        response_msg.append(value[:800])
+        add_notification(containers, f"{value}")
+        response_msg.append(value)
 
     appendix = state["appendix"] if "appendix" in state else []
     appendix.append(body)
@@ -540,8 +543,8 @@ def generate_insight(state: CostState, config) -> dict:
 
     if chat.debug_mode == "Enable":
         value = response.content
-        add_notification(containers, f"{value[:800]}")
-        response_msg.append(value[:800])
+        add_notification(containers, f"{value}")
+        response_msg.append(value)
 
     iteration = state["iteration"] if "iteration" in state else 0
 
@@ -571,8 +574,8 @@ def reflect_context(state: CostState, config) -> dict:
 
     if chat.debug_mode == "Enable":
         value = body
-        add_notification(containers, f"## Reflection\n\n{value[:800]}")
-        response_msg.append(value[:800])
+        add_notification(containers, f"## Reflection\n\n{value}")
+        response_msg.append(value)
 
     return {
         "reflection": result
@@ -591,7 +594,7 @@ def mcp_tools(state: CostState, config) -> dict:
         containers["status"].info(get_status_msg("mcp_tools"))
 
     global status_msg, response_msg 
-    reflection_result, image_url, status_msg, response_msg = asyncio.run(reflection_agent.run(draft, state["reflection"], mcp_servers, containers, status_msg, response_msg))
+    reflection_result, image_url, status_msg, response_msg = asyncio.run(reflection_agent.run_reflection_agent(draft, state["reflection"], mcp_servers, containers, status_msg, response_msg))
     logger.info(f"reflection result: {reflection_result}")
 
     value = ""
@@ -612,8 +615,8 @@ def mcp_tools(state: CostState, config) -> dict:
 
     if chat.debug_mode == "Enable":
         value = body
-        add_notification(containers, f"## Reflected Report\n\n{value[:800]}")
-        response_msg.append(value[:800])
+        add_notification(containers, f"## Reflected Report\n\n{value}")
+        response_msg.append(value)
 
     additional_context = state["additional_context"] if "additional_context" in state else []
     additional_context.append(reflection_result)
@@ -654,18 +657,48 @@ agent = CostAgent(
 
 cost_agent = agent.compile()
 
-def run(request_id: str, mcp_servers: dict, containers):
+def create_final_report(request_id, question, body, urls):
+    # report.html
+    output_html = trans.trans_md_to_html(body, question)
+    chat.create_object(f"artifacts/{request_id}_report.html", output_html)
+
+    logger.info(f"url of html: {chat.path}/artifacts/{request_id}_report.html")
+    urls.append(f"{chat.path}/artifacts/{request_id}_report.html")
+
+    output = asyncio.run(utils.generate_pdf_report(body, request_id))
+    logger.info(f"result of generate_pdf_report: {output}")
+    if output: # reports/request_id.pdf         
+        pdf_filename = f"artifacts/{request_id}.pdf"
+        with open(pdf_filename, 'rb') as f:
+            pdf_bytes = f.read()
+            chat.upload_to_s3_artifacts(pdf_bytes, f"{request_id}.pdf")
+        logger.info(f"url of pdf: {chat.path}/artifacts/{request_id}.pdf")
+    
+    urls.append(f"{chat.path}/artifacts/{request_id}.pdf")
+
+    # report.md
+    key = f"artifacts/{request_id}_report.md"
+    time = f"# {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"    
+    final_result = body + "\n\n" + f"## 최종 결과\n\n"+'\n\n'.join(urls)    
+    chat.create_object(key, time + final_result)
+    
+    return urls
+
+def run_cost_agent(mcp_servers, st):
+    logger.info(f"###### run_cost_agent ######")
+    
+    request_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))    
+    template = open(os.path.join(os.path.dirname(__file__), f"report.html")).read()
+    template = template.replace("{request_id}", request_id)
+    template = template.replace("{sharing_url}", chat.path)
+    key = f"artifacts/{request_id}.html"
+    chat.create_object(key, template)
     logger.info(f"request_id: {request_id}")
+    
+    report_url = chat.path + "/artifacts/" + request_id + ".html"
+    logger.info(f"report_url: {report_url}")
+    st.info(f"report_url: {report_url}")
 
-    global status_msg
-    status_msg = []
-
-    # add plan to report
-    key = f"artifacts/{request_id}_plan.md"
-
-    if chat.debug_mode == "Enable":
-        containers["status"].info(get_status_msg("(start"))
-        
     # draw a graph
     graph_diagram = cost_agent.get_graph().draw_mermaid_png(
         draw_method=MermaidDrawMethod.API,
@@ -675,13 +708,28 @@ def run(request_id: str, mcp_servers: dict, containers):
     image_filename = f'workflow_{random_id}.png'
     url = chat.upload_to_s3(graph_diagram, image_filename)
     
-    # update plan.md
+    # add plan to report
+    key = f"artifacts/{request_id}_plan.md"
     task = "실행 계획"
     output_images = f"![{task}]({url})\n\n"
-    body = f"## {task}\n\n{output_images}"
+    body = f"### {task}\n\n{output_images}"
     chat.updata_object(key, body, 'prepend')
 
-    # make a report
+    # show status and response
+    containers = {
+        "tools": st.empty(),
+        "status": st.empty(),
+        "notification": [st.empty() for _ in range(500)]
+    }
+
+    if chat.debug_mode == "Enable":
+        containers["status"].info(get_status_msg("(start"))
+
+    global index, status_msg, response_msg
+    index = 0
+    status_msg = []
+    response_msg = []
+
     question = "AWS 사용량을 분석하세요."        
     inputs = {
         "messages": [HumanMessage(content=question)],
@@ -701,5 +749,14 @@ def run(request_id: str, mcp_servers: dict, containers):
             logger.info(f"--> key: {key}, value: {value}")
     
     logger.info(f"value: {value}")
+
+    urls = [report_url]
+    urls = create_final_report(request_id, "AWS 비용 분석 보고서", value["final_response"], urls)
+    logger.info(f"urls: {urls}")
+
+    if urls and chat.debug_mode == "Enable":
+        logger.info(f"urls: {urls}")        
+        with st.expander(f"최종 결과"):
+            st.markdown("\n".join(urls))
 
     return value["final_response"]

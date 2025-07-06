@@ -835,6 +835,52 @@ def upload_to_s3(file_bytes, file_name):
         logger.info(f"{err_msg}")
         return None
 
+def upload_to_s3_artifacts(file_bytes, file_name):
+    """
+    Upload a file to S3 and return the URL
+    """
+    try:
+        if aws_access_key and aws_secret_key:
+            s3_client = boto3.client(
+                service_name='s3',
+                region_name=bedrock_region,
+                aws_access_key_id=aws_access_key,
+                aws_secret_access_key=aws_secret_key,
+                aws_session_token=aws_session_token
+            )
+        else:
+            s3_client = boto3.client(
+                service_name='s3',
+                region_name=bedrock_region
+        )
+
+        content_type = utils.get_contents_type(file_name)       
+        logger.info(f"content_type: {content_type}") 
+
+        s3_key = f"artifacts/{file_name}"
+        
+        user_meta = {  # user-defined metadata
+            "content_type": content_type,
+            "model_name": model_name
+        }
+        
+        response = s3_client.put_object(
+            Bucket=s3_bucket, 
+            Key=s3_key, 
+            ContentType=content_type,
+            Metadata = user_meta,
+            Body=file_bytes            
+        )
+        logger.info(f"upload response: {response}")
+
+        url = path+'/artifacts/'+parse.quote(file_name)
+        return url
+    
+    except Exception as e:
+        err_msg = f"Error uploading to S3: {str(e)}"
+        logger.info(f"{err_msg}")
+        return None
+
 def extract_and_display_s3_images(text, s3_client):
     """
     Extract S3 URLs from text, download images, and return them for display
