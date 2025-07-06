@@ -4,6 +4,7 @@ import json
 import utils
 import chat
 import tool_use
+import os
 
 from langchain.docstore.document import Document
 from tavily import TavilyClient  
@@ -35,10 +36,24 @@ config = utils.load_config()
 bedrock_region = config["region"] if "region" in config else "us-west-2"
 projectName = config["projectName"] if "projectName" in config else "agentic-workflow"
 
+aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
+aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+aws_session_token = os.environ.get('AWS_SESSION_TOKEN')
+aws_region = os.environ.get('AWS_DEFAULT_REGION', 'us-west-2')
+
 # load secret
-secretsmanager = boto3.client(
-    service_name='secretsmanager',
-    region_name=bedrock_region
+if aws_access_key and aws_secret_key:
+    secretsmanager = boto3.client(
+        service_name='secretsmanager',
+        region_name=bedrock_region,
+        aws_access_key_id=aws_access_key,
+        aws_secret_access_key=aws_secret_key,
+        aws_session_token=aws_session_token,
+    )
+else:
+    secretsmanager = boto3.client(
+        service_name='secretsmanager',
+        region_name=bedrock_region
 )
 
 # api key for tavily search

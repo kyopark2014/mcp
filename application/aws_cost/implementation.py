@@ -42,6 +42,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger("cost_analysis")
 
+aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
+aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+aws_session_token = os.environ.get('AWS_SESSION_TOKEN')
+aws_region = os.environ.get('AWS_DEFAULT_REGION', 'us-west-2')
+
 def get_url(figure, prefix):
     # Convert fig_pie to base64 image
     img_bytes = pio.to_image(figure, format="png")
@@ -187,7 +192,17 @@ def service_cost(state: CostState, config) -> dict:
         start_date = end_date - timedelta(days=days)
         
         # cost explorer
-        ce = boto3.client('ce')
+        if aws_access_key and aws_secret_key:
+            ce = boto3.client(
+                service_name='ce',
+                aws_access_key_id=aws_access_key, 
+                aws_secret_access_key=aws_secret_key, 
+                aws_session_token=aws_session_token
+            )
+        else:
+            ce = boto3.client(
+                service_name='ce'
+            )
 
         # service cost
         service_response = ce.get_cost_and_usage(
@@ -275,7 +290,17 @@ def region_cost(state: CostState, config) -> dict:
         start_date = end_date - timedelta(days=days)
         
         # cost explorer
-        ce = boto3.client('ce')
+        if aws_access_key and aws_secret_key:
+            ce = boto3.client(
+                service_name='ce',
+                aws_access_key_id=aws_access_key, 
+                aws_secret_access_key=aws_secret_key, 
+                aws_session_token=aws_session_token
+            )
+        else:
+            ce = boto3.client(
+                service_name='ce'
+            )
 
         # region cost
         region_response = ce.get_cost_and_usage(
@@ -360,7 +385,17 @@ def daily_cost(state: CostState, config) -> dict:
         start_date = end_date - timedelta(days=days)
         
         # cost explorer
-        ce = boto3.client('ce')
+        if aws_access_key and aws_secret_key:
+            ce = boto3.client(
+                service_name='ce',
+                aws_access_key_id=aws_access_key, 
+                aws_secret_access_key=aws_secret_key, 
+                aws_session_token=aws_session_token
+            )
+        else:
+            ce = boto3.client(
+                service_name='ce'
+            )
 
        # Daily Cost
         daily_response = ce.get_cost_and_usage(
@@ -549,6 +584,7 @@ def mcp_tools(state: CostState, config) -> dict:
     status_container = config.get("configurable", {}).get("status_container", None)
     response_container = config.get("configurable", {}).get("response_container", None)
     key_container = config.get("configurable", {}).get("key_container", None)
+    mcp_servers = config.get("configurable", {}).get("mcp_servers", None)
 
     appendix = state["appendix"] if "appendix" in state else []
 
@@ -556,7 +592,7 @@ def mcp_tools(state: CostState, config) -> dict:
         status_container.info(get_status_msg("mcp_tools"))
 
     global status_msg, response_msg 
-    reflection_result, image_url, status_msg, response_msg = asyncio.run(reflection_agent.run(draft, state["reflection"], status_container, response_container, key_container, status_msg, response_msg))
+    reflection_result, image_url, status_msg, response_msg = asyncio.run(reflection_agent.run(draft, state["reflection"], mcp_servers, status_container, response_container, key_container, status_msg, response_msg))
     logger.info(f"reflection result: {reflection_result}")
 
     value = ""
@@ -619,7 +655,7 @@ agent = CostAgent(
 
 cost_agent = agent.compile()
 
-def run(request_id: str, status_container=None, response_container=None, key_container=None):
+def run(request_id: str, mcp_servers: dict, status_container=None, response_container=None, key_container=None):
     logger.info(f"request_id: {request_id}")
 
     global status_msg
@@ -655,6 +691,7 @@ def run(request_id: str, status_container=None, response_container=None, key_con
         "request_id": request_id,
         "recursion_limit": 50,
         "max_iteration": 1,
+        "mcp_servers": mcp_servers,
         "status_container": status_container,
         "response_container": response_container,
         "key_container": key_container

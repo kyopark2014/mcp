@@ -5,7 +5,7 @@ import pandas as pd
 import plotly.express as px
 import traceback
 import chat
-
+import os
 from datetime import datetime, timedelta
 from langchain_core.prompts import ChatPromptTemplate
 
@@ -20,6 +20,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger("cost_analysis")
 
+aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
+aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+aws_session_token = os.environ.get('AWS_SESSION_TOKEN')
+aws_region = os.environ.get('AWS_DEFAULT_REGION', 'us-west-2')
+
 def get_cost_analysis(days: str=30):
     """Cost analysis data collection"""
     logger.info(f"Getting cost analysis...")
@@ -28,7 +33,15 @@ def get_cost_analysis(days: str=30):
         start_date = end_date - timedelta(days=days)
         
         # cost explorer
-        ce = boto3.client('ce')
+        if aws_access_key and aws_secret_key:
+            ce = boto3.client('ce',
+                region_name=aws_region,
+                aws_access_key_id=aws_access_key,
+                aws_secret_access_key=aws_secret_key,
+                aws_session_token=aws_session_token,
+            )
+        else:
+            ce = boto3.client('ce')
 
         # service cost
         service_response = ce.get_cost_and_usage(

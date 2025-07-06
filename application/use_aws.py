@@ -3,6 +3,11 @@
 import io
 import os
 
+aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
+aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+aws_session_token = os.environ.get('AWS_SESSION_TOKEN')
+aws_region = os.environ.get('AWS_DEFAULT_REGION', 'us-west-2')
+
 from rich.console import Console
 def create() -> Console:
     """Create rich console instance.
@@ -20,7 +25,6 @@ def create() -> Console:
 import re
 from datetime import datetime
 from typing import Any
-
 
 def convert_datetime_to_str(obj: Any) -> Any:
     """
@@ -223,14 +227,38 @@ def to_pascal_case(service_name: str, input_str: str) -> str:
 
     try:
         # Validate using boto3
-        client = boto3.client(service_name, region_name="us-east-1")
+        if aws_access_key and aws_secret_key:
+            client = boto3.client(
+                service_name, 
+                region_name="us-west-2", 
+                aws_access_key_id=aws_access_key, 
+                aws_secret_access_key=aws_secret_key, 
+                aws_session_token=aws_session_token
+            )
+        else:
+            client = boto3.client(
+                service_name, 
+                region_name="us-west-2"
+            )
         service_model = client.meta.service_model
         service_model.operation_model(pascal_case)
         return pascal_case
     except Exception:
         try:
             # Fallback: search for matching operation name
-            client = boto3.client(service_name, region_name="us-east-1")
+            if aws_access_key and aws_secret_key:
+                client = boto3.client(
+                    service_name, 
+                    region_name="us-west-2", 
+                    aws_access_key_id=aws_access_key, 
+                    aws_secret_access_key=aws_secret_key, 
+                    aws_session_token=aws_session_token
+                )
+            else:
+                client = boto3.client(
+                    service_name, 
+                    region_name="us-west-2"
+                )
             operations = client.meta.service_model.operation_names
             snake_case = to_snake_case(input_str)
             result = next(
@@ -264,7 +292,19 @@ def check_boto3_validity(service_name: str, operation_name: str) -> Tuple[bool, 
         (False, "Unknown service: 'invalid_service'")
     """
     try:
-        client = boto3.client(service_name, region_name="us-east-1")
+        if aws_access_key and aws_secret_key:
+            client = boto3.client(
+                service_name, 
+                region_name="us-west-2", 
+                aws_access_key_id=aws_access_key, 
+                aws_secret_access_key=aws_secret_key, 
+                aws_session_token=aws_session_token
+            )
+        else:
+            client = boto3.client(
+                service_name, 
+                region_name="us-west-2"
+            )
         pascal_operation_name = to_pascal_case(service_name, operation_name)
         snake_operation_name = to_snake_case(pascal_operation_name)
 
@@ -306,7 +346,19 @@ def generate_input_schema(service_name: str, operation_name: str) -> Dict[str, A
 
     try:
         # Create a boto3 client and get the service model
-        client = boto3.client(service_name, region_name="us-east-1")
+        if aws_access_key and aws_secret_key:
+            client = boto3.client(
+                service_name, 
+                region_name="us-west-2", 
+                aws_access_key_id=aws_access_key, 
+                aws_secret_access_key=aws_secret_key, 
+                aws_session_token=aws_session_token
+            )
+        else:
+            client = boto3.client(
+                service_name, 
+                region_name="us-west-2"
+            )
         service_model = client.meta.service_model
         pascal_operation_name = to_pascal_case(service_name, operation_name)
         operation_model = service_model.operation_model(pascal_operation_name)

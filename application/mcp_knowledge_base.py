@@ -4,6 +4,7 @@ import traceback
 import logging
 import sys
 import utils
+import os
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -28,11 +29,25 @@ numberOfDocs = 3
 model_name = "Claude 3.5 Haiku"
 knowledge_base_name = projectName
 
+aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
+aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+aws_session_token = os.environ.get('AWS_SESSION_TOKEN')
+aws_region = os.environ.get('AWS_DEFAULT_REGION', 'us-west-2')
+
 def retrieve_knowledge_base(query):
-    lambda_client = boto3.client(
-        service_name='lambda',
-        region_name=bedrock_region
-    )
+    if aws_access_key and aws_secret_key:
+        lambda_client = boto3.client(
+            service_name='lambda',
+            region_name=bedrock_region,
+            aws_access_key_id=aws_access_key,
+            aws_secret_access_key=aws_secret_key,
+            aws_session_token=aws_session_token,
+        )
+    else:
+        lambda_client = boto3.client(
+            service_name='lambda',
+            region_name=bedrock_region
+        )
 
     functionName = f"knowledge-base-for-{projectName}"
     logger.info(f"functionName: {functionName}")

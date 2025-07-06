@@ -22,6 +22,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger("mcp-basic")
 
+aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
+aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+aws_session_token = os.environ.get('AWS_SESSION_TOKEN')
+aws_region = os.environ.get('AWS_DEFAULT_REGION', 'us-west-2')
+
 def load_config():
     config = None
     
@@ -81,10 +86,19 @@ def save_mcp_env(mcp_env):
         json.dump(mcp_env, f)
 
 # api key to get weather information in agent
-secretsmanager = boto3.client(
-    service_name='secretsmanager',
-    region_name=bedrock_region
-)
+if aws_access_key and aws_secret_key:
+    secretsmanager = boto3.client(
+        service_name='secretsmanager',
+        region_name=bedrock_region,
+        aws_access_key_id=aws_access_key,
+        aws_secret_access_key=aws_secret_key,
+        aws_session_token=aws_session_token,
+    )
+else:
+    secretsmanager = boto3.client(
+        service_name='secretsmanager',
+        region_name=bedrock_region
+    )
 
 # api key for weather
 weather_api_key = ""

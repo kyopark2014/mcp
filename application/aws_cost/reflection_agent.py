@@ -3,6 +3,8 @@ import sys
 import json
 import traceback
 import chat
+import langgraph_agent
+import mcp_config
 
 from langgraph.prebuilt import ToolNode
 from typing import Literal
@@ -12,8 +14,6 @@ from langgraph.graph.message import add_messages
 from langchain_core.prompts import MessagesPlaceholder, ChatPromptTemplate
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from langchain_mcp_adapters.client import MultiServerMCPClient
-
-import chat
 
 logging.basicConfig(
     level=logging.INFO,  
@@ -273,12 +273,15 @@ def extract_reference(response):
                 pass
     return references
 
-async def run(draft, reflection, status_container, response_container, key_container, previous_status_msg, previous_response_msg):
+async def run(draft, reflection, mcp_servers, status_container, response_container, key_container, previous_status_msg, previous_response_msg):
     global status_msg, response_msg
     status_msg = previous_status_msg
     response_msg = previous_response_msg
 
-    server_params = chat.load_multiple_mcp_server_parameters()
+    mcp_json = mcp_config.load_selected_config(mcp_servers)
+    logger.info(f"mcp_json: {mcp_json}")   
+
+    server_params = langgraph_agent.load_multiple_mcp_server_parameters(mcp_json)
     logger.info(f"server_params: {server_params}")
 
     async with MultiServerMCPClient(server_params) as client:

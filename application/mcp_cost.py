@@ -9,7 +9,7 @@ import plotly.express as px
 import plotly.io as pio
 import random
 import traceback
-
+import os
 from typing import Dict, Optional, Any
 from datetime import datetime, timedelta
 from langchain_core.prompts import MessagesPlaceholder, ChatPromptTemplate
@@ -22,6 +22,11 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger("mcp-cost")
+
+aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
+aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+aws_session_token = os.environ.get('AWS_SESSION_TOKEN')
+aws_region = os.environ.get('AWS_DEFAULT_REGION', 'us-west-2')
 
 cost_data = {}
 def normalize_service_name(service_name: str) -> str:
@@ -93,10 +98,19 @@ def get_service_cost(start_date: str, end_date: str, granularity: str = "MONTHLY
     """
     try:
         # cost explorer
-        ce = boto3.client(
-            service_name='ce',
-            region_name=region
-        )
+        if aws_access_key and aws_secret_key:
+            ce = boto3.client(
+                service_name='ce',
+                region_name=region,
+                aws_access_key_id=aws_access_key,
+                aws_secret_access_key=aws_secret_key,
+                aws_session_token=aws_session_token,
+            )
+        else:
+            ce = boto3.client(
+                service_name='ce',
+                region_name=region
+            )
 
         service_response = ce.get_cost_and_usage(
             TimePeriod={

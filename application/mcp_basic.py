@@ -8,7 +8,7 @@ import traceback
 import json
 import re
 import utils
-
+import os
 from pytz import timezone
 from bs4 import BeautifulSoup
 
@@ -20,6 +20,11 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger("mcp-basic")
+
+aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
+aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+aws_session_token = os.environ.get('AWS_SESSION_TOKEN')
+aws_region = os.environ.get('AWS_DEFAULT_REGION', 'us-west-2')
 
 def get_current_time(format: str=f"%Y-%m-%d %H:%M:%S")->str:
     """Returns the current date and time in the specified format"""
@@ -80,8 +85,10 @@ def get_weather_info(city: str) -> str:
     logger.info(f"place: {place}")
     
     weather_str: str = f"{city}에 대한 날씨 정보가 없습니다."
-    if utils.weather_api_key: 
-        apiKey = utils.weather_api_key
+
+    weather_api_key = utils.weather_api_key
+    if weather_api_key: 
+        apiKey = weather_api_key
         lang = 'en' 
         units = 'metric' 
         api = f"https://api.openweathermap.org/data/2.5/weather?q={place}&APPID={apiKey}&lang={lang}&units={units}"
@@ -101,7 +108,7 @@ def get_weather_info(city: str) -> str:
                 wind_speed = result['wind']['speed']
                 cloud = result['clouds']['all']
                 
-                #weather_str = f"The current weather in {city} is characterized by {overall}, with current temperature of {current_temp}°C, minimum temperature of {min_temp}°C, and maximum temperature of {max_temp}°C. Current humidity is {humidity}% and wind speed is {wind_speed} meters per second. Cloud coverage is {cloud}%."
+                #weather_str = f"{city}의 현재 날씨의 특징은 {overall}이며, 현재 온도는 {current_temp}도 이고, 최저온도는 {min_temp}도, 최고 온도는 {max_temp}도 입니다. 현재 습도는 {humidity}% 이고, 바람은 초당 {wind_speed} 미터 입니다. 구름은 {cloud}% 입니다."
                 weather_str = f"{city}의 현재 날씨의 특징은 {overall}이며, 현재 온도는 {current_temp} 입니다. 현재 습도는 {humidity}% 이고, 바람은 초당 {wind_speed} 미터 입니다. 구름은 {cloud}% 입니다."
                 #weather_str = f"Today, the overall of {city} is {overall}, current temperature is {current_temp} degree, min temperature is {min_temp} degree, highest temperature is {max_temp} degree. huminity is {humidity}%, wind status is {wind_speed} meter per second. the amount of cloud is {cloud}%."            
         except Exception:

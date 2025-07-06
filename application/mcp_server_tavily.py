@@ -5,6 +5,7 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, Field, field_validator
 from tavily import TavilyClient, InvalidAPIKeyError, UsageLimitExceededError
 import json
+import os
 from dotenv import load_dotenv
 import utils
 
@@ -21,6 +22,13 @@ logger = logging.getLogger("tavily_mcp")
 # Load environment variables from .env file
 load_dotenv()
 
+#api_key = os.getenv("TAVILY_API_KEY")
+api_key = utils.tavily_key
+if not api_key:
+    err_msg = "TAVILY_API_KEY environment variable is required"
+    logger.error(f"{err_msg}")
+    raise ValueError(err_msg)
+
 try:
     mcp = FastMCP(
         name="tavily_tools",
@@ -31,7 +39,7 @@ except Exception as e:
     logger.error(f"{err_msg}")
 
 # Initialize Tavily client
-client = TavilyClient(api_key=utils.tavily_key)
+client = TavilyClient(api_key=api_key)
 
 # Base model for search parameters
 class SearchBase(BaseModel):

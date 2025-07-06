@@ -1,4 +1,4 @@
-FROM python:3.13-slim
+FROM --platform=linux/amd64 python:3.13-slim
 
 RUN apt-get update && apt-get install -y \
     curl \
@@ -30,6 +30,32 @@ RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2
     && ./aws/install \
     && rm -rf aws awscliv2.zip
  
+# AWS credentials will be passed at build time via ARG
+ARG AWS_ACCESS_KEY_ID
+ARG AWS_SECRET_ACCESS_KEY
+ARG AWS_DEFAULT_REGION
+ARG AWS_SESSION_TOKEN
+
+# Create AWS credentials directory and files
+RUN mkdir -p /root/.aws
+
+# Create credentials file from build args
+RUN if [ ! -z "$AWS_ACCESS_KEY_ID" ] && [ ! -z "$AWS_SECRET_ACCESS_KEY" ]; then \
+        echo "[default]" > /root/.aws/credentials && \
+        echo "aws_access_key_id = $AWS_ACCESS_KEY_ID" >> /root/.aws/credentials && \
+        echo "aws_secret_access_key = $AWS_SECRET_ACCESS_KEY" >> /root/.aws/credentials && \
+        if [ ! -z "$AWS_SESSION_TOKEN" ]; then \
+            echo "aws_session_token = $AWS_SESSION_TOKEN" >> /root/.aws/credentials; \
+        fi && \
+        chmod 600 /root/.aws/credentials; \
+    fi
+
+# Create config file
+RUN echo "[default]" > /root/.aws/config && \
+    echo "region = ${AWS_DEFAULT_REGION:-us-east-1}" >> /root/.aws/config && \
+    echo "output = json" >> /root/.aws/config && \
+    chmod 600 /root/.aws/config
+
 WORKDIR /app
 
 # Install Chrome and Playwright dependencies
@@ -59,16 +85,15 @@ RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key
 # COPY requirements.txt .
 # RUN pip install --no-cache-dir -r requirements.txt
 
-RUN pip install streamlit==1.41.0 streamlit-chat pandas numpy boto3
+RUN pip install streamlit==1.41.0 streamlit-chat pandas numpy boto3 aioboto3 opensearch-py
 RUN pip install langchain_aws langchain langchain_community langgraph langchain_experimental
 RUN pip install langgraph-supervisor langgraph-swarm
-RUN pip install tavily-python==0.5.0 yfinance==0.2.52 rizaio==0.8.0 pytz==2024.2 beautifulsoup4==4.12.3
-RUN pip install plotly_express==0.4.1 matplotlib==3.10.0
-RUN pip install PyPDF2==3.0.1 opensearch-py
-RUN pip install mcp langchain-mcp-adapters==0.0.9 wikipedia
-RUN pip install aioboto3 requests uv kaleido diagrams reportlab
-RUN pip install graphviz sarif-om==1.0.4
+RUN pip install mcp langchain-mcp-adapters==0.0.9 
 RUN pip install strands-agents strands-agents-tools
+
+RUN pip install tavily-python==0.5.0 yfinance==0.2.52 rizaio==0.8.0 pytz==2024.2 beautifulsoup4==4.12.3
+RUN pip install plotly_express==0.4.1 matplotlib==3.10.0 arxiv chembl-webresource-client pytrials 
+RUN pip install PyPDF2==3.0.1 wikipedia requests uv kaleido diagrams reportlab graphviz sarif-om==1.0.4
 
 RUN mkdir -p /root/.streamlit
 COPY config.toml /root/.streamlit/

@@ -162,8 +162,9 @@ def cost_analysis_with_reflection():
     # show status and response
     status_container = st.empty()
     response_container = st.empty()
+    key_container = st.empty()
     
-    response = aws_cost.run(request_id, status_container, response_container)
+    response = aws_cost.run(request_id, mcp_servers, status_container, response_container, key_container)
     logger.info(f"response: {response}")
 
     if aws_cost.response_msg:

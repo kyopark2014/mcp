@@ -85,13 +85,42 @@ def get_model():
     maxReasoningOutputTokens=64000
     thinking_budget = min(maxOutputTokens, maxReasoningOutputTokens-1000)
 
+    # AWS 자격 증명 설정
+    aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
+    aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+    aws_session_token = os.environ.get('AWS_SESSION_TOKEN')
+    aws_region = os.environ.get('AWS_DEFAULT_REGION', 'ap-northeast-2')
+
+    # Bedrock 클라이언트 설정
+    bedrock_config = Config(
+        read_timeout=900,
+        connect_timeout=900,
+        retries=dict(max_attempts=3, mode="adaptive"),
+    )
+
+    # 자격 증명이 있는 경우 Bedrock 클라이언트 생성
+    if aws_access_key and aws_secret_key:
+        import boto3
+        bedrock_client = boto3.client(
+            'bedrock-runtime',
+            region_name=aws_region,
+            aws_access_key_id=aws_access_key,
+            aws_secret_access_key=aws_secret_key,
+            aws_session_token=aws_session_token,
+            config=bedrock_config
+        )
+    else:
+        # 기본 자격 증명 사용
+        import boto3
+        bedrock_client = boto3.client(
+            'bedrock-runtime',
+            region_name=aws_region,
+            config=bedrock_config
+        )
+
     if chat.reasoning_mode=='Enable':
         model = BedrockModel(
-            boto_client_config=Config(
-               read_timeout=900,
-               connect_timeout=900,
-               retries=dict(max_attempts=3, mode="adaptive"),
-            ),
+            client=bedrock_client,
             model_id=chat.model_id,
             max_tokens=64000,
             stop_sequences = [STOP_SEQUENCE],
@@ -105,11 +134,7 @@ def get_model():
         )
     else:
         model = BedrockModel(
-            boto_client_config=Config(
-               read_timeout=900,
-               connect_timeout=900,
-               retries=dict(max_attempts=3, mode="adaptive"),
-            ),
+            client=bedrock_client,
             model_id=chat.model_id,
             max_tokens=maxOutputTokens,
             stop_sequences = [STOP_SEQUENCE],

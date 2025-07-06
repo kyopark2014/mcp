@@ -12,7 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import boto3
+import os
 from typing import TYPE_CHECKING
+
+aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
+aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+aws_session_token = os.environ.get('AWS_SESSION_TOKEN')
+aws_region = os.environ.get('AWS_DEFAULT_REGION', 'us-west-2')
 
 AgentsforBedrockClient = object
 AgentsforBedrockRuntimeClient = object
@@ -33,7 +39,19 @@ def get_bedrock_agent_runtime_client(
             'bedrock-agent-runtime', region_name=region_name or 'us-west-2'
         )
         return client  # type: ignore
-    client = boto3.client('bedrock-agent-runtime', region_name=region_name or 'us-west-2')
+    if aws_access_key and aws_secret_key:
+        client = boto3.client(
+            service_name='bedrock-agent-runtime', 
+            region_name=region_name or 'us-west-2', 
+            aws_access_key_id=aws_access_key, 
+            aws_secret_access_key=aws_secret_key, 
+            aws_session_token=aws_session_token
+        )
+    else:
+        client = boto3.client(
+            service_name='bedrock-agent-runtime', 
+            region_name=region_name or 'us-west-2'
+        )
     return client  # type: ignore
 
 
@@ -50,8 +68,21 @@ def get_bedrock_agent_client(
     """
     if profile_name:
         client = boto3.Session(profile_name=profile_name).client(
-            'bedrock-agent', region_name=region_name or 'us-west-2'
+            service_name='bedrock-agent', 
+            region_name=region_name or 'us-west-2'
         )
         return client  # type: ignore
-    client = boto3.client('bedrock-agent', region_name=region_name or 'us-west-2')
+    
+    if aws_access_key and aws_secret_key:
+        client = boto3.client(
+            service_name='bedrock-agent', 
+            region_name=region_name or 'us-west-2', 
+            aws_access_key_id=aws_access_key, 
+            aws_secret_access_key=aws_secret_key, 
+            aws_session_token=aws_session_token)
+    else:
+        client = boto3.client(
+            service_name='bedrock-agent', 
+            region_name=region_name or 'us-west-2'
+        )
     return client  # type: ignore
