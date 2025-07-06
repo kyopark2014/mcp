@@ -85,12 +85,12 @@ RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key
 # COPY requirements.txt .
 # RUN pip install --no-cache-dir -r requirements.txt
 
-RUN pip install streamlit==1.41.0 streamlit-chat pandas numpy boto3 aioboto3 opensearch-py
+RUN pip install streamlit==1.41.0 streamlit-chat pandas numpy boto3 
 RUN pip install langchain_aws langchain langchain_community langgraph langchain_experimental
 RUN pip install langgraph-supervisor langgraph-swarm
 RUN pip install mcp langchain-mcp-adapters==0.0.9 
 RUN pip install strands-agents strands-agents-tools
-
+RUN pip install aioboto3 opensearch-py
 RUN pip install tavily-python==0.5.0 yfinance==0.2.52 rizaio==0.8.0 pytz==2024.2 beautifulsoup4==4.12.3
 RUN pip install plotly_express==0.4.1 matplotlib==3.10.0 arxiv chembl-webresource-client pytrials 
 RUN pip install PyPDF2==3.0.1 wikipedia requests uv kaleido diagrams reportlab graphviz sarif-om==1.0.4

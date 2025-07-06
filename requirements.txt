@@ -34,3 +34,4 @@ chembl-webresource-client==0.10.9
 pytrials==1.0.0
 strands-agents>=0.1.0
 strands-agents-tools>=0.1.0
+reportlab
