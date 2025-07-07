@@ -269,17 +269,21 @@ def get_tool_info(tool_name, tool_content):
                 else:
                     urls.append(path)            
 
-            for item in json_data:
-                logger.info(f"item: {item}")
-                if "reference" in item and "contents" in item:
-                    url = item["reference"]["url"]
-                    title = item["reference"]["title"]
-                    content_text = item["contents"][:100] + "..." if len(item["contents"]) > 100 else item["contents"]
-                    tool_references.append({
-                        "url": url,
-                        "title": title,
-                        "content": content_text
-                    })
+            if isinstance(json_data, dict):
+                for item in json_data:
+                    logger.info(f"item: {item}")
+                    if "reference" in item and "contents" in item:
+                        url = item["reference"]["url"]
+                        title = item["reference"]["title"]
+                        content_text = item["contents"][:100] + "..." if len(item["contents"]) > 100 else item["contents"]
+                        tool_references.append({
+                            "url": url,
+                            "title": title,
+                            "content": content_text
+                        })
+            else:
+                logger.info(f"json_data is not a dict: {json_data}")
+                
             logger.info(f"tool_references: {tool_references}")
 
         except json.JSONDecodeError:
@@ -534,7 +538,7 @@ async def run_agent(query, mcp_servers, historyMode, containers):
     logger.info(f"server_params: {server_params}")    
 
     async with MultiServerMCPClient(server_params) as client:        
-        mcp_server_info = client.server_name_to_tools.items()
+        mcp_server_info = client.server_name_to_tools.items() 
 
         tools = client.get_tools()        
         

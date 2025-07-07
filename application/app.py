@@ -236,8 +236,29 @@ with st.sidebar:
             logger.info(f"mcp_info: {mcp_info}")
 
             if mcp_info:
-                mcp_config.mcp_user_config = json.loads(mcp_info)
-                logger.info(f"mcp_user_config: {mcp_config.mcp_user_config}")
+                try:
+                    mcp_config.mcp_user_config = json.loads(mcp_info)
+                    logger.info(f"mcp_user_config: {mcp_config.mcp_user_config}")
+                    st.success("JSON 설정이 성공적으로 로드되었습니다.")
+                except json.JSONDecodeError as e:
+                    st.error(f"JSON 파싱 오류: {str(e)}")
+                    st.error("올바른 JSON 형식으로 입력해주세요.")
+                    st.info("예시 JSON 형식:")
+                    st.code("""
+{
+  "mcpServers": {
+    "server-name": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "image-name"],
+      "env": {
+        "ENV_VAR": "value"
+      }
+    }
+  }
+}
+""")
+                    logger.error(f"JSON 파싱 오류: {str(e)}")
+                    mcp_config.mcp_user_config = {}
         
         if mcp_selections["image generation"]:
             enable_seed = st.checkbox("Seed Image", value=False)
