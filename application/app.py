@@ -171,8 +171,7 @@ with st.sidebar:
     )   
     st.info(mode_descriptions[mode][0])
     
-    # mcp selection
-    mcp = ""
+    # mcp selection    
     if mode=='Agent' or mode=='Agent (Chat)' or mode=='비용 분석':
         # MCP Config JSON input
         st.subheader("⚙️ MCP Config")
@@ -228,9 +227,20 @@ with st.sidebar:
             mcp_selections["basic"] = True
 
         if mcp_selections["사용자 설정"]:
+            mcp = {}
+            try:
+                with open("user_defined_mcp.json", "r", encoding="utf-8") as f:
+                    mcp = json.load(f)
+                    logger.info(f"loaded user defined mcp: {mcp}")
+            except FileNotFoundError:
+                logger.info("user_defined_mcp.json not found")
+                pass
+            
+            mcp_json_str = json.dumps(mcp, ensure_ascii=False, indent=2) if mcp else ""
+            
             mcp_info = st.text_area(
                 "MCP 설정을 JSON 형식으로 입력하세요",
-                value=mcp,
+                value=mcp_json_str,
                 height=150
             )
             logger.info(f"mcp_info: {mcp_info}")
@@ -238,27 +248,19 @@ with st.sidebar:
             if mcp_info:
                 try:
                     mcp_config.mcp_user_config = json.loads(mcp_info)
-                    logger.info(f"mcp_user_config: {mcp_config.mcp_user_config}")
-                    st.success("JSON 설정이 성공적으로 로드되었습니다.")
+                    logger.info(f"mcp_user_config: {mcp_config.mcp_user_config}")                    
+                    st.success("JSON 설정이 성공적으로 로드되었습니다.")                    
                 except json.JSONDecodeError as e:
                     st.error(f"JSON 파싱 오류: {str(e)}")
                     st.error("올바른 JSON 형식으로 입력해주세요.")
-                    st.info("예시 JSON 형식:")
-                    st.code("""
-{
-  "mcpServers": {
-    "server-name": {
-      "command": "docker",
-      "args": ["run", "-i", "--rm", "image-name"],
-      "env": {
-        "ENV_VAR": "value"
-      }
-    }
-  }
-}
-""")
                     logger.error(f"JSON 파싱 오류: {str(e)}")
                     mcp_config.mcp_user_config = {}
+            else:
+                mcp_config.mcp_user_config = {}
+                
+            with open("user_defined_mcp.json", "w", encoding="utf-8") as f:
+                json.dump(mcp_config.mcp_user_config, f, ensure_ascii=False, indent=4)
+            logger.info("save to user_defined_mcp.json")
         
         if mcp_selections["image generation"]:
             enable_seed = st.checkbox("Seed Image", value=False)
