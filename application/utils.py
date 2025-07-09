@@ -237,3 +237,8 @@ async def generate_pdf_report(report_content: str, filename: str) -> str:
             return f"PDF generation failed. Saved as text file instead: {text_filepath}"
         except Exception as text_error:
             return f"Error generating report: {str(e)}. Text fallback also failed: {str(text_error)}"
+
+def status(st, str):
+    st.info(str)
+def stcode(st, code):
+    st.code(code)

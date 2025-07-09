@@ -314,8 +314,12 @@ async def call_model(state: State, config):
         logger.info(f"tool_name: {tool_name}, content: {tool_content[:800]}")
 
         if chat.debug_mode == "Enable":
-            add_notification(containers, f"{tool_name}: {str(tool_content)}")
-            response_msg.append(f"{tool_name}: {str(tool_content)}")
+            if tool_name == "terminal":
+                add_notification(containers, f"{tool_name}\n\n {tool_content}")
+                response_msg.append(f"{tool_name}: {tool_content}")
+            else:
+                add_notification(containers, f"{tool_name}: {str(tool_content)}")
+                response_msg.append(f"{tool_name}: {str(tool_content)}")
 
         global references
         content, urls, refs = get_tool_info(tool_name, tool_content)
