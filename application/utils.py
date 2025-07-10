@@ -112,7 +112,8 @@ try:
     weather_api_key = secret['weather_api_key']
 
 except Exception as e:
-    raise e
+    # raise e
+    pass
 
 # api key to use Tavily Search
 tavily_key = tavily_api_wrapper = ""
@@ -136,7 +137,8 @@ try:
             logger.info(f"tavily_key is required.")
 except Exception as e: 
     logger.info(f"Tavily credential is required: {e}")
-    raise e
+    # raise e
+    pass
 
 # api key to use firecrawl Search
 firecrawl_key = ""
@@ -151,7 +153,8 @@ try:
         # print('firecrawl_api_key: ', firecrawl_key)
 except Exception as e: 
     logger.info(f"Firecrawl credential is required: {e}")
-    raise e
+    # raise e
+    pass
 
 # api key to use perplexity Search
 perplexity_key = ""
@@ -169,7 +172,8 @@ try:
 
 except Exception as e: 
     logger.info(f"perplexity credential is required: {e}")
-    raise e
+    # raise e
+    pass
 
 async def generate_pdf_report(report_content: str, filename: str) -> str:
     """

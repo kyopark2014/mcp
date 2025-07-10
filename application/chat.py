@@ -40,21 +40,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger("chat")
 
-os.environ["PHOENIX_COLLECTOR_ENDPOINT"] = "http://localhost:6006"
-
-try:
-    from phoenix.otel import register
-
-    # configure the Phoenix tracer
-    tracer_provider = register(
-      project_name="my-llm-app", # Default is 'default'
-      endpoint="http://localhost:6006/v1/traces",
-      auto_instrument=True # Auto-instrument your app based on installed OI dependencies
-    )
-except ImportError:
-    # Phoenix OTEL is not installed, skip tracing configuration
-    pass
-
 userId = uuid.uuid4().hex
 map_chain = dict() 
 
@@ -108,6 +93,21 @@ if accountId is None:
 region = config["region"] if "region" in config else "us-west-2"
 logger.info(f"region: {region}")
 
+# for logging based on arize-phoenix
+os.environ["PHOENIX_COLLECTOR_ENDPOINT"] = "http://localhost:6006"
+try:
+    from phoenix.otel import register  # pip install arize-phoenix
+
+    # configure the Phoenix tracer
+    tracer_provider = register(
+      project_name=projectName, # Default is 'default'
+      endpoint="http://localhost:6006/v1/traces",
+      auto_instrument=True # Auto-instrument your app based on installed OI dependencies
+    )
+except ImportError:
+    # Phoenix OTEL is not installed, skip tracing configuration
+    pass
+
 s3_prefix = 'docs'
 s3_image_prefix = 'images'
 
@@ -159,6 +159,7 @@ aws_region = os.environ.get('AWS_DEFAULT_REGION', 'us-west-2')
 
 reasoning_mode = 'Disable'
 grading_mode = 'Disable'
+
 def update(modelName, debugMode, multiRegion, reasoningMode, gradingMode):    
     global model_name, model_id, model_type, debug_mode, multi_region, reasoning_mode, grading_mode
     global models
@@ -1509,7 +1510,7 @@ def retrieve_knowledge_base(query):
             region_name=bedrock_region,
         )
 
-    functionName = f"lambda-rag-for-{projectName}"
+    functionName = f"knowledge-base-for-{projectName}"
     logger.info(f"functionName: {functionName}")
 
     try:
@@ -1518,7 +1519,7 @@ def retrieve_knowledge_base(query):
             'knowledge_base_name': knowledge_base_name,
             'keyword': query,
             'top_k': numberOfDocs,
-            'grading': "Enable",
+            'grading': grading_mode,
             'model_name': model_name,
             'multi_region': multi_region
         }
@@ -1550,7 +1551,7 @@ def get_reference_docs(docs):
                     'from': reference.get("from")
                 },
             )
-    )     
+        )     
     return reference_docs
 
 def run_rag_with_knowledge_base(query, st):
