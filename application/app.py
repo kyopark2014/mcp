@@ -504,9 +504,6 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                 "images": image_url if image_url else []
             })
 
-            if agent_type == "LangGraph":
-                st.write(response)
-            
             for url in image_url:
                     logger.info(f"url: {url}")
                     file_name = url[url.rfind('/')+1:]

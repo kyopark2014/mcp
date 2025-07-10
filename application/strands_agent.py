@@ -729,9 +729,7 @@ async def run_agent(question, strands_tools, mcp_servers, historyMode, container
         for i, reference in enumerate(references):
             ref += f"{i+1}. [{reference['title']}]({reference['url']}), {reference['content']}...\n"    
 
-        # show reference
-        if chat.debug_mode == 'Enable':
-            containers['notification'][index-1].markdown(result+ref)
+    containers['notification'][index-1].markdown(result+ref)
 
     return result+ref, image_url
 

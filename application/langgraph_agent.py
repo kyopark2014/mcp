@@ -283,6 +283,17 @@ def get_tool_info(tool_name, tool_content):
                         })
             else:
                 logger.info(f"json_data is not a dict: {json_data}")
+
+                for item in json_data:
+                    if "reference" in item and "contents" in item:
+                        url = item["reference"]["url"]
+                        title = item["reference"]["title"]
+                        content_text = item["contents"][:100] + "..." if len(item["contents"]) > 100 else item["contents"]
+                        tool_references.append({
+                            "url": url,
+                            "title": title,
+                            "content": content_text
+                        })
                 
             logger.info(f"tool_references: {tool_references}")
 
@@ -606,6 +617,8 @@ async def run_agent(query, mcp_servers, historyMode, containers):
 
         logger.info(f"result: {result}")       
         logger.info(f"image_url: {image_url}")
+
+        containers['notification'][index-1].markdown(result)
     
     return result, image_url
 
