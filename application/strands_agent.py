@@ -50,6 +50,7 @@ def add_notification(containers, message):
     global index
     containers['notification'][index].info(message)
     index += 1
+    chat.arize_trace(message)
 
 def add_response(containers, message):
     global index
