@@ -50,7 +50,6 @@ def add_notification(containers, message):
     global index
     containers['notification'][index].info(message)
     index += 1
-    chat.arize_trace(message)
 
 def add_response(containers, message):
     global index
@@ -306,18 +305,20 @@ def update_tools(strands_tools: list, mcp_servers: list):
 
     return tools
 
-def create_agent(tools, history_mode):
-    system = (
-        "당신의 이름은 서연이고, 질문에 대해 친절하게 답변하는 사려깊은 인공지능 도우미입니다."
-        "상황에 맞는 구체적인 세부 정보를 충분히 제공합니다." 
-        "모르는 질문을 받으면 솔직히 모른다고 말합니다."
-    )
+def create_agent(system_prompt, tools, history_mode):
+    if system_prompt==None:
+        system_prompt = (
+            "당신의 이름은 서연이고, 질문에 대해 친절하게 답변하는 사려깊은 인공지능 도우미입니다."
+            "상황에 맞는 구체적인 세부 정보를 충분히 제공합니다." 
+            "모르는 질문을 받으면 솔직히 모른다고 말합니다."
+        )
+
     model = get_model()
     if history_mode == "Enable":
         logger.info("history_mode: Enable")
         agent = Agent(
             model=model,
-            system_prompt=system,
+            system_prompt=system_prompt,
             tools=tools,
             conversation_manager=conversation_manager
         )
@@ -325,7 +326,7 @@ def create_agent(tools, history_mode):
         logger.info("history_mode: Disable")
         agent = Agent(
             model=model,
-            system_prompt=system,
+            system_prompt=system_prompt,
             tools=tools
             #max_parallel_tools=2
         )
@@ -573,16 +574,10 @@ def get_tool_list(tools):
             tool_list.append(module_name)
     return tool_list
 
-async def run_agent(question, strands_tools, mcp_servers, historyMode, containers):
-    result = ""
-    current_response = ""
-
+async def initiate_agent(system_prompt, strands_tools, mcp_servers, historyMode):
     global references, image_url
     image_url = []    
-    references = []
-
-    global status_msg
-    status_msg = []
+    references = []    
 
     global agent, initiated, update_required, tool_list
     global selected_strands_tools, selected_mcp_servers
@@ -605,10 +600,8 @@ async def run_agent(question, strands_tools, mcp_servers, historyMode, container
         tools = update_tools(strands_tools, mcp_servers)
         logger.info(f"tools: {tools}")
 
-        agent = create_agent(tools, historyMode)
+        agent = create_agent(system_prompt, tools, historyMode)
         tool_list = get_tool_list(tools)
-        if chat.debug_mode == 'Enable':
-            containers['tools'].info(f"Tools: {tool_list}")
         initiated = True
     elif update_required:      
         logger.info(f"update_required: {update_required}")
@@ -617,253 +610,178 @@ async def run_agent(question, strands_tools, mcp_servers, historyMode, container
         tools = update_tools(strands_tools, mcp_servers)
         logger.info(f"tools: {tools}")
 
-        agent = create_agent(tools, historyMode)
+        agent = create_agent(system_prompt, tools, historyMode)
         tool_list = get_tool_list(tools)
-        if chat.debug_mode == 'Enable':
-            containers['tools'].info(f"Tools: {tool_list}")
         update_required = False
-    else:
-        if chat.debug_mode == 'Enable':
-            containers['tools'].info(f"tool_list: {tool_list}")
-    
-    if chat.debug_mode == 'Enable':
-        containers['status'].info(get_status_msg(f"(start"))    
 
-    with mcp_manager.get_active_clients(mcp_servers) as _:
-        agent_stream = agent.stream_async(question)
-        
-        tool_name = ""
-        async for event in agent_stream:
-            # logger.info(f"event: {event}")
-            if "message" in event:
-                message = event["message"]
-                logger.info(f"message: {message}")
+async def show_streams(agent_stream, containers):
+    tool_name = ""
+    result = ""
+    current_response = ""
 
-                for content in message["content"]:                
-                    if "text" in content:
-                        logger.info(f"text: {content['text']}")
-                        if chat.debug_mode == 'Enable':
-                            add_response(containers, content['text'])
+    async for event in agent_stream:
+        # logger.info(f"event: {event}")
+        if "message" in event:
+            message = event["message"]
+            logger.info(f"message: {message}")
 
-                        result = content['text']
-                        current_response = ""
+            for content in message["content"]:                
+                if "text" in content:
+                    logger.info(f"text: {content['text']}")
+                    if chat.debug_mode == 'Enable':
+                        add_response(containers, content['text'])
 
-                    if "toolUse" in content:
-                        tool_use = content["toolUse"]
-                        logger.info(f"tool_use: {tool_use}")
-                        
-                        tool_name = tool_use["name"]
-                        input = tool_use["input"]
-                        
-                        logger.info(f"tool_nmae: {tool_name}, arg: {input}")
-                        if chat.debug_mode == 'Enable':       
-                            add_notification(containers, f"tool name: {tool_name}, arg: {input}")
-                            containers['status'].info(get_status_msg(f"{tool_name}"))
-                
-                    if "toolResult" in content:
-                        tool_result = content["toolResult"]
-                        logger.info(f"tool_name: {tool_name}")
-                        logger.info(f"tool_result: {tool_result}")
-                        if "content" in tool_result:
-                            tool_content = tool_result['content']
-                            for content in tool_content:
-                                if "text" in content:
-                                    if chat.debug_mode == 'Enable':
-                                        add_notification(containers, f"tool result: {content['text']}")
+                    result = content['text']
+                    current_response = ""
 
-                                    try:
-                                        json_data = json.loads(content['text'])
-                                        if isinstance(json_data, dict) and "path" in json_data:
-                                            paths = json_data["path"]
-                                            logger.info(f"paths: {paths}")
-                                            for path in paths:
-                                                if path.startswith("http"):
-                                                    image_url.append(path)
-                                                    logger.info(f"Added image URL: {path}")
-                                    except json.JSONDecodeError:
-                                        pass
+                if "toolUse" in content:
+                    tool_use = content["toolUse"]
+                    logger.info(f"tool_use: {tool_use}")
+                    
+                    tool_name = tool_use["name"]
+                    input = tool_use["input"]
+                    
+                    logger.info(f"tool_nmae: {tool_name}, arg: {input}")
+                    if chat.debug_mode == 'Enable':       
+                        add_notification(containers, f"tool name: {tool_name}, arg: {input}")
+                        containers['status'].info(get_status_msg(f"{tool_name}"))
+            
+                if "toolResult" in content:
+                    tool_result = content["toolResult"]
+                    logger.info(f"tool_name: {tool_name}")
+                    logger.info(f"tool_result: {tool_result}")
+                    if "content" in tool_result:
+                        tool_content = tool_result['content']
+                        for content in tool_content:
+                            if "text" in content:
+                                if chat.debug_mode == 'Enable':
+                                    add_notification(containers, f"tool result: {content['text']}")
 
-                                    content, urls, refs = get_tool_info(tool_name, content['text'])
-                                    logger.info(f"content: {content}")
-                                    logger.info(f"urls: {urls}")
+                                try:
+                                    json_data = json.loads(content['text'])
+                                    if isinstance(json_data, dict) and "path" in json_data:
+                                        paths = json_data["path"]
+                                        logger.info(f"paths: {paths}")
+                                        for path in paths:
+                                            if path.startswith("http"):
+                                                image_url.append(path)
+                                                logger.info(f"Added image URL: {path}")
+                                except json.JSONDecodeError:
+                                    pass
+
+                                content, urls, refs = get_tool_info(tool_name, content['text'])
+                                logger.info(f"content: {content}")
+                                logger.info(f"urls: {urls}")
+                                logger.info(f"refs: {refs}")
+
+                                if refs:
+                                    for r in refs:
+                                        references.append(r)
                                     logger.info(f"refs: {refs}")
+                                if urls:
+                                    for url in urls:
+                                        image_url.append(url)
+                                    logger.info(f"urls: {urls}")
 
-                                    if refs:
-                                        for r in refs:
-                                            references.append(r)
-                                        logger.info(f"refs: {refs}")
-                                    if urls:
-                                        for url in urls:
-                                            image_url.append(url)
-                                        logger.info(f"urls: {urls}")
+                                    if chat.debug_mode == "Enable":
+                                        add_notification(containers, f"Added path to image_url: {urls}")
+                                        response_msg.append(f"Added path to image_url: {urls}")
+                                    
+        if "event_loop_metrics" in event and \
+            hasattr(event["event_loop_metrics"], "tool_metrics") and \
+            "generate_image_with_colors" in event["event_loop_metrics"].tool_metrics:
+            tool_info = event["event_loop_metrics"].tool_metrics["generate_image_with_colors"].tool
+            if "input" in tool_info and "filename" in tool_info["input"]:
+                fname = tool_info["input"]["filename"]
+                if fname:
+                    url = f"{chat.path}/{chat.s3_image_prefix}/{parse.quote(fname)}.png"
+                    if url not in image_url:
+                        image_url.append(url)
+                        logger.info(f"Added image URL: {url}")
 
-                                        if chat.debug_mode == "Enable":
-                                            add_notification(containers, f"Added path to image_url: {urls}")
-                                            response_msg.append(f"Added path to image_url: {urls}")
-                                        
-            if "event_loop_metrics" in event and \
-                hasattr(event["event_loop_metrics"], "tool_metrics") and \
-                "generate_image_with_colors" in event["event_loop_metrics"].tool_metrics:
-                tool_info = event["event_loop_metrics"].tool_metrics["generate_image_with_colors"].tool
-                if "input" in tool_info and "filename" in tool_info["input"]:
-                    fname = tool_info["input"]["filename"]
-                    if fname:
-                        url = f"{chat.path}/{chat.s3_image_prefix}/{parse.quote(fname)}.png"
-                        if url not in image_url:
-                            image_url.append(url)
-                            logger.info(f"Added image URL: {url}")
+        if "data" in event:
+            text_data = event["data"]
+            current_response += text_data
 
-            if "data" in event:
-                text_data = event["data"]
-                current_response += text_data
+            if chat.debug_mode == 'Enable':
+                containers["notification"][index].markdown(current_response)
+            continue
+    
+    return result, image_url
 
-                if chat.debug_mode == 'Enable':
-                    containers["notification"][index].markdown(current_response)
-                continue
-
-    if chat.debug_mode == 'Enable':
-        containers['status'].info(get_status_msg(f"end)"))
-
+def get_reference(references):
     ref = ""
     if references:
         ref = "\n\n### Reference\n"
         for i, reference in enumerate(references):
-            ref += f"{i+1}. [{reference['title']}]({reference['url']}), {reference['content']}...\n"    
+            ref += f"{i+1}. [{reference['title']}]({reference['url']}), {reference['content']}...\n"        
+    return ref
 
-    containers['notification'][index-1].markdown(result+ref)
+async def run_agent(question, strands_tools, mcp_servers, historyMode, containers):
+    global status_msg
+    status_msg = []
 
-    return result+ref, image_url
+    if chat.debug_mode == 'Enable':
+        containers['status'].info(get_status_msg(f"(start"))    
 
-async def run_task(question, strands_tools, mcp_servers, system_prompt, containers, historyMode, previous_status_msg, previous_response_msg):
+    # initiate agent
+    await initiate_agent(None, strands_tools, mcp_servers, historyMode)
+    logger.info(f"tool_list: {tool_list}")    
+    if chat.debug_mode == 'Enable':
+        containers['tools'].info(f"tool_list: {tool_list}")
+
+    # run agent
+    result = ""
+    with mcp_manager.get_active_clients(mcp_servers) as _:
+        agent_stream = agent.stream_async(question)
+
+        result, image_url = await show_streams(agent_stream, containers)
+        
+    # get reference
+    result += get_reference(references)
+    containers['notification'][index-1].markdown(result)
+
+    if chat.debug_mode == 'Enable':
+        containers['status'].info(get_status_msg(f"end)"))
+
+    return result, image_url
+
+async def run_task(question, strands_tools, mcp_servers, containers, historyMode, previous_status_msg, previous_response_msg):
     global status_msg, response_msg
     status_msg = previous_status_msg
     response_msg = previous_response_msg
-
-    result = ""
-    current_response = ""
-
+    
     global references, image_url
     image_url = []    
     references = []
 
+    # initiate agent
     logger.info(f"mcp_servers: {mcp_servers}")
     init_mcp_clients(mcp_servers)
     tools = update_tools(strands_tools, mcp_servers)
     logger.info(f"tools: {tools}")
-    agent = create_agent(tools, historyMode)
-
+    agent = create_agent(None, tools, historyMode)
+    
+    # get tool list
     tool_list = get_tool_list(tools)
     logger.info(f"tool_list: {tool_list}")
-
     if chat.debug_mode == 'Enable':
         containers['tools'].info(f"Tools: {tool_list}")
-
-    logger.info(f"tool_list: {tool_list}")
-
+    
+    # run agent
+    result = ""
     with mcp_manager.get_active_clients(mcp_servers) as _:
         agent_stream = agent.stream_async(question)
-        
-        tool_name = ""
-        async for event in agent_stream:
-            # logger.info(f"event: {event}")
-            if "message" in event:
-                message = event["message"]
-                logger.info(f"message: {message}")
 
-                for content in message["content"]:                
-                    if "text" in content:
-                        logger.info(f"text: {content['text']}")
-                        if chat.debug_mode == 'Enable':
-                            add_response(containers, content['text'])
-
-                        result = content['text']
-                        current_response = ""
-
-                    if "toolUse" in content:
-                        tool_use = content["toolUse"]
-                        logger.info(f"tool_use: {tool_use}")
-                        
-                        tool_name = tool_use["name"]
-                        input = tool_use["input"]
-                        
-                        logger.info(f"tool_nmae: {tool_name}, arg: {input}")
-                        if chat.debug_mode == 'Enable':       
-                            add_notification(containers, f"tool name: {tool_name}, arg: {input}")
-                            containers['status'].info(get_status_msg(f"{tool_name}"))
-                
-                    if "toolResult" in content:
-                        tool_result = content["toolResult"]
-                        logger.info(f"tool_name: {tool_name}")
-                        logger.info(f"tool_result: {tool_result}")
-                        if "content" in tool_result:
-                            tool_content = tool_result['content']
-                            for content in tool_content:
-                                if "text" in content:
-                                    if chat.debug_mode == 'Enable':
-                                        add_notification(containers, f"tool result: {content['text']}")
-
-                                    try:
-                                        json_data = json.loads(content['text'])
-                                        if isinstance(json_data, dict) and "path" in json_data:
-                                            paths = json_data["path"]
-                                            logger.info(f"paths: {paths}")
-                                            for path in paths:
-                                                if path.startswith("http"):
-                                                    image_url.append(path)
-                                                    logger.info(f"Added image URL: {path}")
-                                    except json.JSONDecodeError:
-                                        pass
-
-                                    content, urls, refs = get_tool_info(tool_name, content['text'])
-                                    logger.info(f"content: {content}")
-                                    logger.info(f"urls: {urls}")
-                                    logger.info(f"refs: {refs}")
-
-                                    if refs:
-                                        for r in refs:
-                                            references.append(r)
-                                        logger.info(f"refs: {refs}")
-                                    if urls:
-                                        for url in urls:
-                                            image_url.append(url)
-                                        logger.info(f"urls: {urls}")
-
-                                        if chat.debug_mode == "Enable":
-                                            add_notification(containers, f"Added path to image_url: {urls}")
-                                            response_msg.append(f"Added path to image_url: {urls}")
-                                        
-            if "event_loop_metrics" in event and \
-                hasattr(event["event_loop_metrics"], "tool_metrics") and \
-                "generate_image_with_colors" in event["event_loop_metrics"].tool_metrics:
-                tool_info = event["event_loop_metrics"].tool_metrics["generate_image_with_colors"].tool
-                if "input" in tool_info and "filename" in tool_info["input"]:
-                    fname = tool_info["input"]["filename"]
-                    if fname:
-                        url = f"{chat.path}/{chat.s3_image_prefix}/{parse.quote(fname)}.png"
-                        if url not in image_url:
-                            image_url.append(url)
-                            logger.info(f"Added image URL: {url}")
-
-            if "data" in event:
-                text_data = event["data"]
-                current_response += text_data
-
-                if chat.debug_mode == 'Enable':
-                    containers["notification"][index].markdown(current_response)
-                continue
+        result, image_url = show_streams(agent_stream, containers)
+    
+    # get reference
+    ref = get_reference(references)
+    if ref:
+        containers['notification'][index-1].markdown(result+ref)
 
     if chat.debug_mode == 'Enable':
         containers['status'].info(get_status_msg(f"end)"))
-
-    ref = ""
-    if references:
-        ref = "\n\n### Reference\n"
-        for i, reference in enumerate(references):
-            ref += f"{i+1}. [{reference['title']}]({reference['url']}), {reference['content']}...\n"    
-
-        # show reference
-        if chat.debug_mode == 'Enable':
-            containers['notification'][index-1].markdown(result+ref)
 
     return result, image_url, status_msg, response_msg
 

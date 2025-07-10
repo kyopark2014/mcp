@@ -93,28 +93,6 @@ if accountId is None:
 region = config["region"] if "region" in config else "us-west-2"
 logger.info(f"region: {region}")
 
-# for logging based on arize-phoenix
-os.environ["PHOENIX_COLLECTOR_ENDPOINT"] = "http://localhost:6006"
-tracer = None
-try:
-    from phoenix.otel import register  # pip install arize-phoenix
-
-    # configure the Phoenix tracer
-    tracer_provider = register(
-      project_name=projectName, # Default is 'default'
-      endpoint="http://localhost:6006/v1/traces",
-      auto_instrument=True # Auto-instrument your app based on installed OI dependencies
-    )
-    tracer = tracer_provider.get_tracer(__name__)
-
-    @tracer.chain
-    def arize_trace(input: str) -> str:
-        return str(input)
-    
-except ImportError:
-    # Phoenix OTEL is not installed, skip tracing configuration
-    pass
-
 s3_prefix = 'docs'
 s3_image_prefix = 'images'
 
