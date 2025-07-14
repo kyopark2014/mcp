@@ -314,17 +314,17 @@ async def call_model(state: State, config):
     
     image_url = state['image_url'] if 'image_url' in state else []
 
-    containers = config.get("configurable", {}).get("containers", None)
-    
+    containers = config.get("configurable", {}).get("containers", None)    
     tools = config.get("configurable", {}).get("tools", None)
     system_prompt = config.get("configurable", {}).get("system_prompt", None)
+    debug_mode = config.get("configurable", {}).get("debug_mode", "Disable")
     
     if isinstance(last_message, ToolMessage):
         tool_name = last_message.name
         tool_content = last_message.content
         logger.info(f"tool_name: {tool_name}, content: {tool_content[:800]}")
 
-        if chat.debug_mode == "Enable":
+        if debug_mode == "Enable":
             if tool_name == "terminal":
                 add_notification(containers, f"{tool_name}\n\n {tool_content}")
                 response_msg.append(f"{tool_name}: {tool_content}")
@@ -343,7 +343,7 @@ async def call_model(state: State, config):
                 image_url.append(url)
             logger.info(f"urls: {urls}")
 
-            if chat.debug_mode == "Enable":
+            if debug_mode == "Enable":
                 add_notification(containers, f"Added path to image_url: {urls}")
                 response_msg.append(f"Added path to image_url: {urls}")
 
@@ -357,7 +357,7 @@ async def call_model(state: State, config):
             state["messages"] = messages
 
     if isinstance(last_message, AIMessage) and last_message.content:
-        if chat.debug_mode == "Enable":
+        if debug_mode == "Enable":
             containers['status'].info(get_status_msg(f"{last_message.name}"))
             add_notification(containers, f"{last_message.content}")
             response_msg.append(last_message.content)    
@@ -410,6 +410,7 @@ async def should_continue(state: State, config) -> Literal["continue", "end"]:
     last_message = messages[-1]
 
     containers = config.get("configurable", {}).get("containers", None)
+    debug_mode = config.get("configurable", {}).get("debug_mode", "Disable")
     
     if isinstance(last_message, AIMessage) and last_message.tool_calls:
         tool_name = last_message.tool_calls[-1]['name']
@@ -419,15 +420,15 @@ async def should_continue(state: State, config) -> Literal["continue", "end"]:
 
         if last_message.content:
             logger.info(f"last_message: {last_message.content}")
-            if chat.debug_mode == "Enable":
+            if debug_mode == "Enable":
                 add_notification(containers, f"{last_message.content}")
                 response_msg.append(last_message.content)
 
         logger.info(f"tool_name: {tool_name}, tool_args: {tool_args}")
-        if chat.debug_mode == "Enable":
+        if debug_mode == "Enable":
             add_notification(containers, f"{tool_name}: {tool_args}")
         
-        if chat.debug_mode == "Enable":
+        if debug_mode == "Enable":
             containers['status'].info(get_status_msg(f"{tool_name}"))
             if "code" in tool_args:
                 logger.info(f"code: {tool_args['code']}")
@@ -436,7 +437,7 @@ async def should_continue(state: State, config) -> Literal["continue", "end"]:
 
         return "continue"
     else:
-        if chat.debug_mode == "Enable":
+        if debug_mode == "Enable":
             containers['status'].info(get_status_msg("end)"))
 
         logger.info(f"--- END ---")
@@ -542,7 +543,10 @@ async def run_agent(query, mcp_servers, historyMode, containers):
     response_msg = []
     image_urls = []
     references = []
-    
+
+    global index
+    index = 0
+
     if chat.debug_mode == "Enable":
         containers["status"].info(get_status_msg("(start"))
 
@@ -569,23 +573,24 @@ async def run_agent(query, mcp_servers, historyMode, containers):
                 "recursion_limit": 50,
                 "configurable": {"thread_id": chat.userId},
                 "containers": containers,
-                "tools": tools
+                "tools": tools,
+                "system_prompt": None,
+                "debug_mode": chat.debug_mode
             }
         else:
             app = buildChatAgent(tools)
             config = {
                 "recursion_limit": 50,
                 "containers": containers,
-                "tools": tools
+                "tools": tools,
+                "system_prompt": None,
+                "debug_mode": chat.debug_mode
             }
         
         inputs = {
             "messages": [HumanMessage(content=query)]
         }
-        
-        global index
-        index = 0
-
+                
         value = result = None
         final_output = None
         async for output in app.astream(inputs, config):
@@ -637,7 +642,8 @@ async def run_task(question, tools, system_prompt, containers, historyMode, prev
             "configurable": {"thread_id": chat.userId},
             "containers": containers,
             "tools": tools,
-            "system_prompt": system_prompt
+            "system_prompt": system_prompt,
+            "debug_mode": chat.debug_mode
         }
     else:
         app = buildChatAgent(tools)
@@ -645,7 +651,8 @@ async def run_task(question, tools, system_prompt, containers, historyMode, prev
             "recursion_limit": 50,
             "containers": containers,
             "tools": tools,
-            "system_prompt": system_prompt
+            "system_prompt": system_prompt,
+            "debug_mode": chat.debug_mode
         }
 
     value = None

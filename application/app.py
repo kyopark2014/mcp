@@ -19,6 +19,7 @@ import string
 import aws_cost.implementation as aws_cost
 import langgraph_agent as langgraph_agent
 import strands_agent as strands_agent
+import swarm_agent
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -81,6 +82,9 @@ mode_descriptions = {
     ],
     "LangGraph Swarm": [
         "LangGraph Swarm를 이용한 Multi-agent Collaboration입니다. 여기에서는 Agent들 사이에 서로 정보를 교환합니다."
+    ],
+    "Swarm Agent": [
+        "Swarm Agent를 이용한 Multi-agent Collaboration입니다. 여기에서는 Agent들 사이에 서로 정보를 교환합니다."
     ],
     "번역하기": [
         "한국어와 영어에 대한 번역을 제공합니다. 한국어로 입력하면 영어로, 영어로 입력하면 한국어로 번역합니다."        
@@ -167,12 +171,12 @@ with st.sidebar:
     
     # radio selection
     mode = st.radio(
-        label="원하는 대화 형태를 선택하세요. ",options=["일상적인 대화", "RAG", "Agent", "Agent (Chat)", "Multi-agent Supervisor (Router)", "LangGraph Supervisor", "LangGraph Swarm", "번역하기", "문법 검토하기", "이미지 분석", "비용 분석"], index=2
+        label="원하는 대화 형태를 선택하세요. ",options=["일상적인 대화", "RAG", "Agent", "Agent (Chat)", "Multi-agent Supervisor (Router)", "LangGraph Supervisor", "LangGraph Swarm", "Swarm Agent", "번역하기", "문법 검토하기", "이미지 분석", "비용 분석"], index=2
     )   
     st.info(mode_descriptions[mode][0])
     
     # mcp selection    
-    if mode=='Agent' or mode=='Agent (Chat)' or mode=='비용 분석':
+    if mode=='Agent' or mode=='Agent (Chat)' or mode=='비용 분석' or mode=='Swarm Agent':
         # MCP Config JSON input
         st.subheader("⚙️ MCP Config")
 
@@ -223,8 +227,8 @@ with st.sidebar:
                     default_value = option in default_selections
                     mcp_selections[option] = st.checkbox(option, key=f"mcp_{option}", value=default_value)
         
-        if not any(mcp_selections.values()):
-            mcp_selections["basic"] = True
+        # if not any(mcp_selections.values()):
+        #     mcp_selections["basic"] = True
 
         if mcp_selections["사용자 설정"]:
             mcp = {}
@@ -291,6 +295,8 @@ with st.sidebar:
                 update_seed_image_url("") 
 
         mcp_servers = [server for server, is_selected in mcp_selections.items() if is_selected]
+    else:
+        mcp_servers = []
 
     # model selection box
     modelName = st.selectbox(
@@ -560,7 +566,22 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                 chat.save_chat_history(prompt, response)       
 
                 show_references(reference_docs)              
-
+        
+        elif mode == "Swarm Agent":
+            sessionState = ""
+            with st.status("thinking...", expanded=True, state="running") as status:
+                containers = {
+                    "tools": st.empty(),
+                    "status": st.empty(),
+                    "notification": [st.empty() for _ in range(500)]
+                }         
+                response = asyncio.run(swarm_agent.run_swarm_agent(prompt, mcp_servers, containers))                                    
+                logger.info(f"response: {response}")
+                st.write(response)
+                
+                st.session_state.messages.append({"role": "assistant", "content": response})
+                chat.save_chat_history(prompt, response)
+                
         elif mode == '번역하기':
             response = chat.translate_text(prompt)
             st.write(response)
