@@ -295,21 +295,21 @@ async def run_swarm_agent(question, mcp_servers, containers):
                     
         # Create specialized agents with different expertise
         add_notification(containers, f"Phase 1: Initial analysis by each specialized agent")
+        add_notification(containers, f"research agent")
         research_result = await run_agent(question, tools, research_prompt, containers)
         logger.info(f"research_result: {research_result}")
-        add_notification(containers, f"research agent")
         add_response(containers, f"{research_result}")
         update_report("research", request_id, research_result)
         
+        add_notification(containers, f"creative agent")
         creative_result = await run_agent(question, tools, creative_prompt, containers)
         logger.info(f"creative_result: {creative_result}")
-        add_notification(containers, f"creative agent")
         add_response(containers, f"{creative_result}")
         update_report("creative", request_id, creative_result)
 
+        add_notification(containers, f"critical agent")
         critical_result = await run_agent(question, tools, critical_prompt, containers)
         logger.info(f"critical_result: {critical_result}")
-        add_notification(containers, f"critical agent")
         add_response(containers, f"{critical_result}")
         update_report("critical", request_id, critical_result)
 
@@ -341,21 +341,21 @@ async def run_swarm_agent(question, mcp_servers, containers):
         # logger.info(f"next_critical_message: {next_critical_message}")
 
         add_notification(containers, f"Phase 2: Each agent refines based on input from others")
+        add_notification(containers, f"refined research agent")
         refined_research = await run_agent(next_research_message, tools, research_prompt, containers)
         logger.info(f"refined_research_result: {refined_research}")
-        add_notification(containers, f"refined research agent")
         add_response(containers, f"{refined_research}")
         update_report("research", request_id, refined_research)
 
+        add_notification(containers, f"refined creative agent")
         refined_creative = await run_agent(next_creative_message, tools, creative_prompt, containers)
         logger.info(f"refined_creative: {refined_creative}")
-        add_notification(containers, f"refined creative agent")
         add_response(containers, f"{refined_creative}")
         update_report("creative", request_id, refined_creative)
 
+        add_notification(containers, f"refined critical agent")
         refined_critical = await run_agent(next_critical_message, tools, critical_prompt, containers)
         logger.info(f"refined_critical: {refined_critical}")
-        add_notification(containers, f"refined critical agent")
         add_response(containers, f"{refined_critical}")
         update_report("critical", request_id, refined_critical)
 
