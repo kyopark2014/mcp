@@ -112,7 +112,6 @@ async def create_final_report(request_id, question, body, report_url):
         body = "## 결과\n\n내용이 없습니다."
     
     output_html = trans.trans_md_to_html(body, question)
-    logger.info(f"output_html: {output_html}")
     chat.create_object(f"artifacts/{request_id}_report.html", output_html)
 
     logger.info(f"url of html: {chat.path}/artifacts/{request_id}_report.html")
