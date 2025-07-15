@@ -575,12 +575,17 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                     "status": st.empty(),
                     "notification": [st.empty() for _ in range(500)]
                 }         
-                response = asyncio.run(swarm_agent.run_swarm_agent(prompt, mcp_servers, containers))                                    
+                response, urls = asyncio.run(swarm_agent.run_swarm_agent(prompt, mcp_servers, containers))                                    
                 logger.info(f"response: {response}")
                 st.write(response)
-                
+
                 st.session_state.messages.append({"role": "assistant", "content": response})
                 chat.save_chat_history(prompt, response)
+
+            if urls:
+                with st.expander(f"최종 결과"):
+                    url_msg = '\n\n'.join(urls)
+                    st.markdown(url_msg)
                 
         elif mode == '번역하기':
             response = chat.translate_text(prompt)

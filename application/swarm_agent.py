@@ -5,9 +5,16 @@ import re
 import chat
 import mcp_config
 import langgraph_agent
+import os
+import random
+import string
+import utils
+import trans
 
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+from langchain_core.runnables.graph import CurveStyle, MermaidDrawMethod
+from datetime import datetime
 
 logging.basicConfig(
     level=logging.INFO,  
@@ -53,6 +60,87 @@ def isKorean(text):
     else:
         # logger.info(f"Not Korean:: {word_kor}")
         return False
+
+def initiate_report(question, containers):
+    # request id
+    request_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+    template = open(os.path.join(os.path.dirname(__file__), f"swarm_report.html")).read()
+    template = template.replace("{request_id}", request_id)
+    template = template.replace("{sharing_url}", chat.path)
+    key = f"artifacts/{request_id}.html"
+    chat.create_object(key, template)
+
+    report_url = chat.path + "/artifacts/" + request_id + ".html"
+    logger.info(f"report_url: {report_url}")
+    add_response(containers, f"report_url: {report_url}")
+
+    # upload diagram to s3
+    random_id = ''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=8))
+    image_filename = f'workflow_{random_id}.png'
+
+    # load an image file, contents/swarm.png
+    image_file = open(os.path.join(os.path.dirname(__file__), f"../contents/swarm.png"), "rb")
+    image_bytes = image_file.read()
+    url = chat.upload_to_s3(image_bytes, image_filename)
+    logger.info(f"url: {url}")
+
+    # add plan to report    
+    key = f"artifacts/{request_id}_plan.md"
+    body = f"## 주제: {question}\n\n"
+    chat.updata_object(key, body, 'append') # prepend or append
+
+    key = f"artifacts/{request_id}_plan.md"
+    task = "Multi-Agent 동작 방식 (SWARM)"
+    output_images = f"<img src='{url}' width='800'>\n\n"
+    body = f"## {task}\n\n{output_images}"
+    chat.updata_object(key, body, 'append') # prepend or append
+
+    return request_id, report_url
+
+async def create_final_report(request_id, question, body, report_url):
+    urls = []
+    if report_url:
+        urls.append(report_url)
+
+    # report.html
+    logger.info(f"body: {body}")
+    logger.info(f"body type: {type(body)}")
+    logger.info(f"body length: {len(body) if body else 0}")
+    
+    if not body:
+        logger.error("body is empty or None")
+        body = "## 결과\n\n내용이 없습니다."
+    
+    output_html = trans.trans_md_to_html(body, question)
+    logger.info(f"output_html: {output_html}")
+    chat.create_object(f"artifacts/{request_id}_report.html", output_html)
+
+    logger.info(f"url of html: {chat.path}/artifacts/{request_id}_report.html")
+    urls.append(f"{chat.path}/artifacts/{request_id}_report.html")
+
+    output = await utils.generate_pdf_report(body, request_id)
+    logger.info(f"result of generate_pdf_report: {output}")
+    if output: # reports/request_id.pdf         
+        pdf_filename = f"artifacts/{request_id}.pdf"
+        with open(pdf_filename, 'rb') as f:
+            pdf_bytes = f.read()
+            chat.upload_to_s3_artifacts(pdf_bytes, f"{request_id}.pdf")
+        logger.info(f"url of pdf: {chat.path}/artifacts/{request_id}.pdf")
+    
+    urls.append(f"{chat.path}/artifacts/{request_id}.pdf")
+
+    # report.md
+    key = f"artifacts/{request_id}_report.md"
+    time = f"# {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"    
+    final_result = body + "\n\n" + f"## 최종 결과\n\n"+'\n\n'.join(urls)    
+    chat.create_object(key, time + final_result)
+
+    # add Link to report    
+    key = f"artifacts/{request_id}_plan.md"
+    body = f"## Final Report\n\n{'\n\n'.join(urls)}\n\n"
+    chat.updata_object(key, body, 'append') # prepend or append
+    
+    return urls
 
 async def run_agent(question, tools, system_prompt, containers):    
     app = langgraph_agent.buildChatAgent(tools)
@@ -153,6 +241,11 @@ def get_prompt(question):
 
     return research_prompt, creative_prompt, critical_prompt, summarizer_prompt
 
+def update_report(type, request_id, result):
+    key = f"artifacts/{request_id}_{type}.md"
+    time = f"## {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+    chat.updata_object(key, time + result, 'append')
+
 # swarm agent
 async def run_swarm_agent(question, mcp_servers, containers):    
     global status_msg, response_msg, image_urls, references, mcp_server_info
@@ -180,6 +273,8 @@ async def run_swarm_agent(question, mcp_servers, containers):
         return f"죄송합니다. MCP 서버가 구성되지 않았습니다. 사이드바에서 MCP 서버를 선택해주세요."
 
     research_prompt, creative_prompt, critical_prompt, summarizer_prompt = get_prompt(question)
+    
+    request_id, report_url = initiate_report(question, containers)
 
     async with MultiServerMCPClient(server_params) as client:        
         mcp_server_info = client.server_name_to_tools.items() 
@@ -204,16 +299,19 @@ async def run_swarm_agent(question, mcp_servers, containers):
         logger.info(f"research_result: {research_result}")
         add_notification(containers, f"research agent")
         add_response(containers, f"{research_result}")
+        update_report("research", request_id, research_result)
         
         creative_result = await run_agent(question, tools, creative_prompt, containers)
         logger.info(f"creative_result: {creative_result}")
         add_notification(containers, f"creative agent")
         add_response(containers, f"{creative_result}")
+        update_report("creative", request_id, creative_result)
 
         critical_result = await run_agent(question, tools, critical_prompt, containers)
         logger.info(f"critical_result: {critical_result}")
         add_notification(containers, f"critical agent")
         add_response(containers, f"{critical_result}")
+        update_report("critical", request_id, critical_result)
 
         # Dictionary to track messages between agents (mesh communication)
         research_messages = []
@@ -247,16 +345,19 @@ async def run_swarm_agent(question, mcp_servers, containers):
         logger.info(f"refined_research_result: {refined_research}")
         add_notification(containers, f"refined research agent")
         add_response(containers, f"{refined_research}")
+        update_report("research", request_id, refined_research)
 
         refined_creative = await run_agent(next_creative_message, tools, creative_prompt, containers)
         logger.info(f"refined_creative: {refined_creative}")
         add_notification(containers, f"refined creative agent")
         add_response(containers, f"{refined_creative}")
+        update_report("creative", request_id, refined_creative)
 
         refined_critical = await run_agent(next_critical_message, tools, critical_prompt, containers)
         logger.info(f"refined_critical: {refined_critical}")
         add_notification(containers, f"refined critical agent")
         add_response(containers, f"{refined_critical}")
+        update_report("critical", request_id, refined_critical)
 
         # Share refined results with summarizer
         summarizer_messages.append(f"From Research Agent (Phase 2): {refined_research}")
@@ -278,11 +379,15 @@ Create a well-structured final answer that incorporates the research findings, c
         add_notification(containers, f"summarizer agent")
         result = await run_agent(next_summarizer_message, tools, summarizer_prompt, containers)
         logger.info(f"result: {result}")
+        update_report("summarizer", request_id, result)
+
+        urls = await create_final_report(request_id, question, result, report_url)
+        logger.info(f"urls: {urls}")
 
         if chat.debug_mode == 'Enable':
             containers['status'].info(get_status_msg(f"end"))
-        
-    return result
+
+    return result, urls
 
 
 

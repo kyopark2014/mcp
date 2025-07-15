@@ -26,6 +26,28 @@ aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
 aws_session_token = os.environ.get('AWS_SESSION_TOKEN')
 aws_region = os.environ.get('AWS_DEFAULT_REGION', 'us-west-2')
 
+os.environ["PHOENIX_COLLECTOR_ENDPOINT"] = "http://localhost:6006"
+tracer = None
+try:
+    from phoenix.otel import register  # pip install arize-phoenix
+
+    # configure the Phoenix tracer
+    tracer_provider = register(
+      project_name="mcp-basic", # Default is 'default'
+      endpoint="http://localhost:6006/v1/traces",
+      auto_instrument=True # Auto-instrument your app based on installed OI dependencies
+    )
+    tracer = tracer_provider.get_tracer(__name__)
+
+    @tracer.chain
+    def arize_trace(input: str) -> str:
+        return str(input)
+    
+except ImportError:
+    # Phoenix OTEL is not installed, skip tracing configuration
+    pass
+
+@tracer.chain
 def get_current_time(format: str=f"%Y-%m-%d %H:%M:%S")->str:
     """Returns the current date and time in the specified format"""
     # f"%Y-%m-%d %H:%M:%S"

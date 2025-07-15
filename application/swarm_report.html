@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Markdown Viewer</title>
+    <link rel="icon" href="data:,">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #ddd;
+        }
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: 1px solid #ddd;
+            border-bottom: none;
+            border-radius: 4px 4px 0 0;
+            margin-right: 5px;
+            background-color: #f8f9fa;
+        }
+        .tab.active {
+            background-color: white;
+            border-bottom: 1px solid white;
+            margin-bottom: -1px;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 30px;
+        }
+        h3 {
+            color: #2c3e50;
+        }
+        pre {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        code {
+            font-family: 'Consolas', monospace;
+        }
+        .status {
+            background-color: #e8f4f8;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .result {
+            background-color: #f0f7ff;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        /* table style */
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 15px 0;
+        }
+        th, td {
+            border: 1px solid #333;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f8f9fa;
+            font-weight: 500;
+        }
+
+        /* Checkbox styles */
+        input[type="checkbox"] {
+            width: 20px !important;
+            height: 20px !important;
+            margin: 0 5px 0 0 !important;
+            border: 2px solid #666 !important;
+            border-radius: 3px !important;
+            appearance: none !important;
+            -webkit-appearance: none !important;
+            background-color: white !important;
+        }
+        
+        input[type="checkbox"]:checked {
+            background-color: white !important;
+            border-color: #666 !important;
+            position: relative;
+        }
+        
+        input[type="checkbox"]:checked::after {
+            content: "✓";
+            color: #ff0000;
+            position: absolute;
+            left: 4px;
+            top: -3px;
+            font-size: 16px;
+            font-weight: bold;
+            text-shadow: 1px 1px 1px rgba(0,0,0,0.1);
+        }
+        
+        /* Checkbox label styles */
+        label {
+            font-size: 14px !important;
+            color: #333 !important;
+            margin-left: 5px !important;
+            font-weight: 500 !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="tabs" role="tablist">
+            <div class="tab active" data-tab="plan" role="tab" aria-selected="true" aria-controls="plan-content">계획</div>
+            <div class="tab" data-tab="research" role="tab" aria-selected="false" aria-controls="research-content">Research</div>
+            <div class="tab" data-tab="creative" role="tab" aria-selected="false" aria-controls="creative-content">Creative</div>
+            <div class="tab" data-tab="critical" role="tab" aria-selected="false" aria-controls="critical-content">Critical</div>
+            <div class="tab" data-tab="summarizer" role="tab" aria-selected="false" aria-controls="summarizer-content">Final</div>
+        </div>
+        <div id="markdown-content" role="tabpanel"></div>
+    </div>
+
+    <script>
+        // marked 라이브러리가 로드되었는지 확인
+        function checkMarkedLoaded() {
+            if (typeof marked === 'undefined') {
+                console.error('marked 라이브러리가 로드되지 않았습니다.');
+                return false;
+            }
+            return true;
+        }
+
+        async function loadMarkdown(tabName) {
+            if (!checkMarkedLoaded()) {
+                document.getElementById('markdown-content').innerHTML = '<p>마크다운 변환 라이브러리를 불러오는 중 오류가 발생했습니다. 페이지를 새로고침해주세요.</p>';
+                return;
+            }
+
+            try {
+                let request_id = "{request_id}";
+                let sharing_url = "{sharing_url}";
+                let file_name = "";
+                
+                if (tabName === 'plan') {
+                    file_name = request_id + '_plan.md';
+                } 
+                else if (tabName === 'research') {
+                    file_name = request_id + '_research.md';
+                } 
+                else if (tabName === 'creative') {
+                    file_name = request_id + '_creative.md';
+                } 
+                else if (tabName === 'critical') {
+                    file_name = request_id + '_critical.md';
+                } 
+                else if (tabName === 'summarizer') {
+                    file_name = request_id + '_summarizer.md';
+                }
+                
+                let url = sharing_url + '/artifacts/' + file_name;
+                console.log("url: ", url);
+
+                const response = await fetch(url);
+                if (!response.ok) {
+                    if (response.status === 404 || response.status === 403) {
+                        document.getElementById('markdown-content').innerHTML = '<p>파일이 아직 준비되지 않았습니다. 잠시후 재시도 해주세요...</p>';
+                        return;
+                    }
+                    throw new Error(`HTTP 오류! 상태 코드: ${response.status}`);
+                }
+                const text = await response.text();
+                const html = marked.parse(text);
+                document.getElementById('markdown-content').innerHTML = html;
+            } catch (error) {
+                console.error('마크다운 파일 로딩 중 오류 발생:', error);
+                document.getElementById('markdown-content').innerHTML = '<p>마크다운 파일을 불러오는 중 오류가 발생했습니다. 파일이 존재하는지 확인해주세요.</p>';
+            }
+        }
+
+        // Handle tab click events
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                // Remove active class and aria-selected from all tabs
+                document.querySelectorAll('.tab').forEach(t => {
+                    t.classList.remove('active');
+                    t.setAttribute('aria-selected', 'false');
+                });
+                // Add active class and aria-selected to clicked tab
+                tab.classList.add('active');
+                tab.setAttribute('aria-selected', 'true');
+                // Load markdown file for the selected tab
+                loadMarkdown(tab.dataset.tab);
+            });
+        });
+
+        // Load result research by default when page loads
+        window.onload = () => loadMarkdown('plan');
+    </script>
+</body>
+</html>

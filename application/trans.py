@@ -6,6 +6,10 @@ def trans_md_to_html(md_content, question):
     with open('application/styles.css', 'r', encoding='utf-8') as f:
         css_content = f.read()
 
+    # Check if md_content is valid
+    if not md_content or not isinstance(md_content, str):
+        md_content = "## 결과\n\n내용이 없습니다."
+    
     lines = md_content.split('\n')
     
     # Get main title from first # heading
@@ -20,6 +24,11 @@ def trans_md_to_html(md_content, question):
     for line in lines:
         if line.startswith('## '):
             subtitles.append(line[3:])
+    
+    # If no subtitles found, create a default section
+    if not subtitles:
+        subtitles = ["보고서"]
+        md_content = "## 보고서\n\n" + md_content
 
     # Create HTML template
     html_template = f"""<!DOCTYPE html>
@@ -123,6 +132,10 @@ def convert_markdown_table(content):
 def convert_section_content(content, section_title):
     """Convert section content to HTML format"""
     html = ""
+    
+    if not content or not isinstance(content, str):
+        return "<p>내용이 없습니다.</p>"
+    
     lines = content.split('\n')
     in_section = False
     section_content = []
@@ -177,6 +190,10 @@ def convert_section_content(content, section_title):
     # Process the last subsection
     if current_subsection and subsection_content:
         html += process_subsection(current_subsection, subsection_content)
+    
+    # If no content was found for this section, return default content
+    if not section_content:
+        return f"<p>{section_title}에 대한 내용이 없습니다.</p>"
     
     # Check if section contains a table and no ### sections
     has_table = any(line.strip().startswith('|') for line in section_content)
