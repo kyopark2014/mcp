@@ -17,8 +17,8 @@ import asyncio
 import random
 import string
 import aws_cost.implementation as aws_cost
-import langgraph_agent as langgraph_agent
-import strands_agent as strands_agent
+import langgraph_agent
+import strands_agent
 import swarm_agent
 
 logging.basicConfig(

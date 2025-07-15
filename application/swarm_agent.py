@@ -155,8 +155,14 @@ def get_prompt(question):
 
 # swarm agent
 async def run_swarm_agent(question, mcp_servers, containers):    
-    global status_msg
+    global status_msg, response_msg, image_urls, references, mcp_server_info
     status_msg = []
+    response_msg = []
+    image_urls = []
+    references = []
+
+    global index
+    index = 0
 
     if chat.debug_mode == 'Enable':
         containers['status'].info(get_status_msg(f"(start"))    
@@ -192,9 +198,6 @@ async def run_swarm_agent(question, mcp_servers, containers):
         if chat.debug_mode == "Enable" and tools is not None:    
             containers["tools"].info(f"Tools: {tool_list}")
                     
-        global index
-        index = 0
-
         # Create specialized agents with different expertise
         add_notification(containers, f"Phase 1: Initial analysis by each specialized agent")
         research_result = await run_agent(question, tools, research_prompt, containers)
@@ -232,25 +235,25 @@ async def run_swarm_agent(question, mcp_servers, containers):
         summarizer_messages.append(f"From Critical Agent: {critical_result}")
 
         # Phase 2: Each agent refines based on input from others
-        next_research_prompt = f"{question}\n\nConsider these messages from other agents:\n" + "\n\n".join(research_messages)
-        logger.info(f"next_research_prompt: {next_research_prompt}")
-        next_creative_prompt = f"{question}\n\nConsider these messages from other agents:\n" + "\n\n".join(creative_messages)
-        # logger.info(f"next_creative_prompt: {next_creative_prompt}")
-        next_refined_prompt = f"{question}\n\nConsider these messages from other agents:\n" + "\n\n".join(critical_messages)
-        # logger.info(f"next_refined_prompt: {next_refined_prompt}")
+        next_research_message = f"{question}\n\nConsider these messages from other agents:\n" + "\n\n".join(research_messages)
+        logger.info(f"next_research_message: {next_research_message}")
+        next_creative_message = f"{question}\n\nConsider these messages from other agents:\n" + "\n\n".join(creative_messages)
+        # logger.info(f"next_creative_message: {next_creative_message}")
+        next_critical_message = f"{question}\n\nConsider these messages from other agents:\n" + "\n\n".join(critical_messages)
+        # logger.info(f"next_critical_message: {next_critical_message}")
 
         add_notification(containers, f"Phase 2: Each agent refines based on input from others")
-        refined_research = await run_agent(next_research_prompt, tools, research_prompt, containers)
+        refined_research = await run_agent(next_research_message, tools, research_prompt, containers)
         logger.info(f"refined_research_result: {refined_research}")
         add_notification(containers, f"refined research agent")
         add_response(containers, f"{refined_research}")
 
-        refined_creative = await run_agent(next_creative_prompt, tools, creative_prompt, containers)
+        refined_creative = await run_agent(next_creative_message, tools, creative_prompt, containers)
         logger.info(f"refined_creative: {refined_creative}")
         add_notification(containers, f"refined creative agent")
         add_response(containers, f"{refined_creative}")
 
-        refined_critical = await run_agent(next_refined_prompt, tools, critical_prompt, containers)
+        refined_critical = await run_agent(next_critical_message, tools, critical_prompt, containers)
         logger.info(f"refined_critical: {refined_critical}")
         add_notification(containers, f"refined critical agent")
         add_response(containers, f"{refined_critical}")
@@ -262,7 +265,7 @@ async def run_swarm_agent(question, mcp_servers, containers):
         
         logger.info(f"summarized messages: {summarizer_messages}")
 
-        next_summarizer = f"""
+        next_summarizer_message = f"""
 Original query: {question}
 
 Please synthesize the following inputs from all agents into a comprehensive final solution:
@@ -273,7 +276,7 @@ Create a well-structured final answer that incorporates the research findings, c
 """
 
         add_notification(containers, f"summarizer agent")
-        result = await run_agent(next_summarizer, tools, summarizer_prompt, containers)
+        result = await run_agent(next_summarizer_message, tools, summarizer_prompt, containers)
         logger.info(f"result: {result}")
 
         if chat.debug_mode == 'Enable':
