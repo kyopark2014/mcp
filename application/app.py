@@ -183,20 +183,20 @@ with st.sidebar:
         # Change radio to checkbox
         if environment == "user":        
             mcp_options = [
-                "basic", "code interpreter", "aws document", "aws cost", "aws cli", 
+                "basic", "tavily-search", "aws document", "aws cost", "aws cli", 
                 "use_aws", "aws cloudwatch", "aws storage", "image generation", "aws diagram",
-                "knowledge base", "tavily", "perplexity", "ArXiv", "wikipedia", 
+                "code interpreter","knowledge base", "tavily", "perplexity", "ArXiv", "wikipedia", 
                 "filesystem", "terminal", "text editor", "context7", "puppeteer", 
                 "playwright", "firecrawl", "obsidian", "airbnb", 
-                "pubmed", "chembl", "clinicaltrial", "arxiv-manual", "tavily-manual", "사용자 설정"
+                "pubmed", "chembl", "clinicaltrial", "arxiv-manual", "사용자 설정"
             ]
         else:
             mcp_options = [ 
-                "basic", "code interpreter", "aws document", "aws cost", "aws cli", 
+                "basic", "tavily-search", "aws document", "aws cost", "aws cli", 
                 "use_aws", "aws cloudwatch", "aws storage", "image generation", "aws diagram",
-                "knowledge base", "tavily", "ArXiv", "wikipedia", 
+                "code interpreter", "knowledge base", "tavily", "ArXiv", "wikipedia", 
                 "filesystem", "terminal", "text editor", "playwright", "airbnb",
-                "pubmed", "chembl", "clinicaltrial", "arxiv-manual", "tavily-manual", "사용자 설정"
+                "pubmed", "chembl", "clinicaltrial", "arxiv-manual", "사용자 설정"
             ]
         mcp_selections = {}
         default_selections = ["basic", "use_aws", "tavily-manual", "filesystem", "terminal"]
