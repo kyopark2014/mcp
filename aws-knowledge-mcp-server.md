@@ -24,3 +24,17 @@
     }
 }
 ```
+
+```java
+{
+    "mcpServers": {
+        "aws-knowledge-mcp-server": {
+            "command": "npx",
+            "args": [
+                "mcp-remote",
+                "https://knowledge-mcp.global.api.aws"
+            ]
+        }
+    }
+}
+```
