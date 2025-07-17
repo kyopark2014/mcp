@@ -2,6 +2,7 @@ import chat
 import logging
 import sys
 import utils
+import os
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -17,6 +18,8 @@ print(f"config: {config}")
 
 aws_region = config["region"] if "region" in config else "us-west-2"
 projectName = config["projectName"] if "projectName" in config else "mcp"
+workingDir = os.path.dirname(os.path.abspath(__file__))
+logger.info(f"workingDir: {workingDir}")
 
 mcp_user_config = {}    
 def load_config(mcp_type):
@@ -42,6 +45,8 @@ def load_config(mcp_type):
         mcp_type = 'aws_cli'
     elif mcp_type == "text editor":
         mcp_type = 'text_editor'
+    elif mcp_type == "aws-api":
+        mcp_type = 'aws-api-mcp-server'
     logger.info(f"mcp_type: {mcp_type}")
 
     if mcp_type == "basic":
@@ -429,6 +434,22 @@ def load_config(mcp_type):
                     ],
                     "env": {
                         "KB_INCLUSION_TAG_KEY": projectName
+                    }
+                }
+            }
+        }
+    
+    elif mcp_type == "aws-api-mcp-server": 
+        return {
+            "mcpServers": {
+                "awslabs.aws-api-mcp-server": {
+                    "command": "uvx",
+                    "args": [
+                            "awslabs.aws-api-mcp-server@latest"
+                    ],
+                    "env": {
+                        "AWS_REGION": aws_region,
+                        "AWS_API_MCP_WORKING_DIR": workingDir
                     }
                 }
             }
