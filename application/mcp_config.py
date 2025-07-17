@@ -47,6 +47,8 @@ def load_config(mcp_type):
         mcp_type = 'text_editor'
     elif mcp_type == "aws-api":
         mcp_type = 'aws-api-mcp-server'
+    elif mcp_type == "aws-knowledge":
+        mcp_type = 'aws-knowledge-mcp-server'
     logger.info(f"mcp_type: {mcp_type}")
 
     if mcp_type == "basic":
@@ -451,6 +453,19 @@ def load_config(mcp_type):
                         "AWS_REGION": aws_region,
                         "AWS_API_MCP_WORKING_DIR": workingDir
                     }
+                }
+            }
+        }
+    
+    elif mcp_type == "aws-knowledge-mcp-server":
+        return {
+            "mcpServers": {
+                "aws-knowledge-mcp-server": {
+                    "command": "npx",
+                    "args": [
+                        "mcp-remote",
+                        "https://knowledge-mcp.global.api.aws"
+                    ]
                 }
             }
         }
