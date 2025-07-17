@@ -19,3 +19,6 @@
 }
 ```
 
+세부 동작은 [server.py](https://github.com/awslabs/mcp/blob/main/src/aws-api-mcp-server/awslabs/aws_api_mcp_server/server.py)을 참조합니다.
+
+
