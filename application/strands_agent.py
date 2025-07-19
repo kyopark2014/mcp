@@ -613,6 +613,8 @@ async def show_streams(agent_stream, containers):
     tool_name = ""
     result = ""
     current_response = ""
+    
+    debug_mode = chat.debug_mode
 
     async for event in agent_stream:
         # logger.info(f"event: {event}")
@@ -623,7 +625,7 @@ async def show_streams(agent_stream, containers):
             for content in message["content"]:                
                 if "text" in content:
                     logger.info(f"text: {content['text']}")
-                    if chat.debug_mode == 'Enable':
+                    if debug_mode == 'Enable' and containers is not None:
                         add_response(containers, content['text'])
 
                     result = content['text']
@@ -637,7 +639,7 @@ async def show_streams(agent_stream, containers):
                     input = tool_use["input"]
                     
                     logger.info(f"tool_name: {tool_name}, arg: {input}")
-                    if chat.debug_mode == 'Enable':       
+                    if debug_mode == 'Enable' and containers is not None:       
                         add_notification(containers, f"tool name: {tool_name}, arg: {input}")
                         containers['status'].info(get_status_msg(f"{tool_name}"))
             
@@ -649,7 +651,7 @@ async def show_streams(agent_stream, containers):
                         tool_content = tool_result['content']
                         for content in tool_content:
                             if "text" in content:
-                                if chat.debug_mode == 'Enable':
+                                if debug_mode == 'Enable' and containers is not None:
                                     add_notification(containers, f"tool result: {content['text']}")
 
                                 try:
@@ -678,7 +680,7 @@ async def show_streams(agent_stream, containers):
                                         image_url.append(url)
                                     logger.info(f"urls: {urls}")
 
-                                    if chat.debug_mode == "Enable":
+                                    if debug_mode == "Enable" and containers is not None:
                                         add_notification(containers, f"Added path to image_url: {urls}")
                                         response_msg.append(f"Added path to image_url: {urls}")
                                     
@@ -698,7 +700,7 @@ async def show_streams(agent_stream, containers):
             text_data = event["data"]
             current_response += text_data
 
-            if chat.debug_mode == 'Enable':
+            if debug_mode == 'Enable' and containers is not None:
                 containers["notification"][index].markdown(current_response)
             continue
     
@@ -716,13 +718,15 @@ async def run_agent(question, strands_tools, mcp_servers, historyMode, container
     global status_msg
     status_msg = []
 
-    if chat.debug_mode == 'Enable':
+    debug_mode = chat.debug_mode
+
+    if debug_mode == 'Enable' and containers is not None:
         containers['status'].info(get_status_msg(f"(start"))    
 
     # initiate agent
     agent, tool_list = await initiate_agent(None, strands_tools, mcp_servers, historyMode)
     logger.info(f"tool_list: {tool_list}")    
-    if chat.debug_mode == 'Enable' and tool_list:
+    if debug_mode == 'Enable' and containers is not None and tool_list:
         containers['tools'].info(f"tool_list: {tool_list}")
 
     # run agent
@@ -736,7 +740,7 @@ async def run_agent(question, strands_tools, mcp_servers, historyMode, container
     result += get_reference(references)
     containers['notification'][index-1].markdown(result)
 
-    if chat.debug_mode == 'Enable':
+    if debug_mode == 'Enable' and containers is not None:
         containers['status'].info(get_status_msg(f"end)"))
 
     return result, image_url
@@ -745,6 +749,8 @@ async def run_task(question, strands_tools, mcp_servers, containers, historyMode
     global status_msg, response_msg
     status_msg = previous_status_msg
     response_msg = previous_response_msg
+
+    debug_mode = chat.debug_mode
     
     global references, image_url
     image_url = []    
@@ -760,7 +766,7 @@ async def run_task(question, strands_tools, mcp_servers, containers, historyMode
     # get tool list
     tool_list = get_tool_list(tools)
     logger.info(f"tool_list: {tool_list}")
-    if chat.debug_mode == 'Enable':
+    if debug_mode == 'Enable' and containers is not None:
         containers['tools'].info(f"Tools: {tool_list}")
     
     # run agent
@@ -775,7 +781,7 @@ async def run_task(question, strands_tools, mcp_servers, containers, historyMode
     if ref:
         containers['notification'][index-1].markdown(result+ref)
 
-    if chat.debug_mode == 'Enable':
+    if debug_mode == 'Enable' and containers is not None:
         containers['status'].info(get_status_msg(f"end)"))
 
     return result, image_url, status_msg, response_msg

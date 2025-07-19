@@ -43,7 +43,8 @@ mcp_server_info = {}
 index = 0
 def add_notification(containers, message):
     global index
-    containers['notification'][index].info(message)
+    if containers is not None:
+        containers['notification'][index].info(message)
     index += 1
 
 def get_status_msg(status):
@@ -343,7 +344,7 @@ async def call_model(state: State, config):
                 image_url.append(url)
             logger.info(f"urls: {urls}")
 
-            if debug_mode == "Enable":
+            if debug_mode == "Enable" and containers is not None:
                 add_notification(containers, f"Added path to image_url: {urls}")
                 response_msg.append(f"Added path to image_url: {urls}")
 
@@ -357,7 +358,7 @@ async def call_model(state: State, config):
             state["messages"] = messages
 
     if isinstance(last_message, AIMessage) and last_message.content:
-        if debug_mode == "Enable":
+        if debug_mode == "Enable" and containers is not None:
             containers['status'].info(get_status_msg(f"{last_message.name}"))
             add_notification(containers, f"{last_message.content}")
             response_msg.append(last_message.content)    
@@ -380,7 +381,9 @@ async def call_model(state: State, config):
             "6. Produces a final response"
         )
 
-    chatModel = chat.get_chat(extended_thinking=chat.reasoning_mode)
+    # Use reasoning_mode with fallback to default
+    reasoning_mode = getattr(chat, 'reasoning_mode', 'Disable')
+    chatModel = chat.get_chat(extended_thinking=reasoning_mode)
     model = chatModel.bind_tools(tools)
 
     try:
@@ -420,15 +423,15 @@ async def should_continue(state: State, config) -> Literal["continue", "end"]:
 
         if last_message.content:
             logger.info(f"last_message: {last_message.content}")
-            if debug_mode == "Enable":
+            if debug_mode == "Enable" and containers is not None:
                 add_notification(containers, f"{last_message.content}")
                 response_msg.append(last_message.content)
 
         logger.info(f"tool_name: {tool_name}, tool_args: {tool_args}")
-        if debug_mode == "Enable":
+        if debug_mode == "Enable" and containers is not None:
             add_notification(containers, f"{tool_name}: {tool_args}")
         
-        if debug_mode == "Enable":
+        if debug_mode == "Enable" and containers is not None:
             containers['status'].info(get_status_msg(f"{tool_name}"))
             if "code" in tool_args:
                 logger.info(f"code: {tool_args['code']}")
@@ -437,7 +440,7 @@ async def should_continue(state: State, config) -> Literal["continue", "end"]:
 
         return "continue"
     else:
-        if debug_mode == "Enable":
+        if debug_mode == "Enable" and containers is not None:
             containers['status'].info(get_status_msg("end)"))
 
         logger.info(f"--- END ---")
@@ -547,7 +550,9 @@ async def run_agent(query, mcp_servers, historyMode, containers):
     global index
     index = 0
 
-    if chat.debug_mode == "Enable":
+    debug_mode = chat.debug_mode
+
+    if debug_mode == "Enable" and containers is not None:
         containers["status"].info(get_status_msg("(start"))
 
     mcp_json = mcp_config.load_selected_config(mcp_servers)
@@ -564,7 +569,7 @@ async def run_agent(query, mcp_servers, historyMode, containers):
         tool_list = [tool.name for tool in tools]
         logger.info(f"tool_list: {tool_list}")
 
-        if chat.debug_mode == "Enable":    
+        if debug_mode == "Enable":    
             containers["tools"].info(f"Tools: {tool_list}")
                     
         if historyMode == "Enable":
@@ -575,7 +580,7 @@ async def run_agent(query, mcp_servers, historyMode, containers):
                 "containers": containers,
                 "tools": tools,
                 "system_prompt": None,
-                "debug_mode": chat.debug_mode
+                "debug_mode": debug_mode
             }
         else:
             app = buildChatAgent(tools)
@@ -584,7 +589,7 @@ async def run_agent(query, mcp_servers, historyMode, containers):
                 "containers": containers,
                 "tools": tools,
                 "system_prompt": None,
-                "debug_mode": chat.debug_mode
+                "debug_mode": debug_mode
             }
         
         inputs = {
@@ -623,7 +628,8 @@ async def run_agent(query, mcp_servers, historyMode, containers):
         logger.info(f"result: {result}")       
         logger.info(f"image_url: {image_url}")
 
-        containers['notification'][index-1].markdown(result)
+        if containers is not None:
+            containers['notification'][index-1].markdown(result)
     
     return result, image_url
 
@@ -632,7 +638,9 @@ async def run_task(question, tools, system_prompt, containers, historyMode, prev
     status_msg = previous_status_msg
     response_msg = previous_response_msg
 
-    if chat.debug_mode == "Enable":
+    debug_mode = chat.debug_mode
+
+    if debug_mode == "Enable" and containers is not None:
         containers["status"].info(get_status_msg("(start"))
 
     if historyMode == "Enable":
@@ -643,7 +651,7 @@ async def run_task(question, tools, system_prompt, containers, historyMode, prev
             "containers": containers,
             "tools": tools,
             "system_prompt": system_prompt,
-            "debug_mode": chat.debug_mode
+            "debug_mode": debug_mode
         }
     else:
         app = buildChatAgent(tools)
@@ -652,7 +660,7 @@ async def run_task(question, tools, system_prompt, containers, historyMode, prev
             "containers": containers,
             "tools": tools,
             "system_prompt": system_prompt,
-            "debug_mode": chat.debug_mode
+            "debug_mode": debug_mode
         }
 
     value = None

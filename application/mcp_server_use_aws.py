@@ -217,8 +217,6 @@ class ToolUse(TypedDict):
     input: Any
     name: str
 
-from strands.types.tools import ToolResult, ToolUse
-
 @mcp.tool()
 def use_aws(
     service_name: str,
