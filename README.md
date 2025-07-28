@@ -749,3 +749,5 @@ Tool에서 "aws storage"를 선택하고, "내 s3 전체 사용량은?"이라고
 [The Top 7 MCP-Supported AI Frameworks](https://medium.com/@amosgyamfi/the-top-7-mcp-supported-ai-frameworks-a8e5030c87ab)
 
 [Drug Discovery Agent based on Amazon Bedrock](https://github.com/hsr87/drug-discovery-agent)
+
+[Price Per Token](https://pricepertoken.com/)
