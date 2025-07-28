@@ -353,6 +353,17 @@ export class CdkMcpStack extends cdk.Stack {
     });
     codeInterpreterSecret.grantRead(ec2Role) 
 
+    const novaActSecret = new secretsmanager.Secret(this, `nova-act-secret-for-${projectName}`, {
+      description: 'secret for nova act api key', // nova act
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      secretName: `nova-act-${projectName}`,
+      secretObjectValue: {
+        project_name: cdk.SecretValue.unsafePlainText(projectName),
+        nova_act_api_key: cdk.SecretValue.unsafePlainText(''),
+      },
+    });
+    novaActSecret.grantRead(ec2Role) 
+
     // Cost Explorer Policy
     const costExplorerPolicy = new iam.PolicyStatement({  
       resources: ['*'],

@@ -481,6 +481,17 @@ def load_config(mcp_type):
                 }
             }
         }
+    elif mcp_type == "agentcore-browser":
+        return {
+            "mcpServers": {
+                "agentcore-browser": {
+                    "command": "python",
+                    "args": [
+                        f"{workingDir}/mcp_server_browser.py"
+                    ]
+                }
+            }
+        }
     
     elif mcp_type == "사용자 설정":
         return mcp_user_config
