@@ -43,7 +43,7 @@ projectName = config['projectName']
 
 console = Console()
 
-starting_page = "https://www.amazon.com"
+starting_page = "https://www.google.com"
 
 # api key to get weather information in agent
 secretsmanager = boto3.client(
