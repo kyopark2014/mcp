@@ -19,6 +19,7 @@ from strands.tools.mcp import MCPClient
 from mcp import stdio_client, StdioServerParameters
 from botocore.config import Config
 from speak import speak
+from bedrock_agentcore.memory import MemoryClient
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -69,6 +70,7 @@ def get_status_msg(status):
     else: 
         status = " -> ".join(status_msg)
         return "[status]\n" + status    
+
 
 #########################################################
 # Strands Agent 
@@ -716,12 +718,77 @@ def get_reference(references):
             ref += f"{i+1}. [{reference['title']}]({reference['url']}), {reference['content']}...\n"        
     return ref
 
+user_id = "strands"
+memory_id = None
+memory_client = MemoryClient(region_name="us-west-2")
+def init_memory():
+    global memory_id
+    agent_type = "strands"
+
+    memory_id = utils.memory_id
+    if memory_id is None:    
+        memories = memory_client.list_memories()
+        logger.info(f"memories: {memories}")
+        for memory in memories:            
+            logger.info(f"Memory ID: {memory.get('id')}")
+            memory_name = memory.get('id').split("-")[0]
+            if memory_name == utils.projectName:
+                logger.info(f"The memory of {memory_name} was found")
+                memory_id = memory.get('id')
+                logger.info(f"Memory Arn: {memory.get('arn')}")
+                break
+
+        if memory_id is None:  # no memory_id found, create new memory_id
+            result = memory_client.create_memory(
+                name=utils.projectName,
+                description=f"Memory for {utils.projectName}",
+                event_expiry_days=365, # 7 - 365 days
+                # memory_execution_role_arn=memory_execution_role_arn
+            )
+            logger.info(f"result of memory creation: {result}")
+            memory_id = result.get('id')
+            logger.info(f"memory_id: {memory_id}")
+
+            agentcore_path = os.path.join(os.path.dirname(__file__), "agentcore.json")
+            if not os.path.exists(agentcore_path):
+                with open(agentcore_path, "w", encoding="utf-8") as f:
+                    json.dump({"memory_id": memory_id}, f, ensure_ascii=False, indent=4)
+                logger.info(f"memory_id was created and saved to {agentcore_path}")
+            else:
+                with open(agentcore_path, "r", encoding="utf-8") as f:
+                    json_data = json.load(f)
+                    json_data["memory_id"] = memory_id
+                    with open(agentcore_path, "w", encoding="utf-8") as f:
+                        json.dump(json_data, f, ensure_ascii=False, indent=4)
+                logger.info(f"memory_id was updated to {memory_id}")
+
+def save_conversation_to_memory(query, result):
+    # save conversation to memory
+    logger.info(f"###### save_conversation_to_memory ######")
+    logger.info(f"memory_id: {memory_id}")
+    memory_result = memory_client.create_event(
+        memory_id=memory_id,
+        actor_id=user_id, 
+        session_id=user_id, 
+        messages=[
+            (query, "USER"),
+            (result, "ASSISTANT")
+        ]
+    )
+    logger.info(f"result of save conversation to memory: {memory_result}")
+
 async def run_agent(question, strands_tools, mcp_servers, historyMode, containers):
     global status_msg, image_url, references, tool_list
     status_msg = []
-    image_url = []    
+    image_url = []
     references = []    
     tool_list = []
+
+    if memory_id is None:
+        init_memory()
+
+    global index
+    index = 0
 
     debug_mode = chat.debug_mode
 
@@ -749,6 +816,18 @@ async def run_agent(question, strands_tools, mcp_servers, historyMode, container
 
     if debug_mode == 'Enable' and containers is not None:
         containers['status'].info(get_status_msg(f"end)"))
+
+    # save event to memory
+    if memory_id is not None:
+        save_conversation_to_memory(question, result) 
+
+    conversations = memory_client.list_events(
+        memory_id=memory_id,
+        actor_id=user_id,
+        session_id=user_id,
+        max_results=5,
+    )
+    logger.info(f"conversations: {conversations}")
 
     return result, image_url
 

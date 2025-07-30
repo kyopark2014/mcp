@@ -25,7 +25,6 @@ logger = logging.getLogger("utils")
 aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
 aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
 aws_session_token = os.environ.get('AWS_SESSION_TOKEN')
-aws_region = os.environ.get('AWS_DEFAULT_REGION', 'us-west-2')
 
 def load_config():
     config = None
@@ -41,7 +40,25 @@ def load_config():
 config = load_config()
 
 bedrock_region = config['region']
+accountId = config['accountId']
 projectName = config['projectName']
+
+def load_agentcore_config():
+    memory_id = None
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        agentcore_path = os.path.join(script_dir, "agentcore.json")
+        with open(agentcore_path, "r", encoding="utf-8") as f:
+            json_data = json.load(f)
+            memory_id = json_data['memory_id']
+            logger.info(f"memory_id: {memory_id}")
+    except Exception as e:        
+        logger.error(f"Error loading agentcore config: {e}")
+        pass
+    
+    return memory_id
+
+memory_id = load_agentcore_config()
 
 def get_contents_type(file_name):
     if file_name.lower().endswith((".jpg", ".jpeg")):
@@ -179,7 +196,7 @@ except Exception as e:
 nova_act_key = ""
 try:
     get_nova_act_api_secret = secretsmanager.get_secret_value(
-        SecretId=f"nova-act-apikey-{projectName}"
+        SecretId=f"novaactapikey-{projectName}"
     )
     #print('get_perplexity_api_secret: ', get_perplexity_api_secret)
     secret = json.loads(get_nova_act_api_secret['SecretString'])

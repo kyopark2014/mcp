@@ -356,7 +356,7 @@ export class CdkMcpStack extends cdk.Stack {
     const novaActSecret = new secretsmanager.Secret(this, `nova-act-secret-for-${projectName}`, {
       description: 'secret for nova act api key', // nova act
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      secretName: `nova-act-${projectName}`,
+      secretName: `novaactapikey-${projectName}`,
       secretObjectValue: {
         project_name: cdk.SecretValue.unsafePlainText(projectName),
         nova_act_api_key: cdk.SecretValue.unsafePlainText(''),
