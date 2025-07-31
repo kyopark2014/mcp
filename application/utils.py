@@ -43,23 +43,6 @@ bedrock_region = config['region']
 accountId = config['accountId']
 projectName = config['projectName']
 
-def load_agentcore_config():
-    memory_id = None
-    try:
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        agentcore_path = os.path.join(script_dir, "agentcore.json")
-        with open(agentcore_path, "r", encoding="utf-8") as f:
-            json_data = json.load(f)
-            memory_id = json_data['memory_id']
-            logger.info(f"memory_id: {memory_id}")
-    except Exception as e:        
-        logger.error(f"Error loading agentcore config: {e}")
-        pass
-    
-    return memory_id
-
-memory_id = load_agentcore_config()
-
 def get_contents_type(file_name):
     if file_name.lower().endswith((".jpg", ".jpeg")):
         content_type = "image/jpeg"

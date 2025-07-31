@@ -7,6 +7,7 @@ import sys
 import json
 import utils
 import boto3
+import agentcore_memory
 
 from urllib import parse
 from contextlib import contextmanager
@@ -19,7 +20,6 @@ from strands.tools.mcp import MCPClient
 from mcp import stdio_client, StdioServerParameters
 from botocore.config import Config
 from speak import speak
-from bedrock_agentcore.memory import MemoryClient
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -47,6 +47,7 @@ selected_strands_tools = []
 selected_mcp_servers = []
 
 history_mode = "Disable"
+aws_region = utils.bedrock_region
 
 index = 0
 def add_notification(containers, message):
@@ -71,7 +72,6 @@ def get_status_msg(status):
         status = " -> ".join(status_msg)
         return "[status]\n" + status    
 
-
 #########################################################
 # Strands Agent 
 #########################################################
@@ -93,7 +93,6 @@ def get_model():
     aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
     aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
     aws_session_token = os.environ.get('AWS_SESSION_TOKEN')
-    aws_region = os.environ.get('AWS_DEFAULT_REGION', 'ap-northeast-2')
 
     # Bedrock 클라이언트 설정
     bedrock_config = Config(
@@ -150,6 +149,24 @@ def get_model():
 
 conversation_manager = SlidingWindowConversationManager(
     window_size=10,  
+)
+
+# Custom conversation manager to filter out empty messages
+class ValidatedConversationManager(SlidingWindowConversationManager):
+    def add_message(self, message):
+        # Filter out empty messages before adding to conversation
+        if hasattr(message, 'content') and message.content:
+            if isinstance(message.content, str) and message.content.strip():
+                super().add_message(message)
+            elif isinstance(message.content, list) and message.content:
+                # Handle list content (e.g., text blocks)
+                super().add_message(message)
+        else:
+            logger.warning(f"Skipping empty message: {message}")
+
+# Use validated conversation manager
+conversation_manager = ValidatedConversationManager(
+    window_size=10,
 )
 
 class MCPClientManager:
@@ -269,9 +286,11 @@ def update_tools(strands_tools: list, mcp_servers: list):
         # "python_repl": python_repl  # Temporarily disabled
     }
 
-    for tool_name in strands_tools:
-        if tool_name in tool_map:
-            tools.append(tool_map[tool_name])
+    for tool_item in strands_tools:
+        if isinstance(tool_item, list):
+            tools.extend(tool_item)
+        elif isinstance(tool_item, str) and tool_item in tool_map:
+            tools.append(tool_map[tool_item])
 
     # MCP tools
     mcp_servers_loaded = 0
@@ -311,6 +330,10 @@ def create_agent(system_prompt, tools, history_mode):
             "상황에 맞는 구체적인 세부 정보를 충분히 제공합니다." 
             "모르는 질문을 받으면 솔직히 모른다고 말합니다."
         )
+
+    # Validate system prompt is not empty
+    if not system_prompt or not system_prompt.strip():
+        system_prompt = "You are a helpful AI assistant."
 
     model = get_model()
     if history_mode == "Enable":
@@ -598,7 +621,16 @@ async def initiate_agent(system_prompt, strands_tools, mcp_servers, historyMode)
 
     logger.info(f"initiated: {initiated}, update_required: {update_required}")
 
-    if not initiated or update_required:         
+    if not initiated or update_required:
+        # strands_provider = AgentCoreMemoryToolProvider(
+        #     memory_id=memory_id,
+        #     actor_id=user_id,
+        #     session_id=user_id,
+        #     namespace=f"/users/{user_id}",
+        #     region=aws_region
+        # )
+        # strands_tools.append(strands_provider.tools)
+        
         init_mcp_clients(mcp_servers)
         tools = update_tools(strands_tools, mcp_servers)
         logger.info(f"tools: {tools}")
@@ -718,74 +750,20 @@ def get_reference(references):
             ref += f"{i+1}. [{reference['title']}]({reference['url']}), {reference['content']}...\n"        
     return ref
 
-user_id = "strands"
-memory_id = None
-memory_client = MemoryClient(region_name="us-west-2")
-def init_memory():
-    global memory_id
-    agent_type = "strands"
-
-    memory_id = utils.memory_id
-    if memory_id is None:    
-        memories = memory_client.list_memories()
-        logger.info(f"memories: {memories}")
-        for memory in memories:            
-            logger.info(f"Memory ID: {memory.get('id')}")
-            memory_name = memory.get('id').split("-")[0]
-            if memory_name == utils.projectName:
-                logger.info(f"The memory of {memory_name} was found")
-                memory_id = memory.get('id')
-                logger.info(f"Memory Arn: {memory.get('arn')}")
-                break
-
-        if memory_id is None:  # no memory_id found, create new memory_id
-            result = memory_client.create_memory(
-                name=utils.projectName,
-                description=f"Memory for {utils.projectName}",
-                event_expiry_days=365, # 7 - 365 days
-                # memory_execution_role_arn=memory_execution_role_arn
-            )
-            logger.info(f"result of memory creation: {result}")
-            memory_id = result.get('id')
-            logger.info(f"memory_id: {memory_id}")
-
-            agentcore_path = os.path.join(os.path.dirname(__file__), "agentcore.json")
-            if not os.path.exists(agentcore_path):
-                with open(agentcore_path, "w", encoding="utf-8") as f:
-                    json.dump({"memory_id": memory_id}, f, ensure_ascii=False, indent=4)
-                logger.info(f"memory_id was created and saved to {agentcore_path}")
-            else:
-                with open(agentcore_path, "r", encoding="utf-8") as f:
-                    json_data = json.load(f)
-                    json_data["memory_id"] = memory_id
-                    with open(agentcore_path, "w", encoding="utf-8") as f:
-                        json.dump(json_data, f, ensure_ascii=False, indent=4)
-                logger.info(f"memory_id was updated to {memory_id}")
-
-def save_conversation_to_memory(query, result):
-    # save conversation to memory
-    logger.info(f"###### save_conversation_to_memory ######")
-    logger.info(f"memory_id: {memory_id}")
-    memory_result = memory_client.create_event(
-        memory_id=memory_id,
-        actor_id=user_id, 
-        session_id=user_id, 
-        messages=[
-            (query, "USER"),
-            (result, "ASSISTANT")
-        ]
-    )
-    logger.info(f"result of save conversation to memory: {memory_result}")
-
 async def run_agent(question, strands_tools, mcp_servers, historyMode, containers):
     global status_msg, image_url, references, tool_list
     status_msg = []
     image_url = []
     references = []    
     tool_list = []
+    
+    if agentcore_memory.memory_id is None:
+        user_id = actor_id = chat.user_id
+        session_id = chat.session_id
 
-    if memory_id is None:
-        init_memory()
+        add_notification(containers, f"Memory will be created...")
+        agentcore_memory.init_memory(user_id, actor_id, session_id)
+        add_notification(containers, f"Memory was created...")
 
     global index
     index = 0
@@ -818,16 +796,11 @@ async def run_agent(question, strands_tools, mcp_servers, historyMode, container
         containers['status'].info(get_status_msg(f"end)"))
 
     # save event to memory
-    if memory_id is not None:
-        save_conversation_to_memory(question, result) 
+    if agentcore_memory.memory_id is not None:
+        agentcore_memory.save_conversation_to_memory(question, result) 
 
-    conversations = memory_client.list_events(
-        memory_id=memory_id,
-        actor_id=user_id,
-        session_id=user_id,
-        max_results=5,
-    )
-    logger.info(f"conversations: {conversations}")
+    #conversations = agentcore_memory.get_memory_record()
+    #logger.info(f"conversations: {conversations}")
 
     return result, image_url
 

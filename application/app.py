@@ -183,7 +183,7 @@ with st.sidebar:
         # Change radio to checkbox
         if environment == "user":        
             mcp_options = [
-                "basic", "tavily-search", "aws-api", "aws-knowledge", "aws document", "aws cost", "aws cli", 
+                "basic", "short-term memory", "long-term memory", "tavily-search", "aws-api", "aws-knowledge", "aws document", "aws cost", "aws cli", 
                 "use_aws", "aws cloudwatch", "aws storage", "image generation", "aws diagram",
                 "repl coder","agentcore coder","knowledge base", "tavily", "perplexity", "ArXiv", "wikipedia", 
                 "filesystem", "terminal", "text editor", "context7", "puppeteer", 
@@ -192,7 +192,7 @@ with st.sidebar:
             ]
         else:
             mcp_options = [ 
-                "basic", "tavily-search", "aws-api", "aws-knowledge", "aws document", "aws cost", "aws cli", 
+                "basic", "short-term memory", "long-term memory", "tavily-search", "aws-api", "aws-knowledge", "aws document", "aws cost", "aws cli", 
                 "use_aws", "aws cloudwatch", "aws storage", "image generation", "aws diagram",
                 "repl coder", "agentcore coder", "knowledge base", "tavily", "ArXiv", "wikipedia", 
                 "filesystem", "terminal", "text editor", "agentcore-browser", "playwright", "airbnb",
@@ -202,8 +202,8 @@ with st.sidebar:
         default_selections = ["basic", "use_aws", "tavily-manual", "filesystem", "terminal"]
 
         if mode=='Agent' or mode=='Agent (Chat)':
-            agent_type = st.radio(
-                label="Agent 타입을 선택하세요. ",options=["LangGraph", "Strands"], index=0
+            agentType = st.radio(
+                label="Agent 타입을 선택하세요. ",options=["langgraph", "strands"], index=0
             )
 
         with st.expander("MCP 옵션 선택", expanded=True):            
@@ -334,7 +334,7 @@ with st.sidebar:
         st.subheader("📋 문서 업로드")
         uploaded_file = st.file_uploader("RAG를 위한 파일을 선택합니다.", type=["pdf", "txt", "py", "md", "csv", "json"], key=chat.fileId)
 
-    chat.update(modelName, debugMode, multiRegion, reasoningMode, gradingMode)    
+    chat.update(modelName, debugMode, multiRegion, reasoningMode, gradingMode, agentType)    
 
     st.success(f"Connected to {modelName}", icon="💚")
     clear_button = st.button("대화 초기화", key="clear")
@@ -495,7 +495,7 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                     "notification": [st.empty() for _ in range(500)]
                 }
 
-                if agent_type == "LangGraph":
+                if agentType == "langgraph":
                     response, image_url = asyncio.run(langgraph_agent.run_agent(prompt, mcp_servers, history_mode, containers))    
                 else:
                     response, image_url = asyncio.run(strands.run_agent(prompt, [], mcp_servers, history_mode, containers))

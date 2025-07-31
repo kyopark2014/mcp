@@ -9,6 +9,7 @@ import info
 import PyPDF2
 import csv
 import utils
+import agentcore_memory
 
 from io import BytesIO
 from PIL import Image
@@ -40,7 +41,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger("chat")
 
-userId = uuid.uuid4().hex
+# for memory
+memory_id, user_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables()
+logger.info(f"memory_id: {memory_id}, user_id: {user_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
+
+session_ids = dict()
+if user_id is None:
+    user_id = "strands"
+    actor_id = user_id
+    session_id = uuid.uuid4().hex
+    session_ids[user_id] = session_id
+
+    agentcore_memory.update_memory_variables(new_user_id=user_id, new_actor_id=user_id, new_session_id=session_id)
+
 map_chain = dict() 
 
 checkpointers = dict() 
@@ -49,37 +62,11 @@ memorystores = dict()
 checkpointer = MemorySaver()
 memorystore = InMemoryStore()
 
-checkpointers[userId] = checkpointer
-memorystores[userId] = memorystore
+checkpointers[session_id] = checkpointer
+memorystores[session_id] = memorystore
 
 reasoning_mode = 'Disable'
 debug_messages = []  # List to store debug messages
-
-def initiate():
-    global userId
-    global memory_chain, checkpointers, memorystores, checkpointer, memorystore
-
-    userId = uuid.uuid4().hex
-    logger.info(f"userId: {userId}")
-
-    if userId in map_chain:  
-            # print('memory exist. reuse it!')
-            memory_chain = map_chain[userId]
-
-            checkpointer = checkpointers[userId]
-            memorystore = memorystores[userId]
-    else: 
-        # print('memory does not exist. create new one!')        
-        memory_chain = ConversationBufferWindowMemory(memory_key="chat_history", output_key='answer', return_messages=True, k=5)
-        map_chain[userId] = memory_chain
-
-        checkpointer = MemorySaver()
-        memorystore = InMemoryStore()
-
-        checkpointers[userId] = checkpointer
-        memorystores[userId] = memorystore
-
-initiate()
 
 config = utils.load_config()
 print(f"config: {config}")
@@ -144,10 +131,11 @@ aws_region = os.environ.get('AWS_DEFAULT_REGION', 'us-west-2')
 
 reasoning_mode = 'Disable'
 grading_mode = 'Disable'
+agent_type = 'Strands'
 
-def update(modelName, debugMode, multiRegion, reasoningMode, gradingMode):    
+def update(modelName, debugMode, multiRegion, reasoningMode, gradingMode, agentType):    
     global model_name, model_id, model_type, debug_mode, multi_region, reasoning_mode, grading_mode
-    global models
+    global models, user_id, actor_id, session_id, agent_type, session_ids
 
     # load mcp.env    
     mcp_env = utils.load_mcp_env()
@@ -177,14 +165,57 @@ def update(modelName, debugMode, multiRegion, reasoningMode, gradingMode):
         grading_mode = gradingMode
         logger.info(f"grading_mode: {grading_mode}")            
         mcp_env['grading_mode'] = grading_mode
-        
+
+    if agent_type != agentType:
+        agent_type = agentType
+        logger.info(f"agent_type: {agent_type}")
+
+        user_id = agent_type
+        actor_id = user_id
+        if user_id in session_ids:
+            session_id = session_ids[user_id]
+        else:
+            session_id = uuid.uuid4().hex
+            session_ids[user_id] = session_id
+
+        agentcore_memory.update_memory_variables(new_user_id=user_id, new_actor_id=actor_id, new_session_id=session_id)
+
     # update mcp.env    
     utils.save_mcp_env(mcp_env)
     logger.info(f"mcp.env updated: {mcp_env}")
 
+def initiate():
+    global user_id, actor_id, session_id, session_ids
+    global memory_chain, checkpointers, memorystores, checkpointer, memorystore
+
+    user_id = agent_type # for testing
+    actor_id = user_id
+    session_id = uuid.uuid4().hex
+    session_ids[user_id] = session_id
+
+    agentcore_memory.update_memory_variables(new_user_id=user_id, new_actor_id=actor_id, new_session_id=session_id)    
+    logger.info(f"user_id: {user_id}, actor_id: {actor_id}, session_id: {session_id}")
+
+    if session_id in map_chain:  
+            # print('memory exist. reuse it!')
+            memory_chain = map_chain[session_id]
+
+            checkpointer = checkpointers[session_id]
+            memorystore = memorystores[session_id]
+    else: 
+        # print('memory does not exist. create new one!')        
+        memory_chain = ConversationBufferWindowMemory(memory_key="chat_history", output_key='answer', return_messages=True, k=5)
+        map_chain[session_id] = memory_chain
+
+        checkpointer = MemorySaver()
+        memorystore = InMemoryStore()
+
+        checkpointers[session_id] = checkpointer
+        memorystores[session_id] = memorystore
+
 def clear_chat_history():
     memory_chain = []
-    map_chain[userId] = memory_chain
+    map_chain[session_id] = memory_chain
 
 def save_chat_history(text, msg):
     memory_chain.chat_memory.add_user_message(text)

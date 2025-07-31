@@ -6,6 +6,7 @@ import chat
 import utils
 import mcp_config
 import os
+import agentcore_memory
 
 from langgraph.prebuilt import ToolNode
 from typing import Literal
@@ -535,64 +536,6 @@ def load_multiple_mcp_server_parameters(mcp_json: dict):
 #         server_lists.append(server_name)
 #     return server_lists
 
-user_id = "LangGraph"
-memory_id = None
-memory_client = MemoryClient(region_name="us-west-2")
-def init_memory():
-    global memory_id
-    agent_type = "langgraph"
-
-    memory_id = utils.memory_id
-    if memory_id is None:    
-        memories = memory_client.list_memories()
-        logger.info(f"memories: {memories}")
-        for memory in memories:            
-            logger.info(f"Memory ID: {memory.get('id')}")
-            memory_name = memory.get('id').split("-")[0]
-            if memory_name == utils.projectName:
-                logger.info(f"The memory of {memory_name} was found")
-                memory_id = memory.get('id')
-                logger.info(f"Memory Arn: {memory.get('arn')}")
-                break
-
-        if memory_id is None:  # no memory_id found, create new memory_id
-            result = memory_client.create_memory(
-                name=utils.projectName,
-                description=f"Memory for {utils.projectName}",
-                event_expiry_days=365, # 7 - 365 days
-                # memory_execution_role_arn=memory_execution_role_arn
-            )
-            logger.info(f"result of memory creation: {result}")
-            memory_id = result.get('id')
-            logger.info(f"memory_id: {memory_id}")
-
-            agentcore_path = os.path.join(os.path.dirname(__file__), "agentcore.json")
-            if not os.path.exists(agentcore_path):
-                with open(agentcore_path, "w", encoding="utf-8") as f:
-                    json.dump({"memory_id": memory_id}, f, ensure_ascii=False, indent=4)
-                logger.info(f"memory_id was created and saved to {agentcore_path}")
-            else:
-                with open(agentcore_path, "r", encoding="utf-8") as f:
-                    json_data = json.load(f)
-                    json_data["memory_id"] = memory_id
-                    with open(agentcore_path, "w", encoding="utf-8") as f:
-                        json.dump(json_data, f, ensure_ascii=False, indent=4)
-                logger.info(f"memory_id was updated to {memory_id}")
-
-def save_conversation_to_memory(query, result):
-    # save conversation to memory
-    logger.info(f"###### save_conversation_to_memory ######")
-    logger.info(f"memory_id: {memory_id}")
-    memory_result = memory_client.create_event(
-        memory_id=memory_id,
-        actor_id=user_id, 
-        session_id=user_id, 
-        messages=[
-            (query, "USER"),
-            (result, "ASSISTANT")
-        ]
-    )
-    logger.info(f"result of save conversation to memory: {memory_result}")
 
 async def run_agent(query, mcp_servers, historyMode, containers):
     global status_msg, response_msg, image_urls, references
@@ -601,8 +544,13 @@ async def run_agent(query, mcp_servers, historyMode, containers):
     image_urls = []
     references = []
 
-    if memory_id is None:
-        init_memory()
+    if agentcore_memory.memory_id is None:
+        user_id = actor_id = chat.user_id
+        session_id = chat.session_id
+
+        add_notification(containers, f"Memory will be created...")
+        agentcore_memory.init_memory(user_id, actor_id, session_id)
+        add_notification(containers, f"Memory was created...")
 
     global index
     index = 0
@@ -687,15 +635,10 @@ async def run_agent(query, mcp_servers, historyMode, containers):
         containers['notification'][index-1].markdown(result)
 
     # save event to memory
-    if memory_id is not None:
-        save_conversation_to_memory(query, result) 
+    if agentcore_memory.memory_id is not None:
+        agentcore_memory.save_conversation_to_memory(query, result) 
 
-    conversations = memory_client.list_events(
-        memory_id=memory_id,
-        actor_id=user_id,
-        session_id=user_id,
-        max_results=5,
-    )
+    conversations = agentcore_memory.get_memory_record()
     logger.info(f"conversations: {conversations}")
 
     return result, image_url

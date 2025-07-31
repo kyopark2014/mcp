@@ -493,6 +493,26 @@ def load_config(mcp_type):
             }
         }
     
+    elif mcp_type == "long-term memory":
+        return {
+            "mcpServers": {
+                "long-term memory": {
+                    "command": "python",
+                    "args": [f"{workingDir}/mcp_server_long_term_memory.py"]
+                }
+            }
+        }
+    
+    elif mcp_type == "short-term memory":
+        return {
+            "mcpServers": {
+                "short-term memory": {
+                    "command": "python",
+                    "args": [f"{workingDir}/mcp_server_short_term_memory.py"]
+                }
+            }
+        }
+    
     elif mcp_type == "사용자 설정":
         return mcp_user_config
 
