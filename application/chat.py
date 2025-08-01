@@ -46,12 +46,14 @@ memory_id, user_id, actor_id, session_id, namespace = agentcore_memory.load_memo
 logger.info(f"memory_id: {memory_id}, user_id: {user_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
 
 session_ids = dict()
-if user_id is None:
+if session_id is None:
+    logger.info(f"session_id is None")
     user_id = "strands"
     actor_id = user_id
     session_id = uuid.uuid4().hex
     session_ids[user_id] = session_id
 
+    logger.info(f"session_id is None, update memory variables.")
     agentcore_memory.update_memory_variables(new_user_id=user_id, new_actor_id=user_id, new_session_id=session_id)
 
 map_chain = dict() 
@@ -131,7 +133,7 @@ aws_region = os.environ.get('AWS_DEFAULT_REGION', 'us-west-2')
 
 reasoning_mode = 'Disable'
 grading_mode = 'Disable'
-agent_type = 'Strands'
+agent_type = 'langgraph'
 
 def update(modelName, debugMode, multiRegion, reasoningMode, gradingMode, agentType):    
     global model_name, model_id, model_type, debug_mode, multi_region, reasoning_mode, grading_mode
@@ -178,6 +180,7 @@ def update(modelName, debugMode, multiRegion, reasoningMode, gradingMode, agentT
             session_id = uuid.uuid4().hex
             session_ids[user_id] = session_id
 
+        logger.info(f"agent_type changed, update memory variables.")
         agentcore_memory.update_memory_variables(new_user_id=user_id, new_actor_id=actor_id, new_session_id=session_id)
 
     # update mcp.env    
@@ -193,6 +196,7 @@ def initiate():
     session_id = uuid.uuid4().hex
     session_ids[user_id] = session_id
 
+    logger.info(f"initiate, update memory variables.")
     agentcore_memory.update_memory_variables(new_user_id=user_id, new_actor_id=actor_id, new_session_id=session_id)    
     logger.info(f"user_id: {user_id}, actor_id: {actor_id}, session_id: {session_id}")
 

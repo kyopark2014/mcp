@@ -52,12 +52,14 @@ aws_region = utils.bedrock_region
 index = 0
 def add_notification(containers, message):
     global index
-    containers['notification'][index].info(message)
+    if containers is not None:
+        containers['notification'][index].info(message)
     index += 1
 
 def add_response(containers, message):
     global index
-    containers['notification'][index].markdown(message)
+    if containers is not None:
+        containers['notification'][index].markdown(message)
     index += 1
 
 status_msg = []
@@ -359,6 +361,8 @@ def get_tool_info(tool_name, tool_content):
     urls = []
     content = ""
 
+    logger.info(f"tool_name: {tool_name}")
+
     # tavily
     if isinstance(tool_content, str) and "Title:" in tool_content and "URL:" in tool_content and "Content:" in tool_content:
         logger.info("Tavily parsing...")
@@ -548,6 +552,78 @@ def get_tool_info(tool_name, tool_content):
 
         logger.info(f"content: {content}")
         logger.info(f"tool_references: {tool_references}")
+    
+    # aws-knowledge
+    elif tool_name == "aws___read_documentation":
+        logger.info(f"#### {tool_name} ####")
+        if isinstance(tool_content, dict):
+            json_data = tool_content
+        elif isinstance(tool_content, list):
+            json_data = tool_content
+        else:
+            json_data = json.loads(tool_content)
+        
+        logger.info(f"json_data: {json_data}")
+        payload = json_data["response"]["payload"]
+        if "content" in payload:
+            payload_content = payload["content"]
+            if "result" in payload_content:
+                result = payload_content["result"]
+                logger.info(f"result: {result}")
+                if isinstance(result, str) and "AWS Documentation from" in result:
+                    logger.info(f"Processing AWS Documentation format: {result}")
+                    try:
+                        # Extract URL from "AWS Documentation from https://..."
+                        url_start = result.find("https://")
+                        if url_start != -1:
+                            # Find the colon after the URL (not inside the URL)
+                            url_end = result.find(":", url_start)
+                            if url_end != -1:
+                                # Check if the colon is part of the URL or the separator
+                                url_part = result[url_start:url_end]
+                                # If the colon is immediately after the URL, use it as separator
+                                if result[url_end:url_end+2] == ":\n":
+                                    url = url_part
+                                    content_start = url_end + 2  # Skip the colon and newline
+                                else:
+                                    # Try to find the actual URL end by looking for space or newline
+                                    space_pos = result.find(" ", url_start)
+                                    newline_pos = result.find("\n", url_start)
+                                    if space_pos != -1 and newline_pos != -1:
+                                        url_end = min(space_pos, newline_pos)
+                                    elif space_pos != -1:
+                                        url_end = space_pos
+                                    elif newline_pos != -1:
+                                        url_end = newline_pos
+                                    else:
+                                        url_end = len(result)
+                                    
+                                    url = result[url_start:url_end]
+                                    content_start = url_end + 1
+                                
+                                # Remove trailing colon from URL if present
+                                if url.endswith(":"):
+                                    url = url[:-1]
+                                
+                                # Extract content after the URL
+                                if content_start < len(result):
+                                    content_text = result[content_start:].strip()
+                                    # Truncate content for display
+                                    display_content = content_text[:100] + "..." if len(content_text) > 100 else content_text
+                                    display_content = display_content.replace("\n", "")
+                                    
+                                    tool_references.append({
+                                        "url": url,
+                                        "title": "AWS Documentation",
+                                        "content": display_content
+                                    })
+                                    content += content_text + "\n\n"
+                                    logger.info(f"Extracted URL: {url}")
+                                    logger.info(f"Extracted content length: {len(content_text)}")
+                    except Exception as e:
+                        logger.error(f"Error parsing AWS Documentation format: {e}")
+        logger.info(f"content: {content}")
+        logger.info(f"tool_references: {tool_references}")
 
     else:        
         try:
@@ -704,8 +780,6 @@ async def show_streams(agent_stream, containers):
 
                                 content, urls, refs = get_tool_info(tool_name, content['text'])
                                 logger.info(f"content: {content}")
-                                logger.info(f"urls: {urls}")
-                                logger.info(f"refs: {refs}")
 
                                 if refs:
                                     for r in refs:
@@ -837,7 +911,7 @@ async def run_task(question, strands_tools, mcp_servers, containers, historyMode
     
     # get reference
     ref = get_reference(references)
-    if ref:
+    if ref and containers is not None:
         containers['notification'][index-1].markdown(result+ref)
 
     if debug_mode == 'Enable' and containers is not None:
