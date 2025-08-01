@@ -86,11 +86,6 @@ def agent_core_memory(
     """
     logger.info(f"###### agent_core_memory ######")
     logger.info(f"action: {action}")
-    logger.info(f"content: {content}")
-    logger.info(f"query: {query}")
-    logger.info(f"memory_record_id: {memory_record_id}")
-    logger.info(f"max_results: {max_results}")
-    logger.info(f"next_token: {next_token}")
 
     return mcp_long_term_memory.agent_core_memory(action, content, query, memory_record_id, max_results, next_token)
 

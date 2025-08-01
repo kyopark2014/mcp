@@ -32,9 +32,10 @@ config = load_config()
 bedrock_region = config['region']
 accountId = config['accountId']
 projectName = config['projectName']
+agentcore_memory_role = config['agentcore_memory_role']
 
 def load_memory_variables():
-    memory_id = actor_id = session_id = namespace = None
+    memory_id = user_id = actor_id = session_id = namespace = None
     try:
         script_dir = os.path.dirname(os.path.abspath(__file__))
         agentcore_path = os.path.join(script_dir, "agentcore.json")
@@ -44,37 +45,22 @@ def load_memory_variables():
             if 'memory_id' in json_data:
                 memory_id = json_data['memory_id']
                 logger.info(f"memory_id: {memory_id}")
-            else:
-                logger.error(f"memory_id not found in agentcore.json")
-                memory_id = None
 
             if 'user_id' in json_data:
                 user_id = json_data['user_id']
                 logger.info(f"user_id: {user_id}")
-            else:
-                logger.error(f"user_id not found in agentcore.json")
-                user_id = None
 
             if 'actor_id' in json_data:
                 actor_id = json_data['actor_id']
                 logger.info(f"actor_id: {actor_id}")
-            else:
-                logger.error(f"actor_id not found in agentcore.json")
-                actor_id = None
                 
             if 'session_id' in json_data:
                 session_id = json_data['session_id']
                 logger.info(f"session_id: {session_id}")
-            else:
-                logger.error(f"session_id not found in agentcore.json")
-                session_id = None
             
             if 'namespace' in json_data:
                 namespace = json_data['namespace']
                 logger.info(f"namespace: {namespace}")
-            else:
-                logger.error(f"namespace not found in agentcore.json")
-                namespace = None
                 
     except Exception as e:        
         logger.error(f"Error loading agentcore config: {e}")
@@ -128,6 +114,24 @@ def update_memory_variables(
     
     logger.info(f"config was updated to {config}")    
 
+CUSTOM_PROMPT = (
+    "You are tasked with analyzing conversations to extract the user's general preferences."
+     "You'll be analyzing two sets of data:"
+     "<past_conversation>"
+     "[Past conversations between the user and system will be placed here for context]"
+     "</past_conversation>"
+     "<current_conversation>"
+     "[The current conversation between the user and system will be placed here]"
+     "</current_conversation>"
+     "Your job is to identify and categorize the user's general preferences across various topics and domains."
+     "- Extract user preferences for different types of content, services, or products they show interest in."
+     "- Identify communication style preferences, such as formal vs casual, detailed vs concise."
+     "- Recognize technology preferences, such as specific platforms, tools, or applications they prefer."
+     "- Note any recurring themes or topics the user is particularly interested in or knowledgeable about."
+     "- Capture any specific requirements or constraints they mention in their interactions."
+     "use Korean language."
+)
+
 def init_memory(userId, actorId, sessionId):
     global memory_id, user_id, actor_id, session_id, namespace
     
@@ -159,11 +163,21 @@ def init_memory(userId, actorId, sessionId):
             event_expiry_days=365, # 7 - 365 days
             # memory_execution_role_arn=memory_execution_role_arn
             strategies=[{
-                "userPreferenceMemoryStrategy": {
+                #"userPreferenceMemoryStrategy": {
+                "customMemoryStrategy": {
                     "name": "UserPreference",
-                    "namespaces": [namespace]
+                    "namespaces": [namespace],
+                    "configuration" : {
+                        "userPreferenceOverride" : {
+                            "extraction" : {
+                                "modelId" : "anthropic.claude-3-5-sonnet-20241022-v2:0",
+                                "appendToPrompt": CUSTOM_PROMPT
+                            }
+                        }
+                    }
                 }
-            }]
+            }],
+            memory_execution_role_arn=agentcore_memory_role
         )
         logger.info(f"result of memory creation: {result}")
         memory_id = result.get('id')

@@ -326,7 +326,7 @@ async def call_model(state: State, config):
     if isinstance(last_message, ToolMessage):
         tool_name = last_message.name
         tool_content = last_message.content
-        logger.info(f"tool_name: {tool_name}, content: {tool_content[:800]}")
+        logger.info(f"tool_name: {tool_name}, content: {tool_content}")
 
         if debug_mode == "Enable":
             if tool_name == "terminal":

@@ -660,6 +660,31 @@ export class CdkMcpStack extends cdk.Stack {
         statements: [knowledgeBaseBedrockPolicy],
       }),
     );  
+
+    // agentcore role
+    const agentcore_memory_role = new iam.Role(this, `role-agentcore-memory-for-${projectName}`, {
+      roleName: `role-agentcore-memory-for-${projectName}-${region}`,
+      assumedBy: new iam.CompositePrincipal(
+        new iam.ServicePrincipal("bedrock-agentcore.amazonaws.com")
+      )
+    });
+
+    const agentcoreMemoryPolicy = new iam.PolicyStatement({ 
+      effect: iam.Effect.ALLOW,
+      resources: [
+        `arn:aws:bedrock:*::foundation-model/*`,
+        `arn:aws:bedrock:*:*:inference-profile/*`
+      ],
+      actions: [
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream"
+      ],
+    });        
+    agentcore_memory_role.attachInlinePolicy( 
+      new iam.Policy(this, `agentcore-memory-policy-for-${projectName}`, {
+        statements: [agentcoreMemoryPolicy],
+      }),
+    );  
     
     const lambdaKnowledgeBase = new lambda.DockerImageFunction(this, `knowledge-base-for-${projectName}`, {
       description: 'RAG based on Knoeledge Base',
@@ -687,6 +712,7 @@ export class CdkMcpStack extends cdk.Stack {
       "s3_bucket": s3Bucket.bucketName,      
       "s3_arn": s3Bucket.bucketArn,
       "sharing_url": 'https://'+distribution.domainName,
+      "agentcore_memory_role": agentcore_memory_role.roleArn,
     }    
     new cdk.CfnOutput(this, `environment-for-${projectName}`, {
       value: JSON.stringify(environment),

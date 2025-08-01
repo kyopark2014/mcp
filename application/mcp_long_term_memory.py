@@ -248,6 +248,7 @@ def agent_core_memory(
                     "content": [{"text": f"Memory created successfully: {json.dumps(event_data, default=str)}"}],
                 }
             elif action == "retrieve":
+                contents = []
                 response = retrieve_memory_records(
                     memory_id=memory_id,
                     namespace=namespace,
@@ -262,12 +263,17 @@ def agent_core_memory(
                         relevant_data["memoryRecordSummaries"] = response["memoryRecordSummaries"]
                     if "nextToken" in response:
                         relevant_data["nextToken"] = response["nextToken"]
+                    logger.info(f"relevant_data: {relevant_data}")
+                    
+                    # extract content from memoryRecordSummaries
+                    for memory_record_summary in relevant_data["memoryRecordSummaries"]:
+                        json_content = memory_record_summary["content"]["text"]
+                        content = json.loads(json_content)
+                        logger.info(f"content: {content}")
+                        contents.append(content)
 
                 return {
-                    "status": "success",
-                    "content": [
-                        {"text": f"Memories retrieved successfully: {json.dumps(relevant_data, default=str)}"}
-                    ],
+                    "text": contents
                 }
             elif action == "list":
                 response = list_memory_records(
