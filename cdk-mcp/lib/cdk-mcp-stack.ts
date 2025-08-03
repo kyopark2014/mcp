@@ -677,7 +677,17 @@ export class CdkMcpStack extends cdk.Stack {
       ],
       actions: [
         "bedrock:InvokeModel",
-        "bedrock:InvokeModelWithResponseStream"
+        "bedrock:InvokeModelWithResponseStream",
+        "bedrock:ListMemories",
+        "bedrock:CreateMemory",
+        "bedrock:DeleteMemory",
+        "bedrock:DescribeMemory",
+        "bedrock:UpdateMemory",
+        "bedrock:ListMemoryRecords",
+        "bedrock:CreateMemoryRecord",
+        "bedrock:DeleteMemoryRecord",
+        "bedrock:DescribeMemoryRecord",
+        "bedrock:UpdateMemoryRecord"
       ],
     });        
     agentcore_memory_role.attachInlinePolicy( 

@@ -155,8 +155,8 @@ def init_memory(userId, actorId, sessionId):
             logger.info(f"Memory Arn: {memory.get('arn')}")
             break
 
-    if memory_id is None:  # memory_id still not found, create new memory_id
-        namespace = f"/users/{actor_id}"
+    namespace = f"/users/{actor_id}"
+    if memory_id is None:  # memory_id still not found, create new memory_id        
         result = memory_client.create_memory_and_wait(
             name=projectName,
             description=f"Memory for {projectName}",

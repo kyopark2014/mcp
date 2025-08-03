@@ -224,7 +224,7 @@ def load_config(mcp_type):
     elif mcp_type == "repl_coder":
         return {
             "mcpServers": {
-                "aws_storage": {
+                "repl_coder": {
                     "command": "python",
                     "args": [
                         f"{workingDir}/mcp_server_repl_coder.py"

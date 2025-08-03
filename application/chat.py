@@ -56,6 +56,11 @@ if session_id is None:
     logger.info(f"session_id is None, update memory variables.")
     agentcore_memory.update_memory_variables(new_user_id=user_id, new_actor_id=user_id, new_session_id=session_id)
 
+    if memory_id is None:
+        agentcore_memory.init_memory(user_id, actor_id, session_id)
+        memory_id, user_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables()
+        logger.info(f"memory_id: {memory_id}, user_id: {user_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
+
 map_chain = dict() 
 
 checkpointers = dict() 
