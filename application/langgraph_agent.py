@@ -651,7 +651,7 @@ async def run_agent(query, mcp_servers, historyMode, containers):
         app = buildChatAgentWithHistory(tools)
         config = {
             "recursion_limit": 50,
-            "configurable": {"thread_id": chat.userId},
+            "configurable": {"thread_id": chat.user_id},
             "containers": containers,
             "tools": tools,
             "system_prompt": None,
@@ -729,7 +729,7 @@ async def run_task(question, tools, system_prompt, containers, historyMode, prev
         app = buildChatAgentWithHistory(tools)
         config = {
             "recursion_limit": 50,
-            "configurable": {"thread_id": chat.userId},
+            "configurable": {"thread_id": chat.user_id},
             "containers": containers,
             "tools": tools,
             "system_prompt": system_prompt,
