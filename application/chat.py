@@ -192,6 +192,9 @@ def update(modelName, debugMode, multiRegion, reasoningMode, gradingMode, agentT
     utils.save_mcp_env(mcp_env)
     logger.info(f"mcp.env updated: {mcp_env}")
 
+memory_chain = []
+map_chain[session_id] = memory_chain
+
 def initiate():
     global user_id, actor_id, session_id, session_ids
     global memory_chain, checkpointers, memorystores, checkpointer, memorystore
@@ -206,13 +209,12 @@ def initiate():
     logger.info(f"user_id: {user_id}, actor_id: {actor_id}, session_id: {session_id}")
 
     if session_id in map_chain:  
-            # print('memory exist. reuse it!')
-            memory_chain = map_chain[session_id]
+        # print('memory exist. reuse it!')
+        memory_chain = map_chain[session_id]
 
-            checkpointer = checkpointers[session_id]
-            memorystore = memorystores[session_id]
+        checkpointer = checkpointers[session_id]
+        memorystore = memorystores[session_id]
     else: 
-        # print('memory does not exist. create new one!')        
         memory_chain = ConversationBufferWindowMemory(memory_key="chat_history", output_key='answer', return_messages=True, k=5)
         map_chain[session_id] = memory_chain
 
@@ -222,7 +224,10 @@ def initiate():
         checkpointers[session_id] = checkpointer
         memorystores[session_id] = memorystore
 
+initiate()
+
 def clear_chat_history():
+    global memory_chain
     memory_chain = []
     map_chain[session_id] = memory_chain
 

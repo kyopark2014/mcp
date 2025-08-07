@@ -155,6 +155,7 @@ seed_config = load_image_generator_config()
 seed_image_url = seed_config.get("seed_image", "") if seed_config else ""
 #logger.info(f"seed_image_url from config: {seed_image_url}")
 
+agentType = None
 uploaded_seed_image = None
 with st.sidebar:
     st.title("🔮 Menu")
@@ -200,7 +201,7 @@ with st.sidebar:
             ]
         mcp_selections = {}
         default_selections = ["basic", "use_aws", "tavily-manual", "filesystem", "terminal"]
-
+        
         if mode=='Agent' or mode=='Agent (Chat)':
             agentType = st.radio(
                 label="Agent 타입을 선택하세요. ",options=["langgraph", "strands"], index=0
