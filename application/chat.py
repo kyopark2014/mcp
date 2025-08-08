@@ -41,37 +41,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger("chat")
 
-# for memory
-memory_id, user_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables()
-logger.info(f"memory_id: {memory_id}, user_id: {user_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
-
-session_ids = dict()
-if session_id is None:
-    logger.info(f"session_id is None")
-    user_id = "strands"
-    actor_id = user_id
-    session_id = uuid.uuid4().hex
-    session_ids[user_id] = session_id
-
-    logger.info(f"session_id is None, update memory variables.")
-    agentcore_memory.update_memory_variables(new_user_id=user_id, new_actor_id=user_id, new_session_id=session_id)
-
-    if memory_id is None:
-        agentcore_memory.init_memory(user_id, actor_id, session_id)
-        memory_id, user_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables()
-        logger.info(f"memory_id: {memory_id}, user_id: {user_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
-
-map_chain = dict() 
-
-checkpointers = dict() 
-memorystores = dict() 
-
-checkpointer = MemorySaver()
-memorystore = InMemoryStore()
-
-checkpointers[session_id] = checkpointer
-memorystores[session_id] = memorystore
-
 reasoning_mode = 'Disable'
 debug_messages = []  # List to store debug messages
 
@@ -139,10 +108,11 @@ aws_region = os.environ.get('AWS_DEFAULT_REGION', 'us-west-2')
 reasoning_mode = 'Disable'
 grading_mode = 'Disable'
 agent_type = 'langgraph'
+user_id = agent_type # for testing
 
 def update(modelName, debugMode, multiRegion, reasoningMode, gradingMode, agentType):    
     global model_name, model_id, model_type, debug_mode, multi_region, reasoning_mode, grading_mode
-    global models, user_id, actor_id, session_id, agent_type, session_ids
+    global models, user_id, agent_type
 
     # load mcp.env    
     mcp_env = utils.load_mcp_env()
@@ -177,59 +147,45 @@ def update(modelName, debugMode, multiRegion, reasoningMode, gradingMode, agentT
         agent_type = agentType
         logger.info(f"agent_type: {agent_type}")
 
-        user_id = agent_type
-        actor_id = user_id
-        if user_id in session_ids:
-            session_id = session_ids[user_id]
-        else:
-            session_id = uuid.uuid4().hex
-            session_ids[user_id] = session_id
-
         logger.info(f"agent_type changed, update memory variables.")
-        agentcore_memory.update_memory_variables(new_user_id=user_id, new_actor_id=actor_id, new_session_id=session_id)
+        user_id = agent_type
+        logger.info(f"user_id: {user_id}")
+        mcp_env['user_id'] = user_id
 
     # update mcp.env    
     utils.save_mcp_env(mcp_env)
     logger.info(f"mcp.env updated: {mcp_env}")
 
-memory_chain = []
-map_chain[session_id] = memory_chain
+map_chain = dict() 
+checkpointers = dict() 
+memorystores = dict() 
 
 def initiate():
-    global user_id, actor_id, session_id, session_ids
-    global memory_chain, checkpointers, memorystores, checkpointer, memorystore
+    global memory_chain, checkpointer, memorystore, checkpointers, memorystores
 
-    user_id = agent_type # for testing
-    actor_id = user_id
-    session_id = uuid.uuid4().hex
-    session_ids[user_id] = session_id
+    if user_id in map_chain:  
+        logger.info(f"memory exist. reuse it!")
+        memory_chain = map_chain[user_id]
 
-    logger.info(f"initiate, update memory variables.")
-    agentcore_memory.update_memory_variables(new_user_id=user_id, new_actor_id=actor_id, new_session_id=session_id)    
-    logger.info(f"user_id: {user_id}, actor_id: {actor_id}, session_id: {session_id}")
-
-    if session_id in map_chain:  
-        # print('memory exist. reuse it!')
-        memory_chain = map_chain[session_id]
-
-        checkpointer = checkpointers[session_id]
-        memorystore = memorystores[session_id]
+        checkpointer = checkpointers[user_id]
+        memorystore = memorystores[user_id]
     else: 
+        logger.info(f"memory not exist. create new memory!")
         memory_chain = ConversationBufferWindowMemory(memory_key="chat_history", output_key='answer', return_messages=True, k=5)
-        map_chain[session_id] = memory_chain
+        map_chain[user_id] = memory_chain
 
         checkpointer = MemorySaver()
         memorystore = InMemoryStore()
 
-        checkpointers[session_id] = checkpointer
-        memorystores[session_id] = memorystore
+        checkpointers[user_id] = checkpointer
+        memorystores[user_id] = memorystore
 
 initiate()
 
 def clear_chat_history():
     global memory_chain
     memory_chain = []
-    map_chain[session_id] = memory_chain
+    map_chain[user_id] = memory_chain
 
 def save_chat_history(text, msg):
     memory_chain.chat_memory.add_user_message(text)

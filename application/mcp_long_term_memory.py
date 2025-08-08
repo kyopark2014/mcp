@@ -15,6 +15,7 @@ import boto3
 import os
 import sys
 import agentcore_memory
+import utils
 
 from datetime import datetime, timezone
 from typing import Dict, Optional
@@ -127,6 +128,9 @@ def retrieve_memory_records(
     Returns:
         Dict: Response containing matching memory records and optional next_token
     """
+    logger.info(f"###### retrieve_memory_records ######")
+    logger.info(f"memory_id: {memory_id}, namespace: {namespace}, search_query: {search_query}, max_results: {max_results}, next_token: {next_token}")
+
     # Prepare request parameters
     params = {"memoryId": memory_id, "namespace": namespace, "searchCriteria": {"searchQuery": search_query}}
     if max_results is not None:
@@ -153,6 +157,10 @@ def list_memory_records(
     next_token: Optional[str] = None,
 ) -> Dict:
     """List memory records."""
+
+    logger.info(f"###### list_memory_records ######")
+    logger.info(f"memory_id: {memory_id}, namespace: {namespace}, max_results: {max_results}, next_token: {next_token}")
+
     params = {"memoryId": memory_id}
     if namespace is not None:
         params["namespace"] = namespace
@@ -226,7 +234,9 @@ def agent_core_memory(
         Dict: Response containing the requested memory information or operation status
     """
     try:
-        memory_id, user_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables()
+        mcp_env = utils.load_mcp_env()
+        user_id = mcp_env['user_id']
+        memory_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables(user_id)
         logger.info(f"memory_id: {memory_id}, user_id: {user_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
         
         # Execute the appropriate action

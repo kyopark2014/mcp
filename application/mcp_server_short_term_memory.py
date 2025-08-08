@@ -3,6 +3,7 @@ import sys
 import os
 import json
 import agentcore_memory
+import utils
 
 from typing import Dict, Optional, Any
 from mcp.server.fastmcp import FastMCP 
@@ -66,9 +67,12 @@ def list_events(
         Use this when you need to retrieve recent information.
     """ 
     logger.info(f"###### list_events ######")
-    memory_id, user_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables()
-    logger.info(f"memory_id: {memory_id}, user_id: {user_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
 
+    mcp_env = utils.load_mcp_env()
+    user_id = mcp_env['user_id']
+    memory_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables(user_id)
+    logger.info(f"memory_id: {memory_id}, user_id: {user_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")    
+    
     events = client.list_events(
         memory_id=memory_id,
         actor_id=actor_id,

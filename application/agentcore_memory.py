@@ -2,8 +2,9 @@ import os
 import json
 import logging
 import sys
+import uuid
 
-from typing import Dict, Optional
+from typing import Dict, Optional, Required
 from bedrock_agentcore.memory import MemoryClient
 from datetime import datetime, timezone
 
@@ -34,11 +35,13 @@ accountId = config['accountId']
 projectName = config['projectName']
 agentcore_memory_role = config['agentcore_memory_role']
 
-def load_memory_variables():
-    memory_id = user_id = actor_id = session_id = namespace = None
+memory_client = MemoryClient(region_name=bedrock_region)    
+
+def load_memory_variables(user_id: str):
+    memory_id = actor_id = session_id = namespace = None
     try:
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        agentcore_path = os.path.join(script_dir, "agentcore.json")
+        agentcore_path = os.path.join(script_dir, f"user_{user_id}.json")
         with open(agentcore_path, "r", encoding="utf-8") as f:
             json_data = json.load(f)
 
@@ -46,14 +49,10 @@ def load_memory_variables():
                 memory_id = json_data['memory_id']
                 logger.info(f"memory_id: {memory_id}")
 
-            if 'user_id' in json_data:
-                user_id = json_data['user_id']
-                logger.info(f"user_id: {user_id}")
-
             if 'actor_id' in json_data:
                 actor_id = json_data['actor_id']
                 logger.info(f"actor_id: {actor_id}")
-                
+            
             if 'session_id' in json_data:
                 session_id = json_data['session_id']
                 logger.info(f"session_id: {session_id}")
@@ -65,26 +64,26 @@ def load_memory_variables():
     except Exception as e:        
         logger.error(f"Error loading agentcore config: {e}")
         pass
+
+    if actor_id is None:
+        actor_id = user_id
+    if session_id is None:
+        session_id = uuid.uuid4().hex
+    if namespace is None:
+        namespace = f"/users/{actor_id}"
     
-    return memory_id, user_id, actor_id, session_id, namespace
+    return memory_id, actor_id, session_id, namespace
 
-# initialize memory_client
-memory_id, user_id, actor_id, session_id, namespace = load_memory_variables()
-memory_client = MemoryClient(region_name=bedrock_region)
-
-def update_memory_variables(    
-    new_memory_id: Optional[str]=None, 
-    new_user_id: Optional[str]=None,
-    new_actor_id: Optional[str]=None, 
-    new_session_id: Optional[str]=None, 
-    new_namespace: Optional[str]=None):
-    global memory_id, user_id, actor_id, session_id, namespace
+def update_memory_variables(
+    user_id: str,
+    memory_id: Optional[str]=None, 
+    actor_id: Optional[str]=None, 
+    session_id: Optional[str]=None, 
+    namespace: Optional[str]=None):
     
     logger.info(f"###### update_memory_variables ######")
-
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    config_path = os.path.join(script_dir, "agentcore.json")
-    
+    config_path = os.path.join(script_dir, f"user_{user_id}.json")    
     if os.path.exists(config_path):
         with open(config_path, "r", encoding="utf-8") as f:
             config = json.load(f)
@@ -92,21 +91,21 @@ def update_memory_variables(
         config = {}
     
     # Update config with new values
-    if new_memory_id is not None:
-        config['memory_id'] = new_memory_id
-        memory_id = new_memory_id
-    if new_user_id is not None:
-        config['user_id'] = new_user_id
-        user_id = new_user_id
-    if new_actor_id is not None:
-        config['actor_id'] = new_actor_id
-        actor_id = new_actor_id
-    if new_session_id is not None:
-        config['session_id'] = new_session_id
-        session_id = new_session_id
-    if new_namespace is not None:
-        config['namespace'] = new_namespace
-        namespace = new_namespace
+    if memory_id is not None:
+        config['memory_id'] = memory_id
+    if actor_id is not None:
+        config['actor_id'] = actor_id
+    if session_id is not None:
+        config['session_id'] = session_id
+    else:
+        if 'session_id' in config:
+            session_id = config['session_id']        
+        if session_id is None:
+            session_id = uuid.uuid4().hex
+            config['session_id'] = session_id
+            
+    if namespace is not None:
+        config['namespace'] = namespace
     
     # Save to file
     with open(config_path, "w", encoding="utf-8") as f:
@@ -132,17 +131,8 @@ CUSTOM_PROMPT = (
      "use Korean language."
 )
 
-def init_memory(userId, actorId, sessionId):
-    global memory_id, user_id, actor_id, session_id, namespace
-    
-    logger.info(f"###### init_memory ######")
-
-    if userId is not None:
-        user_id = userId
-    if actorId is not None:
-        actor_id = actorId
-    if sessionId is not None:
-        session_id = sessionId
+def get_memory_id():
+    memory_id = None
 
     memories = memory_client.list_memories()
     logger.info(f"memories: {memories}")
@@ -155,45 +145,46 @@ def init_memory(userId, actorId, sessionId):
             logger.info(f"Memory Arn: {memory.get('arn')}")
             break
 
-    namespace = f"/users/{actor_id}"
-    if memory_id is None:  # memory_id still not found, create new memory_id        
-        result = memory_client.create_memory_and_wait(
-            name=projectName,
-            description=f"Memory for {projectName}",
-            event_expiry_days=365, # 7 - 365 days
-            # memory_execution_role_arn=memory_execution_role_arn
-            strategies=[{
-                #"userPreferenceMemoryStrategy": {
-                "customMemoryStrategy": {
-                    "name": "UserPreference",
-                    "namespaces": [namespace],
-                    "configuration" : {
-                        "userPreferenceOverride" : {
-                            "extraction" : {
-                                "modelId" : "anthropic.claude-3-5-sonnet-20241022-v2:0",
-                                "appendToPrompt": CUSTOM_PROMPT
-                            }
+    return memory_id
+
+def create_memory(namespace: str):
+    result = memory_client.create_memory_and_wait(
+        name=projectName,
+        description=f"Memory for {projectName}",
+        event_expiry_days=365, # 7 - 365 days
+        # memory_execution_role_arn=memory_execution_role_arn
+        strategies=[{
+            #"userPreferenceMemoryStrategy": {
+            "customMemoryStrategy": {
+                "name": "UserPreference",
+                "namespaces": [namespace],
+                "configuration" : {
+                    "userPreferenceOverride" : {
+                        "extraction" : {
+                            "modelId" : "anthropic.claude-3-5-sonnet-20241022-v2:0",
+                            "appendToPrompt": CUSTOM_PROMPT
                         }
                     }
                 }
-            }],
-            memory_execution_role_arn=agentcore_memory_role
-        )
-        logger.info(f"result of memory creation: {result}")
-        memory_id = result.get('id')
-        logger.info(f"created memory_id: {memory_id}")
+            }
+        }],
+        memory_execution_role_arn=agentcore_memory_role
+    )
+    logger.info(f"result of memory creation: {result}")
+    memory_id = result.get('id')
+    logger.info(f"created memory_id: {memory_id}")
 
-    update_memory_variables(new_memory_id=memory_id, new_user_id=user_id, new_actor_id=actor_id, new_session_id=session_id, new_namespace=namespace)
+    return memory_id
     
-def save_conversation_to_memory(query, result):
+def save_conversation_to_memory(memory_id, actor_id, session_id, query, result):
     logger.info(f"###### save_conversation_to_memory ######")
-    logger.info(f"memory_id: {memory_id}, user_id: {user_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
 
     event_timestamp = datetime.now(timezone.utc)
     conversation = [
         (query, "USER"),
         (result, "ASSISTANT")
     ]
+
     memory_result = memory_client.create_event(
         memory_id=memory_id,
         actor_id=actor_id, 
@@ -203,8 +194,10 @@ def save_conversation_to_memory(query, result):
     )
     logger.info(f"result of save conversation to memory: {memory_result}")
 
-def get_memory_record():
+def get_memory_record(user_id: str):
     logger.info(f"###### get_memory_record ######")    
+
+    memory_id, actor_id, session_id, namespace = load_memory_variables(user_id)
     logger.info(f"memory_id: {memory_id}, user_id: {user_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
     
     conversations = memory_client.list_events(

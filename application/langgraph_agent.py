@@ -5,7 +5,6 @@ import traceback
 import chat
 import utils
 import mcp_config
-import os
 import agentcore_memory
 
 from langgraph.prebuilt import ToolNode
@@ -21,7 +20,6 @@ from typing import Literal
 from langgraph.graph import START, END, StateGraph
 from typing_extensions import Annotated, TypedDict
 from langgraph.graph.message import add_messages
-from bedrock_agentcore.memory import MemoryClient
 
 logging.basicConfig(
     level=logging.INFO,  
@@ -42,6 +40,8 @@ response_msg = []
 references = []
 image_urls = []
 mcp_server_info = {}
+
+memory_id = actor_id = session_id = namespace = None
 
 index = 0
 def add_notification(containers, message):
@@ -608,25 +608,92 @@ def load_multiple_mcp_server_parameters(mcp_json: dict):
 #         server_lists.append(server_name)
 #     return server_lists
 
+async def run_task(question, tools, system_prompt, containers, historyMode, previous_status_msg, previous_response_msg):
+    global status_msg, response_msg, references, image_urls
+    status_msg = previous_status_msg
+    response_msg = previous_response_msg
+
+    debug_mode = chat.debug_mode
+
+    if debug_mode == "Enable" and containers is not None:
+        containers["status"].info(get_status_msg("(start"))
+
+    if historyMode == "Enable":
+        app = buildChatAgentWithHistory(tools)
+        config = {
+            "recursion_limit": 50,
+            "configurable": {"thread_id": chat.user_id},
+            "containers": containers,
+            "tools": tools,
+            "system_prompt": system_prompt,
+            "debug_mode": debug_mode
+        }
+    else:
+        app = buildChatAgent(tools)
+        config = {
+            "recursion_limit": 50,
+            "containers": containers,
+            "tools": tools,
+            "system_prompt": system_prompt,
+            "debug_mode": debug_mode
+        }
+
+    value = None
+    inputs = {
+        "messages": [HumanMessage(content=question)]
+    }
+
+    final_output = None
+    async for output in app.astream(inputs, config):
+        for key, value in output.items():
+            logger.info(f"--> key: {key}, value: {value}")
+            
+            if key == "messages" or key == "agent":
+                if isinstance(value, dict) and "messages" in value:
+                    final_output = value
+                elif isinstance(value, list):
+                    final_output = {"messages": value, "image_url": []}
+                else:
+                    final_output = {"messages": [value], "image_url": []}
+                
+    if final_output and "messages" in final_output and len(final_output["messages"]) > 0:
+        result = final_output["messages"][-1].content
+    else:
+        result = "답변을 찾지 못하였습니다."
+
+    image_url = final_output["image_url"] if final_output and "image_url" in final_output else []
+
+    return result, image_url, status_msg, response_msg
 
 async def run_agent(query, mcp_servers, historyMode, containers):
+    global memory_id, actor_id, session_id, namespace
     global status_msg, response_msg, image_urls, references
     status_msg = []
     response_msg = []
     image_urls = []
     references = []
 
-    if agentcore_memory.memory_id is None:
-        user_id = actor_id = chat.user_id
-        session_id = chat.session_id
+    # initate memory variables
+    if session_id is None:
+        memory_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables(chat.user_id)
+        logger.info(f"memory_id: {memory_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
 
-        add_notification(containers, f"Memory will be created...")
-        agentcore_memory.init_memory(user_id, actor_id, session_id)
-        add_notification(containers, f"Memory was created...")
+        if memory_id is None:
+            memory_id = agentcore_memory.get_memory_id()
+            logger.info(f"memory_id: {memory_id}")
+            
+            if memory_id is None and namespace is not None:        
+                logger.info(f"Memory will be created...")
+                add_notification(containers, f"Memory will be created...")
+                memory_id = agentcore_memory.create_memory(namespace)
+                logger.info(f"Memory was created... {memory_id}")
+                add_notification(containers, f"Memory was created... {memory_id}")
 
+            if memory_id is not None:
+                agentcore_memory.update_memory_variables(user_id=chat.user_id, memory_id=memory_id)
+        
     global index
     index = 0
-
     debug_mode = chat.debug_mode
 
     if debug_mode == "Enable" and containers is not None:
@@ -707,68 +774,11 @@ async def run_agent(query, mcp_servers, historyMode, containers):
         containers['notification'][index-1].markdown(result)
 
     # save event to memory
-    if agentcore_memory.memory_id is not None:
-        agentcore_memory.save_conversation_to_memory(query, result) 
+    if memory_id is not None:
+        agentcore_memory.save_conversation_to_memory(memory_id, actor_id, session_id, query, result) 
 
-    conversations = agentcore_memory.get_memory_record()
-    logger.info(f"conversations: {conversations}")
+    # for debugging
+    # conversations = agentcore_memory.get_memory_record(chat.user_id)
+    # logger.info(f"conversations: {conversations}")
 
     return result, image_url
-
-async def run_task(question, tools, system_prompt, containers, historyMode, previous_status_msg, previous_response_msg):
-    global status_msg, response_msg, references, image_urls
-    status_msg = previous_status_msg
-    response_msg = previous_response_msg
-
-    debug_mode = chat.debug_mode
-
-    if debug_mode == "Enable" and containers is not None:
-        containers["status"].info(get_status_msg("(start"))
-
-    if historyMode == "Enable":
-        app = buildChatAgentWithHistory(tools)
-        config = {
-            "recursion_limit": 50,
-            "configurable": {"thread_id": chat.user_id},
-            "containers": containers,
-            "tools": tools,
-            "system_prompt": system_prompt,
-            "debug_mode": debug_mode
-        }
-    else:
-        app = buildChatAgent(tools)
-        config = {
-            "recursion_limit": 50,
-            "containers": containers,
-            "tools": tools,
-            "system_prompt": system_prompt,
-            "debug_mode": debug_mode
-        }
-
-    value = None
-    inputs = {
-        "messages": [HumanMessage(content=question)]
-    }
-
-    final_output = None
-    async for output in app.astream(inputs, config):
-        for key, value in output.items():
-            logger.info(f"--> key: {key}, value: {value}")
-            
-            if key == "messages" or key == "agent":
-                if isinstance(value, dict) and "messages" in value:
-                    final_output = value
-                elif isinstance(value, list):
-                    final_output = {"messages": value, "image_url": []}
-                else:
-                    final_output = {"messages": [value], "image_url": []}
-                
-    if final_output and "messages" in final_output and len(final_output["messages"]) > 0:
-        result = final_output["messages"][-1].content
-    else:
-        result = "답변을 찾지 못하였습니다."
-
-    image_url = final_output["image_url"] if final_output and "image_url" in final_output else []
-
-    return result, image_url, status_msg, response_msg
-

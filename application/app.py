@@ -9,17 +9,16 @@ import swarm
 import traceback
 import mcp_config 
 import logging
-import utils
 import sys
 import os
 import pwd 
 import asyncio
-import random
-import string
 import aws_cost.implementation as aws_cost
 import langgraph_agent
 import strands_agent as strands
 import swarm_agent
+import agentcore_memory
+import uuid
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -343,10 +342,17 @@ with st.sidebar:
 
 st.title('🔮 '+ mode)
 
-if clear_button==True:
-    chat.initiate()
+if clear_button==True:    
     cost.cost_data = {}
     cost.visualizations = {}
+
+    chat.map_chain = dict() 
+    chat.checkpointers = dict() 
+    chat.memorystores = dict() 
+    chat.initiate()
+
+    session_id = uuid.uuid4().hex
+    agentcore_memory.update_memory_variables(user_id=chat.user_id, session_id=session_id)
 
 # Initialize chat history
 if "messages" not in st.session_state:

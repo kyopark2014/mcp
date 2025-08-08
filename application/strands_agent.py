@@ -40,6 +40,8 @@ references = []
 image_url = []
 tool_list = []
 
+memory_id = actor_id = session_id = namespace = None
+
 s3_prefix = "docs"
 capture_prefix = "captures"
 
@@ -824,60 +826,6 @@ def get_reference(references):
             ref += f"{i+1}. [{reference['title']}]({reference['url']}), {reference['content']}...\n"        
     return ref
 
-async def run_agent(question, strands_tools, mcp_servers, historyMode, containers):
-    global status_msg, image_url, references, tool_list
-    status_msg = []
-    image_url = []
-    references = []    
-    tool_list = []
-    
-    if agentcore_memory.memory_id is None:
-        user_id = actor_id = chat.user_id
-        session_id = chat.session_id
-
-        add_notification(containers, f"Memory will be created...")
-        agentcore_memory.init_memory(user_id, actor_id, session_id)
-        add_notification(containers, f"Memory was created...")
-
-    global index
-    index = 0
-
-    debug_mode = chat.debug_mode
-
-    if debug_mode == 'Enable' and containers is not None:
-        containers['status'].info(get_status_msg(f"(start"))    
-
-    # initiate agent
-    await initiate_agent(None, strands_tools, mcp_servers, historyMode)
-    logger.info(f"tool_list: {tool_list}")    
-    if debug_mode == 'Enable' and containers is not None and tool_list:
-        containers['tools'].info(f"tool_list: {tool_list}")
-
-    # run agent
-    result = ""
-    with mcp_manager.get_active_clients(mcp_servers) as _:
-        agent_stream = agent.stream_async(question)
-
-        result, image_url = await show_streams(agent_stream, containers)
-        
-    # get reference
-    result += get_reference(references)
-
-    if containers is not None:
-        containers['notification'][index-1].markdown(result)
-
-    if debug_mode == 'Enable' and containers is not None:
-        containers['status'].info(get_status_msg(f"end)"))
-
-    # save event to memory
-    if agentcore_memory.memory_id is not None:
-        agentcore_memory.save_conversation_to_memory(question, result) 
-
-    #conversations = agentcore_memory.get_memory_record()
-    #logger.info(f"conversations: {conversations}")
-
-    return result, image_url
-
 async def run_task(question, strands_tools, mcp_servers, containers, historyMode, previous_status_msg, previous_response_msg):
     global status_msg, response_msg
     status_msg = previous_status_msg
@@ -919,3 +867,73 @@ async def run_task(question, strands_tools, mcp_servers, containers, historyMode
 
     return result, image_url, status_msg, response_msg
 
+async def run_agent(question, strands_tools, mcp_servers, historyMode, containers):
+    global memory_id, actor_id, session_id, namespace
+    global status_msg, image_url, references, tool_list
+    status_msg = []
+    image_url = []
+    references = []    
+    tool_list = []
+    
+    # initate memory variables
+    if session_id is None:
+        memory_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables(chat.user_id)
+        logger.info(f"memory_id: {memory_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
+
+        if memory_id is None:
+            memory_id = agentcore_memory.get_memory_id()
+            logger.info(f"memory_id: {memory_id}")
+            
+            if memory_id is None and namespace is not None:        
+                logger.info(f"Memory will be created...")
+                add_notification(containers, f"Memory will be created...")
+                memory_id = agentcore_memory.create_memory(namespace)
+                logger.info(f"Memory was created... {memory_id}")
+                add_notification(containers, f"Memory was created... {memory_id}")
+
+            if memory_id is not None:
+                agentcore_memory.update_memory_variables(
+                    user_id=chat.user_id, 
+                    memory_id=memory_id, 
+                    actor_id=actor_id, 
+                    session_id=session_id, 
+                    namespace=namespace)
+
+    global index
+    index = 0
+
+    debug_mode = chat.debug_mode
+
+    if debug_mode == 'Enable' and containers is not None:
+        containers['status'].info(get_status_msg(f"(start"))    
+
+    # initiate agent
+    await initiate_agent(None, strands_tools, mcp_servers, historyMode)
+    logger.info(f"tool_list: {tool_list}")    
+    if debug_mode == 'Enable' and containers is not None and tool_list:
+        containers['tools'].info(f"tool_list: {tool_list}")
+
+    # run agent
+    result = ""
+    with mcp_manager.get_active_clients(mcp_servers) as _:
+        agent_stream = agent.stream_async(question)
+
+        result, image_url = await show_streams(agent_stream, containers)
+        
+    # get reference
+    result += get_reference(references)
+
+    if containers is not None:
+        containers['notification'][index-1].markdown(result)
+
+    if debug_mode == 'Enable' and containers is not None:
+        containers['status'].info(get_status_msg(f"end)"))
+
+    # save event to memory
+    if memory_id is not None:
+        agentcore_memory.save_conversation_to_memory(memory_id, actor_id, session_id, question, result) 
+
+    #conversations = agentcore_memory.get_memory_record()
+    #logger.info(f"conversations: {conversations}")
+
+    return result, image_url
