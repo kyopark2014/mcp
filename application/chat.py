@@ -156,6 +156,17 @@ def update(modelName, debugMode, multiRegion, reasoningMode, gradingMode, agentT
     utils.save_mcp_env(mcp_env)
     logger.info(f"mcp.env updated: {mcp_env}")
 
+def initiate_mcp_env():
+    mcp_env = utils.load_mcp_env()
+    
+    mcp_env['multi_region'] = multi_region
+    mcp_env['grading_mode'] = grading_mode
+    user_id = agent_type
+    mcp_env['user_id'] = user_id
+
+    utils.save_mcp_env(mcp_env)
+    logger.info(f"mcp.env updated: {mcp_env}")
+
 map_chain = dict() 
 checkpointers = dict() 
 memorystores = dict() 

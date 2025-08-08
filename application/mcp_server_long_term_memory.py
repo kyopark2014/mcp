@@ -31,7 +31,7 @@ except Exception as e:
 # memory
 ######################################
 @mcp.tool()
-def agent_core_memory(
+def long_term_memory(
     action: str,
     content: Optional[str] = None,
     query: Optional[str] = None,

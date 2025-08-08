@@ -3,6 +3,8 @@ import json
 import logging
 import sys
 import uuid
+import chat
+import time
 
 from typing import Dict, Optional, Required
 from bedrock_agentcore.memory import MemoryClient
@@ -113,22 +115,44 @@ def update_memory_variables(
     
     logger.info(f"config was updated to {config}")    
 
-CUSTOM_PROMPT = (
-    "You are tasked with analyzing conversations to extract the user's general preferences."
-     "You'll be analyzing two sets of data:"
-     "<past_conversation>"
-     "[Past conversations between the user and system will be placed here for context]"
-     "</past_conversation>"
-     "<current_conversation>"
-     "[The current conversation between the user and system will be placed here]"
-     "</current_conversation>"
-     "Your job is to identify and categorize the user's general preferences across various topics and domains."
-     "- Extract user preferences for different types of content, services, or products they show interest in."
-     "- Identify communication style preferences, such as formal vs casual, detailed vs concise."
-     "- Recognize technology preferences, such as specific platforms, tools, or applications they prefer."
-     "- Note any recurring themes or topics the user is particularly interested in or knowledgeable about."
-     "- Capture any specific requirements or constraints they mention in their interactions."
-     "use Korean language."
+USER_PREFERENCE_PROMPT = (
+    "You are tasked with analyzing conversations to extract the user's preferences. You'll be analyzing two sets of data:\n"
+    "<past_conversation>\n"
+    "[Past conversations between the user and system will be placed here for context]\n"
+    "</past_conversation>\n"
+    "<current_conversation>\n"
+    "[The current conversation between the user and system will be placed here]\n"
+    "</current_conversation>\n"
+    "Your job is to identify and categorize the user's preferences into two main types:\n"
+    "- Explicit preferences: Directly stated preferences by the user.\n"
+    "- Implicit preferences: Inferred from patterns, repeated inquiries, or contextual clues. Take a close look at user's request for implicit preferences.\n"
+    "For explicit preference, extract only preference that the user has explicitly shared. Do not infer user's preference.\n"
+    "For implicit preference, it is allowed to infer user's preference, but only the ones with strong signals, such as requesting something multiple times.\n"
+    "Answer in Korean.\n"
+)
+
+SUMMARY_PROMPT = (
+    "You will be given a text block and a list of summaries you previously generated when available.\n"
+    "<task>\n"
+    "- When the previously generated is not available, your goal is to summarize the given text block.\n"
+    "- When there is existing summary, your goal is to extend summary by taking into account the given text block.\n"
+    "- If there are queries/topics specified in the text block, your generated summary need to cover those queries/topics.\n"
+    "- If there are instructions in the text block **guiding you how to generate suummary**, you MUST follow them.\n"
+    "</task>\n"
+    "Answer in Korean.\n"
+)
+
+SEMENTIC_PROMPT = (
+    "You are a long-term memory extraction agent supporting a lifelong learning system.\n"
+    "Your task is to identify and extract meaningful information about the users from a given list of messages.\n"
+    "Analyze the conversation and extract structured information about the user according to the schema below.\n"
+    "Only include details that are explicitly stated or can be logically inferred from the conversation.\n"
+    "- Extract information ONLY from the user messages. You should use assistant messages only as supporting context.\n"
+    "- If the conversation contains no relevant or noteworthy information, return an empty list.\n"
+    "- Do NOT extract anything from prior conversation history, even if provided. Use it solely for context.\n"
+    "- Do NOT incorporate external knowledge.\n"
+    "- Avoid duplicate extractions.\n"
+    "Answer in Korean.\n"
 )
 
 def get_memory_id():
@@ -147,6 +171,30 @@ def get_memory_id():
 
     return memory_id
 
+def check_memory_strategy(memory_id: str):
+    normalized_strategies = memory_client.get_memory_strategies(memory_id)
+    logger.info(f"normalized_strategies: {normalized_strategies}")
+    return normalized_strategies
+
+def add_strategy(memory_id: str, namespace: str):
+    strategy = {
+            "customMemoryStrategy": {
+                "name": chat.user_id,
+                "namespaces": [namespace],
+                "configuration" : {
+                    "userPreferenceOverride" : {
+                        "extraction" : {
+                            "modelId" : "anthropic.claude-3-5-sonnet-20241022-v2:0",
+                            "appendToPrompt": USER_PREFERENCE_PROMPT
+                        }
+                    }
+                }
+            }
+        }
+    memory_client.add_strategy(memory_id, strategy)
+    logger.info(f"strategy was added to memory_id: {memory_id}")
+    time.sleep(5)
+
 def create_memory(namespace: str):
     result = memory_client.create_memory_and_wait(
         name=projectName,
@@ -156,13 +204,13 @@ def create_memory(namespace: str):
         strategies=[{
             #"userPreferenceMemoryStrategy": {
             "customMemoryStrategy": {
-                "name": "UserPreference",
+                "name": chat.user_id,
                 "namespaces": [namespace],
                 "configuration" : {
                     "userPreferenceOverride" : {
                         "extraction" : {
                             "modelId" : "anthropic.claude-3-5-sonnet-20241022-v2:0",
-                            "appendToPrompt": CUSTOM_PROMPT
+                            "appendToPrompt": USER_PREFERENCE_PROMPT
                         }
                     }
                 }
