@@ -287,54 +287,44 @@ async def run_reflection_agent(draft, reflection, mcp_servers, containers, previ
     server_params = langgraph_agent.load_multiple_mcp_server_parameters(mcp_json)
     logger.info(f"server_params: {server_params}")
 
-    async with MultiServerMCPClient(server_params) as client:
-        tools = client.get_tools()
+    client = MultiServerMCPClient(server_params)
+    tools = await client.get_tools()
 
-        if chat.debug_mode == "Enable":
-            logger.info(f"tools: {tools}")
+    tool_list = [tool.name for tool in tools]
+    logger.info(f"tool_list: {tool_list}")
 
-            tool_names = [tool.name for tool in tools]
-            containers["tools"].info(f"tools: {tool_names}")
-            
-        tool_info = []
-        for tool in tools:
-            description = tool.description.split('\n')[0]
-            tool_info.append(f"{tool.name}: {description}")
-        tool_summary = "\n".join(tool_info)
-
-        if chat.debug_mode == "Enable":
-            add_notification(containers, f"{tool_summary}")
-            response_msg.append(f"{tool_summary}")
-
-        instruction = (
-            f"<reflection>{reflection}</reflection>\n\n"
-            f"<draft>{draft}</draft>"
-        )
-
-        if chat.debug_mode == "Enable":
-            containers["status"].info(get_status_msg("(start"))
-
-        app = buildChatAgent(tools)
-        config = {
-            "recursion_limit": 50,
-            "containers": containers,
-            "tools": tools            
-        }
-
-        value = None
-        inputs = {
-            "messages": [HumanMessage(content=instruction)]
-        }
-
-        references = []
-        final_output = None
-        async for output in app.astream(inputs, config):
-            for key, value in output.items():
-                logger.info(f"--> key: {key}, value: {value}")
-                final_output = output
+    if chat.debug_mode == "Enable":    
+        containers["tools"].info(f"Tools: {tool_list}")
         
-        result = final_output["messages"][-1].content
-        logger.info(f"result: {result}")
-        image_url = final_output["image_url"] if "image_url" in final_output else []
+    instruction = (
+        f"<reflection>{reflection}</reflection>\n\n"
+        f"<draft>{draft}</draft>"
+    )
 
-        return result, image_url, status_msg, response_msg
+    if chat.debug_mode == "Enable":
+        containers["status"].info(get_status_msg("(start"))
+
+    app = buildChatAgent(tools)
+    config = {
+        "recursion_limit": 50,
+        "containers": containers,
+        "tools": tools            
+    }
+
+    value = None
+    inputs = {
+        "messages": [HumanMessage(content=instruction)]
+    }
+
+    references = []
+    final_output = None
+    async for output in app.astream(inputs, config):
+        for key, value in output.items():
+            logger.info(f"--> key: {key}, value: {value}")
+            final_output = output
+    
+    result = final_output["messages"][-1].content
+    logger.info(f"result: {result}")
+    image_url = final_output["image_url"] if "image_url" in final_output else []
+
+    return result, image_url, status_msg, response_msg
