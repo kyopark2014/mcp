@@ -880,39 +880,28 @@ async def run_agent(question, strands_tools, mcp_servers, historyMode, container
     logger.info(f"memory_id: {memory_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
 
     if memory_id is None:
-        memory_id = agentcore_memory.get_memory_id()
-        logger.info(f"memory_id: {memory_id}")
+        # retrieve memory id
+        memory_id = agentcore_memory.retrieve_memory_id()
+        logger.info(f"memory_id: {memory_id}")        
         
-        if memory_id is None and namespace is not None:
+        # create memory if not exists
+        if memory_id is None:
             logger.info(f"Memory will be created...")
             add_notification(containers, f"Memory will be created...")
             memory_id = agentcore_memory.create_memory(namespace)
             logger.info(f"Memory was created... {memory_id}")
             add_notification(containers, f"Memory was created... {memory_id}")
+        
+        # create memory strategy if not exists
+        agentcore_memory.create_strategy_if_not_exists(memory_id=memory_id, namespace=namespace, strategy_name=chat.user_id)
 
-        if memory_id is not None:
-            # check strategy                
-            has_strategy = False
-            strategies = agentcore_memory.check_memory_strategy(memory_id)
-            for strategy in strategies:
-                logger.info(f"strategy: {strategy}")
-                if strategy.get("name") == chat.user_id:
-                    logger.info(f"UserPreference strategy found")
-                    has_strategy = True
-                    break
-
-            if not has_strategy:
-                logger.info(f"UserPreference strategy not found, adding...")
-                agentcore_memory.add_strategy(memory_id, namespace)
-                logger.info(f"UserPreference strategy was added...")
-
-            # update memory variables
-            agentcore_memory.update_memory_variables(
-                user_id=chat.user_id, 
-                memory_id=memory_id, 
-                actor_id=actor_id, 
-                session_id=session_id, 
-                namespace=namespace)
+        # save memory variables
+        agentcore_memory.update_memory_variables(
+            user_id=chat.user_id, 
+            memory_id=memory_id, 
+            actor_id=actor_id, 
+            session_id=session_id, 
+            namespace=namespace)
 
     global index
     index = 0

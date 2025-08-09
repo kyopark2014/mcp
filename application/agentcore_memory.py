@@ -33,7 +33,6 @@ def load_config():
 config = load_config()
 
 bedrock_region = config['region']
-accountId = config['accountId']
 projectName = config['projectName']
 agentcore_memory_role = config['agentcore_memory_role']
 
@@ -173,15 +172,15 @@ SEMENTIC_PROMPT = (
     "Use Korean.\n"
 )
 
-def get_memory_id():
+def retrieve_memory_id():
     memory_id = None
+    memory_name = projectName  # use projectName as memory name
 
     memories = memory_client.list_memories()
     logger.info(f"memories: {memories}")
     for memory in memories:            
         logger.info(f"Memory ID: {memory.get('id')}")
-        memory_name = memory.get('id').split("-")[0]
-        if memory_name == projectName:
+        if memory.get('id').split("-")[0] == memory_name:
             logger.info(f"The memory of {memory_name} was found")
             memory_id = memory.get('id')
             logger.info(f"Memory Arn: {memory.get('arn')}")
@@ -189,10 +188,10 @@ def get_memory_id():
 
     return memory_id
 
-def check_memory_strategy(memory_id: str):
-    normalized_strategies = memory_client.get_memory_strategies(memory_id)
-    logger.info(f"normalized_strategies: {normalized_strategies}")
-    return normalized_strategies
+def load_memory_strategy(memory_id: str):
+    strategies = memory_client.get_memory_strategies(memory_id)
+    logger.info(f"strategies: {strategies}")
+    return strategies
 
 def add_strategy(memory_id: str, namespace: str):
     strategy = {
@@ -212,6 +211,21 @@ def add_strategy(memory_id: str, namespace: str):
     memory_client.add_strategy(memory_id, strategy)
     logger.info(f"strategy was added to memory_id: {memory_id}")
     time.sleep(5)
+
+def create_strategy_if_not_exists(memory_id: str, namespace: str, strategy_name: str):
+    # create strategy if not exists
+    has_strategy = False
+    strategies = load_memory_strategy(memory_id)
+    for strategy in strategies:
+        logger.info(f"strategy: {strategy}")
+        if strategy.get("name") == strategy_name:
+            logger.info(f"UserPreference strategy found")
+            has_strategy = True
+            break
+    if not has_strategy:
+        logger.info(f"UserPreference strategy not found, adding...")
+        add_strategy(memory_id, namespace)
+        logger.info(f"UserPreference strategy was added...")
 
 def create_memory(namespace: str):
     result = memory_client.create_memory_and_wait(
@@ -275,4 +289,5 @@ def get_memory_record(user_id: str):
     logger.info(f"conversations: {conversations}")
 
     return conversations
+
 
