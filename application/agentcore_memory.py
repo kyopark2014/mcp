@@ -115,6 +115,24 @@ def update_memory_variables(
     
     logger.info(f"config was updated to {config}")    
 
+# CUSTOM_PROMPT = (
+#     "You are tasked with analyzing conversations to extract the user's general preferences."
+#      "You'll be analyzing two sets of data:"
+#      "<past_conversation>"
+#      "[Past conversations between the user and system will be placed here for context]"
+#      "</past_conversation>"
+#      "<current_conversation>"
+#      "[The current conversation between the user and system will be placed here]"
+#      "</current_conversation>"
+#      "Your job is to identify and categorize the user's general preferences across various topics and domains."
+#      "- Extract user preferences for different types of content, services, or products they show interest in."
+#      "- Identify communication style preferences, such as formal vs casual, detailed vs concise."
+#      "- Recognize technology preferences, such as specific platforms, tools, or applications they prefer."
+#      "- Note any recurring themes or topics the user is particularly interested in or knowledgeable about."
+#      "- Capture any specific requirements or constraints they mention in their interactions."
+#      "use Korean."
+# )
+
 USER_PREFERENCE_PROMPT = (
     "You are tasked with analyzing conversations to extract the user's preferences. You'll be analyzing two sets of data:\n"
     "<past_conversation>\n"
@@ -128,7 +146,7 @@ USER_PREFERENCE_PROMPT = (
     "- Implicit preferences: Inferred from patterns, repeated inquiries, or contextual clues. Take a close look at user's request for implicit preferences.\n"
     "For explicit preference, extract only preference that the user has explicitly shared. Do not infer user's preference.\n"
     "For implicit preference, it is allowed to infer user's preference, but only the ones with strong signals, such as requesting something multiple times.\n"
-    "Answer in Korean.\n"
+    "Use Korean.\n"
 )
 
 SUMMARY_PROMPT = (
@@ -139,7 +157,7 @@ SUMMARY_PROMPT = (
     "- If there are queries/topics specified in the text block, your generated summary need to cover those queries/topics.\n"
     "- If there are instructions in the text block **guiding you how to generate suummary**, you MUST follow them.\n"
     "</task>\n"
-    "Answer in Korean.\n"
+    "Use Korean.\n"
 )
 
 SEMENTIC_PROMPT = (
@@ -152,7 +170,7 @@ SEMENTIC_PROMPT = (
     "- Do NOT extract anything from prior conversation history, even if provided. Use it solely for context.\n"
     "- Do NOT incorporate external knowledge.\n"
     "- Avoid duplicate extractions.\n"
-    "Answer in Korean.\n"
+    "Use Korean.\n"
 )
 
 def get_memory_id():

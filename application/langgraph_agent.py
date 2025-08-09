@@ -559,6 +559,9 @@ def buildChatAgentWithHistory(tools):
     )
     workflow.add_edge("action", "agent")
 
+    if chat.checkpointer is None:
+        chat.initiate()
+
     return workflow.compile(
         checkpointer=chat.checkpointer,
         store=chat.memorystore
@@ -673,13 +676,15 @@ async def run_agent(query, mcp_servers, historyMode, containers):
     image_urls = []
     references = []
 
+    chat.update_mcp_env()
+
     # initate memory variables
     memory_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables(chat.user_id)
     logger.info(f"memory_id: {memory_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
 
     if memory_id is None:
         memory_id = agentcore_memory.get_memory_id()
-        logger.info(f"memory_id: {memory_id}")
+        logger.info(f"memory_id: {memory_id}")        
         
         if memory_id is None and namespace is not None:
             logger.info(f"Memory will be created...")

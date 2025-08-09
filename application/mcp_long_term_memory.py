@@ -108,7 +108,7 @@ def retrieve_memory_records(
     memory_id: str,
     namespace: str,
     search_query: str,
-    max_results: Optional[int] = None,
+    max_results: Optional[int] = 20, 
     next_token: Optional[str] = None,
 ) -> Dict:
     """
@@ -122,7 +122,7 @@ def retrieve_memory_records(
         memory_id: ID of the memory store to search in
         namespace: Namespace to search within (e.g., "actor/user123/userId")
         search_query: Natural language query to search for
-        max_results: Maximum number of results to return (default: service default)
+        max_results: Maximum return in a single call (default: 20, max: 100)
         next_token: Pagination token for retrieving additional results
 
     Returns:
@@ -132,7 +132,8 @@ def retrieve_memory_records(
     logger.info(f"memory_id: {memory_id}, namespace: {namespace}, search_query: {search_query}, max_results: {max_results}, next_token: {next_token}")
 
     # Prepare request parameters
-    params = {"memoryId": memory_id, "namespace": namespace, "searchCriteria": {"searchQuery": search_query}}
+    topK = 20 # Maximum number of top-scoring memory records to return
+    params = {"memoryId": memory_id, "namespace": namespace, "searchCriteria": {"topK":topK, "searchQuery": search_query}}
     if max_results is not None:
         params["maxResults"] = max_results
     if next_token is not None:
@@ -185,7 +186,7 @@ def agent_core_memory(
     content: Optional[str] = None,
     query: Optional[str] = None,
     memory_record_id: Optional[str] = None,
-    max_results: Optional[int] = None,
+    max_results: Optional[int] = 10,
     next_token: Optional[str] = None,
 ) -> Dict:
     """

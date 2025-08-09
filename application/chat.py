@@ -154,9 +154,9 @@ def update(modelName, debugMode, multiRegion, reasoningMode, gradingMode, agentT
 
     # update mcp.env    
     utils.save_mcp_env(mcp_env)
-    logger.info(f"mcp.env updated: {mcp_env}")
+    # logger.info(f"mcp.env updated: {mcp_env}")
 
-def initiate_mcp_env():
+def update_mcp_env():
     mcp_env = utils.load_mcp_env()
     
     mcp_env['multi_region'] = multi_region
@@ -190,8 +190,6 @@ def initiate():
 
         checkpointers[user_id] = checkpointer
         memorystores[user_id] = memorystore
-
-initiate()
 
 def clear_chat_history():
     global memory_chain
