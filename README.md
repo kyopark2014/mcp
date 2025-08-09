@@ -594,6 +594,81 @@ brew install graphviz
 }
 ```
 
+## Memory 활용하기
+
+Chatbot은 연속적인 사용자의 상호작용을 통해 사용자의 경험을 향상시킬수 있습니다. 이를 위해 이전 대화의 내용을 새로운 대화에서 활용할 수 있어야하며, 일반적으로 chatbot은 sliding window를 이용해 새로운 transaction마다 이전 대화내용을 context로 제공해야 했습니다. 여기에서는 필요한 경우에만 이전 대화내용을 참조할 수 있도록 short term/long term 메모리를 MCP를 이용해 활용합니다. 이렇게 하면 context에 불필요한 이전 대화가 포함되지 않아서 사용자의 의도를 명확히 반영하고 비용도 최적화 할 수 있습니다. 
+
+### Short Term Memory
+
+### Long Term Memory
+
+Long term meory를 위해 필요한 정보에는 memory, actor, session, namespace가 있습니다. 아래와 같이 이미 저장된 값이 있다면 가져오고, 없다면 생성합니다. 상세한 코드는 [langgraph_agent.py](./application/langgraph_agent.py)을 참조합니다.
+
+```python
+# initate memory variables
+memory_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables(chat.user_id)
+logger.info(f"memory_id: {memory_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
+
+if memory_id is None:
+    # retrieve memory id
+    memory_id = agentcore_memory.retrieve_memory_id()
+    logger.info(f"memory_id: {memory_id}")        
+    
+    # create memory if not exists
+    if memory_id is None:
+        memory_id = agentcore_memory.create_memory(namespace)
+    
+    # create strategy if not exists
+    agentcore_memory.create_strategy_if_not_exists(memory_id=memory_id, namespace=namespace, strategy_name=chat.user_id)
+
+    # save memory variables
+    agentcore_memory.update_memory_variables(
+        user_id=chat.user_id, 
+        memory_id=memory_id, 
+        actor_id=actor_id, 
+        session_id=session_id, 
+        namespace=namespace)
+```
+
+생성형 AI 애플리케이션에서는 대화중 필요한 메모리 정보가 있다면 이를 MCP를 이용해 조회합니다. [mcp_server_long_term_memory.py](./application/mcp_server_long_term_memory.py)에서는 long term memory를 이용해 대화 이벤트를 저장하거나 조회할 수 있습니다. 아래는 신규로 레코드를 생성하는 방법입니다.
+
+```python
+response = create_event(
+    memory_id=memory_id,
+    actor_id=actor_id,
+    session_id=session_id,
+    content=content,
+    event_timestamp=datetime.now(timezone.utc),
+)
+event_data = response.get("event", {}) if isinstance(response, dict) else {}
+```
+
+대화에 필요한 정보는 아래와 같이 조회합니다.
+
+```python
+contents = []
+response = retrieve_memory_records(
+    memory_id=memory_id,
+    namespace=namespace,
+    search_query=query,
+    max_results=max_results,
+    next_token=next_token,
+)
+relevant_data = {}
+if isinstance(response, dict):
+    if "memoryRecordSummaries" in response:
+        relevant_data["memoryRecordSummaries"] = response["memoryRecordSummaries"]    
+    for memory_record_summary in relevant_data["memoryRecordSummaries"]:
+        json_content = memory_record_summary["content"]["text"]
+        content = json.loads(json_content)
+        contents.append(content)
+```
+
+"내가 다니는 회사에 대해 소개해줘"라고 질문하면 long term memory에서 사용자에 대한 정보를 가져와서 아래와 같은 결과를 보여줍니다.
+
+<img width="719" height="721" alt="image" src="https://github.com/user-attachments/assets/da23b49e-5a4b-402f-b314-62211bb59b30" />
+
+
 
 ## 실행 결과
 
