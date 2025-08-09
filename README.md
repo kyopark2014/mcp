@@ -600,6 +600,35 @@ Chatbot은 연속적인 사용자의 상호작용을 통해 사용자의 경험�
 
 ### Short Term Memory
 
+Short term memory를 위해서는 대화 transaction을 아래와 같이 agentcore의 memory에 저장합니다. 상세한 코드는 [agentcore_memory.py](./application/agentcore_memory.py)을 참조합니다.
+
+```python
+def save_conversation_to_memory(memory_id, actor_id, session_id, query, result):
+    event_timestamp = datetime.now(timezone.utc)
+    conversation = [
+        (query, "USER"),
+        (result, "ASSISTANT")
+    ]
+    memory_result = memory_client.create_event(
+        memory_id=memory_id,
+        actor_id=actor_id, 
+        session_id=session_id, 
+        event_timestamp=event_timestamp,
+        messages=conversation
+    )
+```
+
+이후, 대화중에 사용자의 이전 대화정보가 필요하다면, [mcp_server_short_term_memory.py](./application/mcp_server_short_term_memory.py)와 같이 memory, actor, session로 max_results 만큼의 이전 대화를 조회하여 활용합니다.  
+
+```python
+events = client.list_events(
+    memory_id=memory_id,
+    actor_id=actor_id,
+    session_id=session_id,
+    max_results=max_results
+)
+```
+
 ### Long Term Memory
 
 Long term meory를 위해 필요한 정보에는 memory, actor, session, namespace가 있습니다. 아래와 같이 이미 저장된 값이 있다면 가져오고, 없다면 생성합니다. 상세한 코드는 [langgraph_agent.py](./application/langgraph_agent.py)을 참조합니다.
