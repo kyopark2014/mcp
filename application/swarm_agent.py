@@ -265,107 +265,93 @@ async def run_swarm_agent(question, mcp_servers, containers):
     server_params = langgraph_agent.load_multiple_mcp_server_parameters(mcp_json)
     logger.info(f"server_params: {server_params}")    
 
-    # Check if server_params is empty
-    if not server_params:
-        logger.warning("No MCP servers configured.")
-        add_notification(containers, "No MCP servers configured.")
-        return f"죄송합니다. MCP 서버가 구성되지 않았습니다. 사이드바에서 MCP 서버를 선택해주세요."
+    client = MultiServerMCPClient(server_params) 
+    tools = await client.get_tools()
+    
+    tool_list = [tool.name for tool in tools]
+    logger.info(f"tool_list: {tool_list}")
 
+    if chat.debug_mode == "Enable" and tools is not None:    
+        containers["tools"].info(f"Tools: {tool_list}")
+        
     research_prompt, creative_prompt, critical_prompt, summarizer_prompt = get_prompt(question)
     
     request_id, report_url = initiate_report(question, containers)
 
-    async with MultiServerMCPClient(server_params) as client:        
-        mcp_server_info = client.server_name_to_tools.items() 
+    # Create specialized agents with different expertise
+    add_notification(containers, f"Phase 1: Initial analysis by each specialized agent")
+    add_notification(containers, f"research agent")
+    research_result = await run_agent(question, tools, research_prompt, containers)
+    logger.info(f"research_result: {research_result}")
+    add_response(containers, f"{research_result}")
+    update_report("research", request_id, research_result)
+    
+    add_notification(containers, f"creative agent")
+    creative_result = await run_agent(question, tools, creative_prompt, containers)
+    logger.info(f"creative_result: {creative_result}")
+    add_response(containers, f"{creative_result}")
+    update_report("creative", request_id, creative_result)
 
-        tools = client.get_tools()        
-        
-        # Check if tools is None or empty
-        if tools is None or len(tools) == 0:
-            logger.warning("No tools available. Using basic conversation.")
-            add_notification(containers, "No MCP tools available. Using basic conversation.")
-            return f"죄송합니다. MCP 도구가 선택되지 않았습니다. 사이드바에서 MCP 서버를 선택해주세요."
-        
-        tool_list = [tool.name for tool in tools]
-        logger.info(f"tool_list: {tool_list}")
+    add_notification(containers, f"critical agent")
+    critical_result = await run_agent(question, tools, critical_prompt, containers)
+    logger.info(f"critical_result: {critical_result}")
+    add_response(containers, f"{critical_result}")
+    update_report("critical", request_id, critical_result)
 
-        if chat.debug_mode == "Enable" and tools is not None:    
-            containers["tools"].info(f"Tools: {tool_list}")
-                    
-        # Create specialized agents with different expertise
-        add_notification(containers, f"Phase 1: Initial analysis by each specialized agent")
-        add_notification(containers, f"research agent")
-        research_result = await run_agent(question, tools, research_prompt, containers)
-        logger.info(f"research_result: {research_result}")
-        add_response(containers, f"{research_result}")
-        update_report("research", request_id, research_result)
-        
-        add_notification(containers, f"creative agent")
-        creative_result = await run_agent(question, tools, creative_prompt, containers)
-        logger.info(f"creative_result: {creative_result}")
-        add_response(containers, f"{creative_result}")
-        update_report("creative", request_id, creative_result)
+    # Dictionary to track messages between agents (mesh communication)
+    research_messages = []
+    creative_messages = []
+    critical_messages = []
+    summarizer_messages = []
 
-        add_notification(containers, f"critical agent")
-        critical_result = await run_agent(question, tools, critical_prompt, containers)
-        logger.info(f"critical_result: {critical_result}")
-        add_response(containers, f"{critical_result}")
-        update_report("critical", request_id, critical_result)
+    # Share results with all other agents (mesh communication)    
+    creative_messages.append(f"From Research Agent: {research_result}")
+    critical_messages.append(f"From Research Agent: {research_result}")
+    summarizer_messages.append(f"From Research Agent: {research_result}")
 
-        # Dictionary to track messages between agents (mesh communication)
-        research_messages = []
-        creative_messages = []
-        critical_messages = []
-        summarizer_messages = []
+    research_messages.append(f"From Creative Agent: {creative_result}")
+    critical_messages.append(f"From Creative Agent: {creative_result}")
+    summarizer_messages.append(f"From Creative Agent: {creative_result}")
 
-        # Share results with all other agents (mesh communication)    
-        creative_messages.append(f"From Research Agent: {research_result}")
-        critical_messages.append(f"From Research Agent: {research_result}")
-        summarizer_messages.append(f"From Research Agent: {research_result}")
+    research_messages.append(f"From Critical Agent: {critical_result}")
+    creative_messages.append(f"From Critical Agent: {critical_result}")
+    summarizer_messages.append(f"From Critical Agent: {critical_result}")
 
-        research_messages.append(f"From Creative Agent: {creative_result}")
-        critical_messages.append(f"From Creative Agent: {creative_result}")
-        summarizer_messages.append(f"From Creative Agent: {creative_result}")
+    # Phase 2: Each agent refines based on input from others
+    next_research_message = f"{question}\n\nConsider these messages from other agents:\n" + "\n\n".join(research_messages)
+    logger.info(f"next_research_message: {next_research_message}")
+    next_creative_message = f"{question}\n\nConsider these messages from other agents:\n" + "\n\n".join(creative_messages)
+    # logger.info(f"next_creative_message: {next_creative_message}")
+    next_critical_message = f"{question}\n\nConsider these messages from other agents:\n" + "\n\n".join(critical_messages)
+    # logger.info(f"next_critical_message: {next_critical_message}")
 
-        research_messages.append(f"From Critical Agent: {critical_result}")
-        creative_messages.append(f"From Critical Agent: {critical_result}")
-        summarizer_messages.append(f"From Critical Agent: {critical_result}")
+    add_notification(containers, f"Phase 2: Each agent refines based on input from others")
+    add_notification(containers, f"refined research agent")
+    refined_research = await run_agent(next_research_message, tools, research_prompt, containers)
+    logger.info(f"refined_research_result: {refined_research}")
+    add_response(containers, f"{refined_research}")
+    update_report("research", request_id, refined_research)
 
-        # Phase 2: Each agent refines based on input from others
-        next_research_message = f"{question}\n\nConsider these messages from other agents:\n" + "\n\n".join(research_messages)
-        logger.info(f"next_research_message: {next_research_message}")
-        next_creative_message = f"{question}\n\nConsider these messages from other agents:\n" + "\n\n".join(creative_messages)
-        # logger.info(f"next_creative_message: {next_creative_message}")
-        next_critical_message = f"{question}\n\nConsider these messages from other agents:\n" + "\n\n".join(critical_messages)
-        # logger.info(f"next_critical_message: {next_critical_message}")
+    add_notification(containers, f"refined creative agent")
+    refined_creative = await run_agent(next_creative_message, tools, creative_prompt, containers)
+    logger.info(f"refined_creative: {refined_creative}")
+    add_response(containers, f"{refined_creative}")
+    update_report("creative", request_id, refined_creative)
 
-        add_notification(containers, f"Phase 2: Each agent refines based on input from others")
-        add_notification(containers, f"refined research agent")
-        refined_research = await run_agent(next_research_message, tools, research_prompt, containers)
-        logger.info(f"refined_research_result: {refined_research}")
-        add_response(containers, f"{refined_research}")
-        update_report("research", request_id, refined_research)
+    add_notification(containers, f"refined critical agent")
+    refined_critical = await run_agent(next_critical_message, tools, critical_prompt, containers)
+    logger.info(f"refined_critical: {refined_critical}")
+    add_response(containers, f"{refined_critical}")
+    update_report("critical", request_id, refined_critical)
 
-        add_notification(containers, f"refined creative agent")
-        refined_creative = await run_agent(next_creative_message, tools, creative_prompt, containers)
-        logger.info(f"refined_creative: {refined_creative}")
-        add_response(containers, f"{refined_creative}")
-        update_report("creative", request_id, refined_creative)
+    # Share refined results with summarizer
+    summarizer_messages.append(f"From Research Agent (Phase 2): {refined_research}")
+    summarizer_messages.append(f"From Creative Agent (Phase 2): {refined_creative}")
+    summarizer_messages.append(f"From Critical Agent (Phase 2): {refined_critical}")
+    
+    logger.info(f"summarized messages: {summarizer_messages}")
 
-        add_notification(containers, f"refined critical agent")
-        refined_critical = await run_agent(next_critical_message, tools, critical_prompt, containers)
-        logger.info(f"refined_critical: {refined_critical}")
-        add_response(containers, f"{refined_critical}")
-        update_report("critical", request_id, refined_critical)
-
-        # Share refined results with summarizer
-        summarizer_messages.append(f"From Research Agent (Phase 2): {refined_research}")
-        summarizer_messages.append(f"From Creative Agent (Phase 2): {refined_creative}")
-        summarizer_messages.append(f"From Critical Agent (Phase 2): {refined_critical}")
-        
-        logger.info(f"summarized messages: {summarizer_messages}")
-
-        next_summarizer_message = f"""
+    next_summarizer_message = f"""
 Original query: {question}
 
 Please synthesize the following inputs from all agents into a comprehensive final solution:
@@ -375,16 +361,16 @@ Please synthesize the following inputs from all agents into a comprehensive fina
 Create a well-structured final answer that incorporates the research findings, creative ideas, and addresses the critical feedback.
 """
 
-        add_notification(containers, f"summarizer agent")
-        result = await run_agent(next_summarizer_message, tools, summarizer_prompt, containers)
-        logger.info(f"result: {result}")
-        update_report("summarizer", request_id, result)
+    add_notification(containers, f"summarizer agent")
+    result = await run_agent(next_summarizer_message, tools, summarizer_prompt, containers)
+    logger.info(f"result: {result}")
+    update_report("summarizer", request_id, result)
 
-        urls = await create_final_report(request_id, question, result, report_url)
-        logger.info(f"urls: {urls}")
+    urls = await create_final_report(request_id, question, result, report_url)
+    logger.info(f"urls: {urls}")
 
-        if chat.debug_mode == 'Enable':
-            containers['status'].info(get_status_msg(f"end"))
+    if chat.debug_mode == 'Enable':
+        containers['status'].info(get_status_msg(f"end"))
 
     return result, urls
 

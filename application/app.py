@@ -587,7 +587,6 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                 st.write(response)
 
                 st.session_state.messages.append({"role": "assistant", "content": response})
-                chat.save_chat_history(prompt, response)
 
             if urls:
                 with st.expander(f"최종 결과"):
