@@ -155,24 +155,6 @@ conversation_manager = SlidingWindowConversationManager(
     window_size=10,  
 )
 
-# Custom conversation manager to filter out empty messages
-class ValidatedConversationManager(SlidingWindowConversationManager):
-    def add_message(self, message):
-        # Filter out empty messages before adding to conversation
-        if hasattr(message, 'content') and message.content:
-            if isinstance(message.content, str) and message.content.strip():
-                super().add_message(message)
-            elif isinstance(message.content, list) and message.content:
-                # Handle list content (e.g., text blocks)
-                super().add_message(message)
-        else:
-            logger.warning(f"Skipping empty message: {message}")
-
-# Use validated conversation manager
-conversation_manager = ValidatedConversationManager(
-    window_size=10,
-)
-
 class MCPClientManager:
     def __init__(self):
         self.clients: Dict[str, MCPClient] = {}

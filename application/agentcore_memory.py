@@ -174,7 +174,7 @@ SEMENTIC_PROMPT = (
 
 def retrieve_memory_id():
     memory_id = None
-    memory_name = projectName  # use projectName as memory name
+    memory_name = projectName.replace("-", "_")  # use projectName as memory name
 
     memories = memory_client.list_memories()
     logger.info(f"memories: {memories}")
@@ -229,7 +229,7 @@ def create_strategy_if_not_exists(memory_id: str, namespace: str, strategy_name:
 
 def create_memory(namespace: str):
     result = memory_client.create_memory_and_wait(
-        name=projectName,
+        name=projectName.replace("-", "_"),
         description=f"Memory for {projectName}",
         event_expiry_days=365, # 7 - 365 days
         # memory_execution_role_arn=memory_execution_role_arn
