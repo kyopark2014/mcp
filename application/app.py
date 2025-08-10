@@ -536,7 +536,6 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                     "content": response,
                     "images": image_url if image_url else []
                 })
-                chat.save_chat_history(prompt, response)       
 
                 show_references(reference_docs)              
 
@@ -554,7 +553,6 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                     "content": response,
                     "images": image_url if image_url else []
                 })
-                chat.save_chat_history(prompt, response)       
 
                 show_references(reference_docs)              
 
@@ -570,7 +568,6 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                     "content": response,
                     "images": image_url if image_url else []
                 })
-                chat.save_chat_history(prompt, response)       
 
                 show_references(reference_docs)              
         
@@ -598,14 +595,12 @@ if prompt := st.chat_input("메시지를 입력하세요."):
             st.write(response)
 
             st.session_state.messages.append({"role": "assistant", "content": response})
-            chat.save_chat_history(prompt, response)
 
         elif mode == '문법 검토하기':
             response = chat.check_grammer(prompt)
             st.write(response)
 
             st.session_state.messages.append({"role": "assistant", "content": response})
-            chat.save_chat_history(prompt, response)
         
         elif mode == '이미지 분석':
             if uploaded_file is None or uploaded_file == "":
@@ -636,7 +631,6 @@ if prompt := st.chat_input("메시지를 입력하세요."):
             logger.info(f"response: {response}")
 
             st.session_state.messages.append({"role": "assistant", "content": response})
-            chat.save_chat_history(prompt, response)
         
 
 def main():
