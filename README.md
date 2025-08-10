@@ -598,7 +598,7 @@ brew install graphviz
 
 Chatbot은 연속적인 사용자의 대화를 이용하여 사용자의 경험을 향상시킬 수 있습니다. 일반 대화형 chatbot에서는 이전 대화를 [sliding window](https://langchain-ai.github.io/langgraph/concepts/memory/) 형태로 context에 포함하므로 사용할 수 있는 대화의 숫자가 제한되고, 이전 대화가 필요하지 않는 경우에도 context를 사용하는 문제가 있습니다. 여기에서는 short/long term memory를 지원하는 MCP를 이용하여 생성형 AI 애플리케이션이 필요할 때마다 메모리를 조회하여 활용하는 방법을 설명합니다. 이전 대화 내용은 필요할 때에만 참조되고, 사용자의 프로필과 같은 주요한 정보도 필요에 따라 MCP를 이용해 조회하여 사용할 수 있습니다. 
 
-아래 architecture에는 short/long term meory를 MCP로 활용합니다. [AgentCore memory]를 이용하면 별도의 DB를 만들어서 관리하지 않아도 생성형 AI 애플리케이션에 필요한 short/long term memory를 손쉽게 활용할 수 있습니다. 대화중 발생하는 transaction은 short-term memory에 저장되며, 주로 최근 n개의 메시지를 가져오는 방식으로 활용됩니다. 대화중 중요한 정보는 long-term memory에 namespace를 이용해 저장됩니다. 저장된 조회할 때에는 namespace를 이용해 검색의 범위를 조정할 수 있습니다. Long-term memory는 prompt를 가진 strategy을 이용해 사용자의 메시지로부터 필요한 정보를 추출합니다. 추출 과정에서는 Amazon Bedrock의 Claude나 OpenAI의 OSS 같은 모델을 활용할 수 있습니다. Long-term memory를 지원하는 MCP를 활용하면 대화중에 필요한 정보를 가져와서 활용할 수 있습니다.
+아래 architecture에는 short/long term meory를 MCP로 활용합니다. [AgentCore memory](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory-getting-started.html)를 이용하면 별도의 DB를 만들어서 관리하지 않아도 생성형 AI 애플리케이션에 필요한 short/long term memory를 손쉽게 활용할 수 있습니다. 대화중 발생하는 transaction은 short-term memory에 저장되며, 주로 최근 n개의 메시지를 가져오는 방식으로 활용됩니다. 대화중 중요한 정보는 long-term memory에 namespace를 이용해 저장됩니다. 저장된 정보를 조회할 때에는 namespace를 이용해 검색의 범위를 조정할 수 있습니다. Long-term memory는 prompt를 가진 strategy을 이용해 사용자의 메시지로부터 필요한 정보를 자동으로 추출합니다. 추출 과정에서는 Amazon Bedrock의 Anthropic의 Claude나 OpenAI의 OSS 같은 모델을 활용할 수 있습니다. 이와 같이 short/long term memory를 지원하는 MCP를 활용하면 대화 중에 필요한 정보를 가져와서 활용할 수 있습니다.
 
 <img src="./contents/memory.png" width="700">
 
