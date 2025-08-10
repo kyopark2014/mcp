@@ -151,6 +151,33 @@ async def get_efs_usage(
     """
     return await storage.get_efs_usage(region, file_system_ids, period_hours)
 
+@mcp.tool()
+async def get_aws_account_info(
+    region: Optional[str] = "us-west-2"
+) -> Dict:
+    """
+    Get AWS account information.
+    
+    Args:
+        region: AWS region name
+    
+    Returns:
+        dict: AWS account information (account ID, user ARN, user ID, etc.)
+    """
+    logger.info(f"get_aws_account_info --> region: {region}")
+    return await storage.get_aws_account_info(region)
+
+@mcp.tool()
+def check_aws_credentials() -> Dict:
+    """
+    Check AWS credentials status.
+    
+    Returns:
+        dict: Credentials status information and troubleshooting methods
+    """
+    logger.info("check_aws_credentials called")
+    return storage.check_aws_credentials()
+
 ######################################
 # AWS Logs
 ######################################

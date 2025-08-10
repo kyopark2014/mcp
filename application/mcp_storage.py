@@ -7,6 +7,7 @@ import asyncio
 import os
 from mcp.types import Resource
 import aioboto3
+import boto3
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -17,7 +18,125 @@ logging.basicConfig(
 )
 logger = logging.getLogger("mcp-s3")
 
-session = aioboto3.Session()
+# Create AWS session safely
+def create_aws_session():
+    """
+    Safely create AWS session.
+    Check environment variables or AWS credentials and return appropriate session.
+    """
+    try:
+        # Check AWS credentials
+        session = boto3.Session()
+        credentials = session.get_credentials()
+        
+        if credentials is None:
+            logger.warning("AWS credentials not found. Please check environment variables or AWS credentials file.")
+            return None
+            
+        # Try to get account ID
+        try:
+            sts_client = session.client('sts')
+            account_info = sts_client.get_caller_identity()
+            logger.info(f"AWS Account ID: {account_info.get('Account')}")
+            logger.info(f"User ARN: {account_info.get('Arn')}")
+        except Exception as e:
+            logger.warning(f"Unable to get AWS account information: {str(e)}")
+            
+        # Create aioboto3 session more safely
+        try:
+            # Create aioboto3 session with default settings
+            aioboto_session = aioboto3.Session()
+            return aioboto_session
+        except Exception as e:
+            logger.error(f"aioboto3 session creation failed: {str(e)}")
+            return None
+        
+    except Exception as e:
+        logger.error(f"Error occurred while creating AWS session: {str(e)}")
+        return None
+
+session = create_aws_session()
+
+# Function to get AWS account information
+async def get_aws_account_info(region: Optional[str] = "us-west-2") -> Dict:
+    """
+    Get AWS account information.
+    
+    Returns:
+        dict: AWS account information (account ID, user ARN, user ID, etc.)
+    """
+    try:
+        # Get account information synchronously using boto3
+        boto_session = boto3.Session()
+        sts_client = boto_session.client('sts', region_name=region)
+        response = sts_client.get_caller_identity()
+        
+        return {
+            "account_id": response.get('Account'),
+            "user_id": response.get('UserId'),
+            "arn": response.get('Arn'),
+            "region": region
+        }
+            
+    except Exception as e:
+        logger.error(f"Error occurred while getting AWS account information: {str(e)}")
+        return {"error": str(e)}
+
+def check_aws_credentials() -> Dict:
+    """
+    Check AWS credentials status.
+    
+    Returns:
+        dict: Credentials status information
+    """
+    try:
+        # Check credentials using boto3 session
+        boto_session = boto3.Session()
+        credentials = boto_session.get_credentials()
+        
+        if credentials is None:
+            return {
+                "status": "error",
+                "message": "AWS credentials not found.",
+                "suggestions": [
+                    "Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables.",
+                    "Configure credentials in ~/.aws/credentials file.",
+                    "Use AWS CLI to run 'aws configure'."
+                ]
+            }
+        
+        # Check if credentials are expired
+        if hasattr(credentials, 'expiry') and credentials.expiry:
+            if credentials.expiry.replace(tzinfo=None) < datetime.datetime.utcnow():
+                return {
+                    "status": "error",
+                    "message": "AWS credentials have expired.",
+                    "expiry": str(credentials.expiry)
+                }
+        
+        # Try to get account information
+        try:
+            sts_client = boto_session.client('sts')
+            account_info = sts_client.get_caller_identity()
+            return {
+                "status": "success",
+                "account_id": account_info.get('Account'),
+                "user_id": account_info.get('UserId'),
+                "arn": account_info.get('Arn'),
+                "credentials_type": credentials.method
+            }
+        except Exception as e:
+            return {
+                "status": "warning",
+                "message": f"Credentials exist but unable to get account information: {str(e)}",
+                "credentials_type": credentials.method
+            }
+            
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Error occurred while checking credentials: {str(e)}"
+        }
 
 def _get_configured_buckets() -> List[str]:
     """
@@ -62,12 +181,16 @@ async def list_buckets(
     region: Optional[str] = "us-west-2"
 ) -> List[dict]:
     """
-    List S3 buckets using async client with pagination
+    List S3 buckets using boto3 client with pagination
     """
-    async with session.client('s3', region_name=region) as s3:
+    try:
+        # Get bucket list synchronously using boto3
+        boto_session = boto3.Session()
+        s3_client = boto_session.client('s3', region_name=region)
+        
         if configured_buckets:
             # If buckets are configured, only return those
-            response = await s3.list_buckets()
+            response = s3_client.list_buckets()
             all_buckets = response.get('Buckets', [])
             configured_bucket_list = [
                 bucket for bucket in all_buckets
@@ -83,39 +206,51 @@ async def list_buckets(
             return configured_bucket_list[:max_buckets]
         else:
             # Default behavior if no buckets configured
-            response = await s3.list_buckets()
+            response = s3_client.list_buckets()
             buckets = response.get('Buckets', [])
 
             if start_after:
                 buckets = [b for b in buckets if b['Name'] > start_after]
 
             return buckets[:max_buckets]
+                
+    except Exception as e:
+        logger.error(f"Error occurred while getting S3 bucket list: {str(e)}")
+        return []
 
 async def list_objects(
     bucket_name: str, 
     prefix: Optional[str] = "", 
-    max_keys: Optional[int] = 500,
+    max_keys: Optional[int] = 100,
     region: Optional[str] = "us-west-2"
 ) -> List[dict]:
     """
-    List objects in a specific bucket using async client with pagination
+    List objects in a specific bucket using boto3 client with pagination
     Args:
         bucket_name: Name of the S3 bucket
         prefix: Object prefix for filtering
         max_keys: Maximum number of keys to return,
         region: Name of the aws region
     """
-    if configured_buckets and bucket_name not in configured_buckets:
-        logger.warning(f"Bucket {bucket_name} not in configured bucket list")
-        return []
+    try:
+        if configured_buckets and bucket_name not in configured_buckets:
+            logger.warning(f"Bucket {bucket_name} not in configured bucket list")
+            return []
 
-    async with session.client('s3', region_name=region) as s3:
-        response = await s3.list_objects_v2(
+        # Get object list synchronously using boto3
+        boto_session = boto3.Session()
+        s3_client = boto_session.client('s3', region_name=region)
+        
+        response = s3_client.list_objects_v2(
             Bucket=bucket_name,
             Prefix=prefix,
             MaxKeys=max_keys
         )
         return response.get('Contents', [])
+            
+    except Exception as e:
+        logger.error(f"Error occurred while getting S3 object list: {str(e)}")
+        return []
     
 async def list_resources(
     start_after: Optional[str] = None,
@@ -199,12 +334,16 @@ async def get_total_storage_usage(
         # Process each bucket to get storage information
         semaphore = asyncio.Semaphore(5)  # Limit concurrent operations
         
-        async def process_bucket_storage(bucket):
+        def process_bucket_storage(bucket):
             bucket_name = bucket['Name']
             bucket_size = 0
             object_count = 0
             
             try:
+                # Calculate storage synchronously using boto3
+                boto_session = boto3.Session()
+                s3_client = boto_session.client('s3', region_name=region)
+                
                 # We need to handle pagination for buckets with many objects
                 continuation_token = None
                 while True:
@@ -217,20 +356,19 @@ async def get_total_storage_usage(
                     if continuation_token:
                         params['ContinuationToken'] = continuation_token
                     
-                    async with session.client('s3', region_name=region) as s3:
-                        response = await s3.list_objects_v2(**params)
-                        
-                        # Process objects in this page
-                        for obj in response.get('Contents', []):
-                            if 'Size' in obj:
-                                bucket_size += obj['Size']
-                                object_count += 1
-                        
-                        # Check if there are more objects to fetch
-                        if response.get('IsTruncated', False):
-                            continuation_token = response.get('NextContinuationToken')
-                        else:
-                            break
+                    response = s3_client.list_objects_v2(**params)
+                    
+                    # Process objects in this page
+                    for obj in response.get('Contents', []):
+                        if 'Size' in obj:
+                            bucket_size += obj['Size']
+                            object_count += 1
+                    
+                    # Check if there are more objects to fetch
+                    if response.get('IsTruncated', False):
+                        continuation_token = response.get('NextContinuationToken')
+                    else:
+                        break
                 
                 return bucket_name, bucket_size, object_count
                 
@@ -238,12 +376,10 @@ async def get_total_storage_usage(
                 logger.error(f"Error calculating storage for bucket {bucket_name}: {str(e)}")
                 return bucket_name, 0, 0
         
-        async def process_with_semaphore(bucket):
-            async with semaphore:
-                return await process_bucket_storage(bucket)
-        
-        # Process all buckets concurrently with semaphore limit
-        results = await asyncio.gather(*[process_with_semaphore(bucket) for bucket in buckets])
+        # Process all buckets sequentially since we're using boto3 now
+        results = []
+        for bucket in buckets:
+            results.append(process_bucket_storage(bucket))
         
         # Compile results
         for bucket_name, size, count in results:
@@ -305,17 +441,20 @@ async def get_ebs_volumes_usage(
     volumes_info = []
     
     try:
-        async with session.client('ec2', region_name=region) as ec2:
-            # Prepare parameters for describe_volumes
-            params = {}
-            if filters:
-                params['Filters'] = filters
-                
-            # Handle pagination for large number of volumes
-            paginator = ec2.get_paginator('describe_volumes')
-            async_iterator = paginator.paginate(**params)
+        # Use boto3 for EBS volumes
+        boto_session = boto3.Session()
+        ec2_client = boto_session.client('ec2', region_name=region)
+        
+        # Prepare parameters for describe_volumes
+        params = {}
+        if filters:
+            params['Filters'] = filters
             
-            async for page in async_iterator:
+        # Handle pagination for large number of volumes
+        paginator = ec2_client.get_paginator('describe_volumes')
+        page_iterator = paginator.paginate(**params)
+        
+        for page in page_iterator:
                 volumes = page.get('Volumes', [])
                 
                 for volume in volumes:
@@ -423,19 +562,22 @@ async def get_ebs_snapshots_usage(
     snapshots_info = []
     
     try:
-        async with session.client('ec2', region_name=region) as ec2:
-            # Prepare parameters for describe_snapshots
-            params = {}
-            if owner_ids:
-                params['OwnerIds'] = owner_ids
-            if filters:
-                params['Filters'] = filters
-                
-            # Handle pagination for large number of snapshots
-            paginator = ec2.get_paginator('describe_snapshots')
-            async_iterator = paginator.paginate(**params)
+        # Use boto3 for EBS snapshots
+        boto_session = boto3.Session()
+        ec2_client = boto_session.client('ec2', region_name=region)
+        
+        # Prepare parameters for describe_snapshots
+        params = {}
+        if owner_ids:
+            params['OwnerIds'] = owner_ids
+        if filters:
+            params['Filters'] = filters
             
-            async for page in async_iterator:
+        # Handle pagination for large number of snapshots
+        paginator = ec2_client.get_paginator('describe_snapshots')
+        page_iterator = paginator.paginate(**params)
+        
+        for page in page_iterator:
                 snapshots = page.get('Snapshots', [])
                 
                 for snapshot in snapshots:
@@ -516,129 +658,130 @@ async def get_efs_usage(
     file_systems_info = []
     
     try:
-        # First, get all EFS file systems
-        async with session.client('efs', region_name=region) as efs:
-            file_systems = []
+        # First, get all EFS file systems using boto3
+        boto_session = boto3.Session()
+        efs_client = boto_session.client('efs', region_name=region)
+        file_systems = []
+        
+        if file_system_ids:
+            # If specific file system IDs are provided, get only those
+            for fs_id in file_system_ids:
+                try:
+                    response = efs_client.describe_file_systems(FileSystemId=fs_id)
+                    if 'FileSystems' in response:
+                        file_systems.extend(response['FileSystems'])
+                except Exception as e:
+                    logger.error(f"Error retrieving EFS file system {fs_id}: {str(e)}")
+        else:
+            # Otherwise, get all file systems
+            paginator = efs_client.get_paginator('describe_file_systems')
+            page_iterator = paginator.paginate()
             
-            if file_system_ids:
-                # If specific file system IDs are provided, get only those
-                for fs_id in file_system_ids:
-                    try:
-                        response = await efs.describe_file_systems(FileSystemId=fs_id)
-                        if 'FileSystems' in response:
-                            file_systems.extend(response['FileSystems'])
-                    except Exception as e:
-                        logger.error(f"Error retrieving EFS file system {fs_id}: {str(e)}")
-            else:
-                # Otherwise, get all file systems
-                paginator = efs.get_paginator('describe_file_systems')
-                async_iterator = paginator.paginate()
+            for page in page_iterator:
+                file_systems.extend(page.get('FileSystems', []))
+        
+        logger.info(f"Found {len(file_systems)} EFS file systems")
+        
+        # Now get CloudWatch metrics for each file system
+        cloudwatch_client = boto_session.client('cloudwatch', region_name=region)
+        # Calculate time range for metrics
+        end_time = datetime.datetime.utcnow()
+        start_time = end_time - datetime.timedelta(hours=period_hours)
+        
+        for fs in file_systems:
+            fs_id = fs.get('FileSystemId')
+            name = fs.get('Name', '')
+            creation_time = fs.get('CreationTime', '')
+            lifecycle_state = fs.get('LifeCycleState', '')
+            performance_mode = fs.get('PerformanceMode', '')
+            throughput_mode = fs.get('ThroughputMode', '')
+            encrypted = fs.get('Encrypted', False)
+            
+            # Get the current size metric
+            try:
+                # Get the most recent StorageBytes metric
+                response = cloudwatch_client.get_metric_statistics(
+                    Namespace='AWS/EFS',
+                    MetricName='StorageBytes',
+                    Dimensions=[
+                        {
+                            'Name': 'FileSystemId',
+                            'Value': fs_id
+                        }
+                    ],
+                    StartTime=start_time,
+                    EndTime=end_time,
+                    Period=3600,  # 1 hour
+                    Statistics=['Average'],
+                    Unit='Bytes'
+                )
+                        
+                # Get the most recent data point
+                datapoints = response.get('Datapoints', [])
+                if datapoints:
+                    # Sort by timestamp to get the most recent
+                    datapoints.sort(key=lambda x: x['Timestamp'], reverse=True)
+                    size_bytes = datapoints[0].get('Average', 0)
+                else:
+                    # If no datapoints, use the SizeInBytes from describe_file_systems
+                    size_bytes = fs.get('SizeInBytes', {}).get('Value', 0)
                 
-                async for page in async_iterator:
-                    file_systems.extend(page.get('FileSystems', []))
-            
-            logger.info(f"Found {len(file_systems)} EFS file systems")
-            
-            # Now get CloudWatch metrics for each file system
-            async with session.client('cloudwatch', region_name=region) as cloudwatch:
-                # Calculate time range for metrics
-                end_time = datetime.datetime.utcnow()
-                start_time = end_time - datetime.timedelta(hours=period_hours)
+                # Add to total size
+                total_size_bytes += size_bytes
                 
-                for fs in file_systems:
-                    fs_id = fs.get('FileSystemId')
-                    name = fs.get('Name', '')
-                    creation_time = fs.get('CreationTime', '')
-                    lifecycle_state = fs.get('LifeCycleState', '')
-                    performance_mode = fs.get('PerformanceMode', '')
-                    throughput_mode = fs.get('ThroughputMode', '')
-                    encrypted = fs.get('Encrypted', False)
-                    
-                    # Get the current size metric
-                    try:
-                        # Get the most recent StorageBytes metric
-                        response = await cloudwatch.get_metric_statistics(
-                            Namespace='AWS/EFS',
-                            MetricName='StorageBytes',
-                            Dimensions=[
-                                {
-                                    'Name': 'FileSystemId',
-                                    'Value': fs_id
-                                }
-                            ],
-                            StartTime=start_time,
-                            EndTime=end_time,
-                            Period=3600,  # 1 hour
-                            Statistics=['Average'],
-                            Unit='Bytes'
-                        )
-                        
-                        # Get the most recent data point
-                        datapoints = response.get('Datapoints', [])
-                        if datapoints:
-                            # Sort by timestamp to get the most recent
-                            datapoints.sort(key=lambda x: x['Timestamp'], reverse=True)
-                            size_bytes = datapoints[0].get('Average', 0)
-                        else:
-                            # If no datapoints, use the SizeInBytes from describe_file_systems
-                            size_bytes = fs.get('SizeInBytes', {}).get('Value', 0)
-                        
-                        # Add to total size
-                        total_size_bytes += size_bytes
-                        
-                        # Get additional metrics: burst credit balance, IO operations
-                        burst_credit_response = await cloudwatch.get_metric_statistics(
-                            Namespace='AWS/EFS',
-                            MetricName='BurstCreditBalance',
-                            Dimensions=[
-                                {
-                                    'Name': 'FileSystemId',
-                                    'Value': fs_id
-                                }
-                            ],
-                            StartTime=start_time,
-                            EndTime=end_time,
-                            Period=3600,  # 1 hour
-                            Statistics=['Average'],
-                            Unit='Bytes'
-                        )
-                        
-                        burst_credits = 0
-                        if burst_credit_response.get('Datapoints'):
-                            burst_credit_datapoints = burst_credit_response['Datapoints']
-                            burst_credit_datapoints.sort(key=lambda x: x['Timestamp'], reverse=True)
-                            burst_credits = burst_credit_datapoints[0].get('Average', 0)
-                        
-                        # Add file system information to the list
-                        file_systems_info.append({
-                            'file_system_id': fs_id,
-                            'name': name,
-                            'size_bytes': size_bytes,
-                            'size_formatted': format_size(size_bytes),
-                            'lifecycle_state': lifecycle_state,
-                            'performance_mode': performance_mode,
-                            'throughput_mode': throughput_mode,
-                            'encrypted': encrypted,
-                            'creation_time': str(creation_time),
-                            'burst_credit_balance': burst_credits,
-                            'burst_credit_balance_formatted': format_size(burst_credits)
-                        })
-                        
-                    except Exception as e:
-                        logger.error(f"Error retrieving CloudWatch metrics for EFS {fs_id}: {str(e)}")
-                        # Still add the file system to the list with available information
-                        file_systems_info.append({
-                            'file_system_id': fs_id,
-                            'name': name,
-                            'size_bytes': 0,
-                            'size_formatted': '0 B',
-                            'lifecycle_state': lifecycle_state,
-                            'performance_mode': performance_mode,
-                            'throughput_mode': throughput_mode,
-                            'encrypted': encrypted,
-                            'creation_time': str(creation_time),
-                            'error': str(e)
-                        })
+                # Get additional metrics: burst credit balance, IO operations
+                burst_credit_response = cloudwatch_client.get_metric_statistics(
+                    Namespace='AWS/EFS',
+                    MetricName='BurstCreditBalance',
+                    Dimensions=[
+                        {
+                            'Name': 'FileSystemId',
+                            'Value': fs_id
+                        }
+                    ],
+                    StartTime=start_time,
+                    EndTime=end_time,
+                    Period=3600,  # 1 hour
+                    Statistics=['Average'],
+                    Unit='Bytes'
+                )
+                
+                burst_credits = 0
+                if burst_credit_response.get('Datapoints'):
+                    burst_credit_datapoints = burst_credit_response['Datapoints']
+                    burst_credit_datapoints.sort(key=lambda x: x['Timestamp'], reverse=True)
+                    burst_credits = burst_credit_datapoints[0].get('Average', 0)
+                
+                # Add file system information to the list
+                file_systems_info.append({
+                    'file_system_id': fs_id,
+                    'name': name,
+                    'size_bytes': size_bytes,
+                    'size_formatted': format_size(size_bytes),
+                    'lifecycle_state': lifecycle_state,
+                    'performance_mode': performance_mode,
+                    'throughput_mode': throughput_mode,
+                    'encrypted': encrypted,
+                    'creation_time': str(creation_time),
+                    'burst_credit_balance': burst_credits,
+                    'burst_credit_balance_formatted': format_size(burst_credits)
+                })
+                
+            except Exception as e:
+                logger.error(f"Error retrieving CloudWatch metrics for EFS {fs_id}: {str(e)}")
+                # Still add the file system to the list with available information
+                file_systems_info.append({
+                    'file_system_id': fs_id,
+                    'name': name,
+                    'size_bytes': 0,
+                    'size_formatted': '0 B',
+                    'lifecycle_state': lifecycle_state,
+                    'performance_mode': performance_mode,
+                    'throughput_mode': throughput_mode,
+                    'encrypted': encrypted,
+                    'creation_time': str(creation_time),
+                    'error': str(e)
+                })
         
         # Calculate summary information
         total_size_formatted = format_size(total_size_bytes)
