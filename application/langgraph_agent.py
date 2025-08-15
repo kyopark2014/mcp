@@ -477,7 +477,7 @@ async def call_model(state: State, config):
         err_msg = traceback.format_exc()
         logger.info(f"error message: {err_msg}")
 
-    return {"messages": [response], "image_url": image_url, "index": index}
+    return {"messages": [response], "image_url": image_url}
 
 async def should_continue(state: State, config) -> Literal["continue", "end"]:
     logger.info(f"###### should_continue ######")
@@ -718,7 +718,7 @@ async def run_agent(query, mcp_servers, historyMode, containers):
     server_params = load_multiple_mcp_server_parameters(mcp_json)
     logger.info(f"server_params: {server_params}")    
 
-    client = MultiServerMCPClient(server_params)
+    client = MultiServerMCPClient(server_params) 
     tools = await client.get_tools()
     
     tool_list = [tool.name for tool in tools]
