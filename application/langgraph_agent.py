@@ -364,7 +364,6 @@ async def call_model(state: State, config):
     
     image_url = state['image_url'] if 'image_url' in state else []
 
-    containers = config.get("configurable", {}).get("containers", None)    
     tools = config.get("configurable", {}).get("tools", None)
     system_prompt = config.get("configurable", {}).get("system_prompt", None)
     
@@ -441,8 +440,6 @@ async def should_continue(state: State, config) -> Literal["continue", "end"]:
 
     messages = state["messages"]    
     last_message = messages[-1]
-
-    containers = config.get("configurable", {}).get("containers", None)
     
     if isinstance(last_message, AIMessage) and last_message.tool_calls:
         tool_name = last_message.tool_calls[-1]['name']

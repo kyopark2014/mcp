@@ -35,7 +35,6 @@ from multiprocessing import Process, Pipe
 import logging
 import sys
 
-
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
     format='%(filename)s:%(lineno)d | %(message)s',
@@ -1862,48 +1861,6 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
             logger.info(f"toolResult: {toolResult}, toolUseId: {toolUseId}")
             add_notification(containers, f"Tool Result: {toolResult}")
             tool_used = True
-
-        # for key, value in output.items():
-        #     logger.info(f"--> key: {key}, value: {value}")
-
-        #     if key == "messages" or key == "agent":
-        #         if isinstance(value, dict) and "messages" in value:
-        #             final_output = value
-        #         elif isinstance(value, list):
-        #             final_output = {"messages": value, "image_url": []}
-        #         else:
-        #             final_output = {"messages": [value], "image_url": []}
-
-        #     if "messages" in value:
-        #         for message in value["messages"]:
-        #             # if isinstance(message, HumanMessage):
-        #             #     logger.info(f"HumanMessage: {message.content}")
-        #             if isinstance(message, AIMessage):
-        #                 logger.info(f"AIMessage: {message.content}")
-                        
-        #                 update_streaming_result(containers, message.content)
-
-        #                 tool_calls = message.tool_calls
-        #                 logger.info(f"tool_calls: {tool_calls}")
-
-        #                 if tool_calls:
-        #                     for tool_call in tool_calls:
-        #                         tool_name = tool_call["name"]
-        #                         tool_content = tool_call["args"]
-        #                         toolUseId = tool_call["id"]
-        #                         logger.info(f"tool_name: {tool_name}, content: {tool_content}, toolUseId: {toolUseId}")
-        #                         # yield({'tool': tool_name, 'input': tool_content, 'toolUseId': toolUseId})
-        #                         add_notification(containers, f"Tool: {tool_name}, Input: {tool_content}")
-
-        #             elif isinstance(message, ToolMessage):
-        #                 logger.info(f"ToolMessage: {message.name}, {message.content}")
-
-        #                 toolResult = message.content
-        #                 toolUseId = message.tool_call_id
-
-        #                 # yield({'toolResult': toolResult, 'toolUseId': toolUseId})
-        #                 add_notification(containers, f"Tool Result: {toolResult}")
-                        
     
     if not result:
         result = "답변을 찾지 못하였습니다."        
