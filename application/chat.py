@@ -9,7 +9,9 @@ import info
 import PyPDF2
 import csv
 import utils
-import agentcore_memory
+import strands_agent
+import langgraph_agent
+import mcp_config
 
 from io import BytesIO
 from PIL import Image
@@ -23,7 +25,8 @@ from urllib import parse
 from pydantic.v1 import BaseModel, Field
 from langchain_core.output_parsers import StrOutputParser
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, AIMessageChunk
+from langchain_mcp_adapters.client import MultiServerMCPClient
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.store.memory import InMemoryStore
@@ -32,6 +35,7 @@ from multiprocessing import Process, Pipe
 import logging
 import sys
 
+
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
     format='%(filename)s:%(lineno)d | %(message)s',
@@ -39,6 +43,14 @@ logging.basicConfig(
         logging.StreamHandler(sys.stderr)
     ]
 )
+
+def ignore_urllib3_io_error(exctype, value, traceback):
+    if exctype == ValueError and "I/O operation on closed file" in str(value):
+        return
+    sys.__excepthook__(exctype, value, traceback)
+
+sys.excepthook = ignore_urllib3_io_error
+
 logger = logging.getLogger("chat")
 
 reasoning_mode = 'Disable'
@@ -170,6 +182,9 @@ def update_mcp_env():
 map_chain = dict() 
 checkpointers = dict() 
 memorystores = dict() 
+
+checkpointer = MemorySaver()
+memorystore = InMemoryStore()
 
 def initiate():
     global memory_chain, checkpointer, memorystore, checkpointers, memorystores
@@ -1613,3 +1628,286 @@ def extract_thinking_tag(response, st):
         msg = response
 
     return msg
+
+streaming_index = None
+index = 0
+def add_notification(containers, message):
+    global index
+
+    if index == streaming_index:
+        index += 1
+
+    if containers is not None:
+        containers['notification'][index].info(message)
+    index += 1
+
+def update_streaming_result(containers, message):
+    global streaming_index
+    streaming_index = index 
+
+    if containers is not None:
+        containers['notification'][streaming_index].markdown(message)
+
+def update_tool_notification(containers, tool_index, message):
+    if containers is not None:
+        containers['notification'][tool_index].info(message)
+
+tool_info_list = dict()
+tool_result_list = dict()
+
+async def run_strands_agent(query, mcp_servers, history_mode, containers):
+    global tool_list, index
+    tool_list = []
+    index = 0
+
+    # # initate memory variables
+    # memory_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables(chat.user_id)
+    # logger.info(f"memory_id: {memory_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
+
+    # if memory_id is None:
+    #     # retrieve memory id
+    #     memory_id = agentcore_memory.retrieve_memory_id()
+    #     logger.info(f"memory_id: {memory_id}")        
+        
+    #     # create memory if not exists
+    #     if memory_id is None:
+    #         logger.info(f"Memory will be created...")
+    #         memory_id = agentcore_memory.create_memory(namespace)
+    #         logger.info(f"Memory was created... {memory_id}")
+        
+    #     # create strategy if not exists
+    #     agentcore_memory.create_strategy_if_not_exists(
+    #         memory_id=memory_id, namespace=namespace, strategy_name=chat.user_id)
+
+    #     # save memory variables
+    #     agentcore_memory.update_memory_variables(
+    #         user_id=chat.user_id, 
+    #         memory_id=memory_id, 
+    #         actor_id=actor_id, 
+    #         session_id=session_id, 
+    #         namespace=namespace)
+    
+    # initiate agent
+    await strands_agent.initiate_agent(
+        system_prompt=None, 
+        strands_tools=strands_agent.strands_tools, 
+        mcp_servers=mcp_servers, 
+        historyMode='Disable'
+    )
+    logger.info(f"tool_list: {tool_list}")    
+
+    # run agent    
+    with strands_agent.mcp_manager.get_active_clients(mcp_servers) as _:
+        agent_stream = strands_agent.agent.stream_async(query)
+
+        final_result = current = ""
+        async for event in agent_stream:
+            text = ""            
+            if "data" in event:
+                text = event["data"]
+                logger.info(f"[data] {text}")
+                current += text
+                update_streaming_result(containers, current)
+
+            elif "result" in event:
+                final = event["result"]                
+                message = final.message
+                if message:
+                    content = message.get("content", [])
+                    result = content[0].get("text", "")
+                    logger.info(f"[result] {result}")
+                    final_result = result
+
+            elif "current_tool_use" in event:
+                current_tool_use = event["current_tool_use"]
+                logger.info(f"current_tool_use: {current_tool_use}")
+                name = current_tool_use.get("name", "")
+                input = current_tool_use.get("input", "")
+                toolUseId = current_tool_use.get("toolUseId", "")
+
+                text = f"name: {name}, input: {input}"
+                logger.info(f"[current_tool_use] {text}")
+
+                if toolUseId not in tool_info_list: # new tool info
+                    index += 1
+                    current = ""
+                    logger.info(f"new tool info: {toolUseId} -> {index}")
+                    tool_info_list[toolUseId] = index
+                    add_notification(containers, f"Tool: {name}, Input: {input}")
+                else: # overwrite tool info if already exists
+                    logger.info(f"overwrite tool info: {toolUseId} -> {tool_info_list[toolUseId]}")
+                    containers['notification'][tool_info_list[toolUseId]].info(f"Tool: {name}, Input: {input}")
+
+            elif "message" in event:
+                message = event["message"]
+                logger.info(f"[message] {message}")
+
+                if "content" in message:
+                    content = message["content"]
+                    logger.info(f"tool content: {content}")
+                    if "toolResult" in content[0]:
+                        toolResult = content[0]["toolResult"]
+                        toolUseId = toolResult["toolUseId"]
+                        toolContent = toolResult["content"]
+                        toolResult = toolContent[0].get("text", "")
+                        logger.info(f"[toolResult] {toolResult}, [toolUseId] {toolUseId}")
+                        add_notification(containers, f"Tool Result: {str(toolResult)}")
+            
+            elif "contentBlockDelta" or "contentBlockStop" or "messageStop" or "metadata" in event:
+                pass
+
+            else:
+                logger.info(f"event: {event}")
+
+        image_url = []
+        return final_result, image_url
+    
+    # save event to memory
+    # if memory_id is not None and result:
+    #     agentcore_memory.save_conversation_to_memory(memory_id, actor_id, session_id, query, result) 
+
+
+
+async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
+    # initate memory variables    
+    # memory_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables(user_id)
+    # logger.info(f"memory_id: {memory_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
+
+    # if memory_id is None:
+    #     # retrieve memory id
+    #     memory_id = agentcore_memory.retrieve_memory_id()
+    #     logger.info(f"memory_id: {memory_id}")        
+        
+    #     # create memory if not exists
+    #     if memory_id is None:
+    #         logger.info(f"Memory will be created...")
+    #         memory_id = agentcore_memory.create_memory(namespace)
+    #         logger.info(f"Memory was created... {memory_id}")
+        
+    #     # create strategy if not exists
+    #     agentcore_memory.create_strategy_if_not_exists(memory_id=memory_id, namespace=namespace, strategy_name=user_id)
+
+    #     # save memory variables
+    #     agentcore_memory.update_memory_variables(
+    #         user_id=user_id, 
+    #         memory_id=memory_id, 
+    #         actor_id=actor_id, 
+    #         session_id=session_id, 
+    #         namespace=namespace)
+
+    mcp_json = mcp_config.load_selected_config(mcp_servers)
+    logger.info(f"mcp_json: {mcp_json}")
+
+    server_params = langgraph_agent.load_multiple_mcp_server_parameters(mcp_json)
+    logger.info(f"server_params: {server_params}")    
+
+    client = MultiServerMCPClient(server_params)
+    tools = await client.get_tools()
+    
+    tool_list = [tool.name for tool in tools]
+    logger.info(f"tool_list: {tool_list}")
+
+    app = langgraph_agent.buildChatAgentWithHistory(tools)
+    config = {
+        "recursion_limit": 50,
+        "configurable": {"thread_id": user_id},
+        "tools": tools,
+        "system_prompt": None
+    }
+    
+    inputs = {
+        "messages": [HumanMessage(content=query)]
+    }
+            
+    result = ""
+    tool_used = False  # Track if tool was used
+    async for output in app.astream(inputs, config, stream_mode="messages"):
+        logger.info(f"output: {output}")
+
+        # Handle tuple output (message, metadata)
+        if isinstance(output, tuple) and len(output) > 0 and isinstance(output[0], AIMessageChunk):
+            message = output[0]            
+            if isinstance(message.content, list):
+                for content_item in message.content:
+                    if isinstance(content_item, dict):
+                        if content_item.get('type') == 'text':
+                            text_content = content_item.get('text', '')
+                            logger.info(f"text_content: {text_content}")
+                            
+                            # If tool was used, start fresh result
+                            if tool_used:
+                                result = text_content
+                                tool_used = False
+                            else:
+                                result += text_content
+                                
+                            logger.info(f"result: {result}")
+                    
+                            update_streaming_result(containers, result)
+
+                        elif content_item.get('type') == 'tool_use':
+                            tool_name = content_item.get('name', '')
+                            toolUseId = content_item.get('id', '')
+                            input = content_item.get('input', {})   
+                            logger.info(f"tool_name: {tool_name}, input: {input}, toolUseId: {toolUseId}")
+
+                            if tool_name:
+                                add_notification(containers, f"Tool: {tool_name}, Input: {input}")
+        
+        elif isinstance(output, tuple) and len(output) > 0 and isinstance(output[0], ToolMessage):
+            message = output[0]
+            logger.info(f"ToolMessage: {message.name}, {message.content}")
+            toolResult = message.content
+            toolUseId = message.tool_call_id
+            logger.info(f"toolResult: {toolResult}, toolUseId: {toolUseId}")
+            add_notification(containers, f"Tool Result: {toolResult}")
+            tool_used = True
+
+        # for key, value in output.items():
+        #     logger.info(f"--> key: {key}, value: {value}")
+
+        #     if key == "messages" or key == "agent":
+        #         if isinstance(value, dict) and "messages" in value:
+        #             final_output = value
+        #         elif isinstance(value, list):
+        #             final_output = {"messages": value, "image_url": []}
+        #         else:
+        #             final_output = {"messages": [value], "image_url": []}
+
+        #     if "messages" in value:
+        #         for message in value["messages"]:
+        #             # if isinstance(message, HumanMessage):
+        #             #     logger.info(f"HumanMessage: {message.content}")
+        #             if isinstance(message, AIMessage):
+        #                 logger.info(f"AIMessage: {message.content}")
+                        
+        #                 update_streaming_result(containers, message.content)
+
+        #                 tool_calls = message.tool_calls
+        #                 logger.info(f"tool_calls: {tool_calls}")
+
+        #                 if tool_calls:
+        #                     for tool_call in tool_calls:
+        #                         tool_name = tool_call["name"]
+        #                         tool_content = tool_call["args"]
+        #                         toolUseId = tool_call["id"]
+        #                         logger.info(f"tool_name: {tool_name}, content: {tool_content}, toolUseId: {toolUseId}")
+        #                         # yield({'tool': tool_name, 'input': tool_content, 'toolUseId': toolUseId})
+        #                         add_notification(containers, f"Tool: {tool_name}, Input: {tool_content}")
+
+        #             elif isinstance(message, ToolMessage):
+        #                 logger.info(f"ToolMessage: {message.name}, {message.content}")
+
+        #                 toolResult = message.content
+        #                 toolUseId = message.tool_call_id
+
+        #                 # yield({'toolResult': toolResult, 'toolUseId': toolUseId})
+        #                 add_notification(containers, f"Tool Result: {toolResult}")
+                        
+    
+    if not result:
+        result = "답변을 찾지 못하였습니다."        
+    logger.info(f"result: {result}")
+
+    image_url = []
+    return result, image_url
