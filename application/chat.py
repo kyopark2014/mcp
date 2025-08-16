@@ -1647,11 +1647,15 @@ def update_tool_notification(containers, tool_index, message):
 
 tool_info_list = dict()
 tool_result_list = dict()
+tool_name_list = dict()
 
 async def run_strands_agent(query, mcp_servers, history_mode, containers):
     global tool_list, index
     tool_list = []
     index = 0
+
+    image_url = []
+    references = []
 
     # # initate memory variables
     # memory_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables(chat.user_id)
@@ -1726,6 +1730,7 @@ async def run_strands_agent(query, mcp_servers, history_mode, containers):
                     current = ""
                     logger.info(f"new tool info: {toolUseId} -> {index}")
                     tool_info_list[toolUseId] = index
+                    tool_name_list[toolUseId] = name
                     add_notification(containers, f"Tool: {name}, Input: {input}")
                 else: # overwrite tool info if already exists
                     logger.info(f"overwrite tool info: {toolUseId} -> {tool_info_list[toolUseId]}")
@@ -1743,23 +1748,43 @@ async def run_strands_agent(query, mcp_servers, history_mode, containers):
                         toolUseId = toolResult["toolUseId"]
                         toolContent = toolResult["content"]
                         toolResult = toolContent[0].get("text", "")
+                        tool_name = tool_name_list[toolUseId]
                         logger.info(f"[toolResult] {toolResult}, [toolUseId] {toolUseId}")
                         add_notification(containers, f"Tool Result: {str(toolResult)}")
-            
+
+                        content, urls, refs = langgraph_agent.get_tool_info(tool_name, toolResult)
+                        if refs:
+                            for r in refs:
+                                references.append(r)
+                            logger.info(f"refs: {refs}")
+                        if urls:
+                            for url in urls:
+                                image_url.append(url)
+                            logger.info(f"urls: {urls}")
+
+                        if content:
+                            logger.info(f"content: {content}")                
+                
             elif "contentBlockDelta" or "contentBlockStop" or "messageStop" or "metadata" in event:
                 pass
 
             else:
                 logger.info(f"event: {event}")
 
-        image_url = []
+        if references:
+            ref = "\n\n### Reference\n"
+            for i, reference in enumerate(references):
+                ref += f"{i+1}. [{reference['title']}]({reference['url']}), {reference['content']}...\n"    
+            final_result += ref
+
+        if containers is not None:
+            containers['notification'][index].markdown(final_result)
+
         return final_result, image_url
     
     # save event to memory
     # if memory_id is not None and result:
     #     agentcore_memory.save_conversation_to_memory(memory_id, actor_id, session_id, query, result) 
-
-
 
 async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
     image_url = []
