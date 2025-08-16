@@ -55,6 +55,8 @@ def get_model():
         STOP_SEQUENCE = '"\n\n<thinking>", "\n<thinking>", " <thinking>"'
     elif chat.model_type == 'claude':
         STOP_SEQUENCE = "\n\nHuman:" 
+    elif chat.model_type == 'openai':
+        STOP_SEQUENCE = "" 
 
     if chat.model_type == 'claude':
         maxOutputTokens = 4096 # 4k
@@ -92,7 +94,7 @@ def get_model():
             config=bedrock_config
         )
 
-    if chat.reasoning_mode=='Enable':
+    if chat.reasoning_mode=='Enable' and chat.model_type != 'openai':
         model = BedrockModel(
             client=bedrock_client,
             model_id=chat.model_id,
@@ -106,7 +108,7 @@ def get_model():
                 }
             },
         )
-    else:
+    elif chat.reasoning_mode=='Disable' and chat.model_type != 'openai':
         model = BedrockModel(
             client=bedrock_client,
             model_id=chat.model_id,
@@ -119,6 +121,12 @@ def get_model():
                     "type": "disabled"
                 }
             }
+        )
+    elif chat.model_type == 'openai':
+        model = BedrockModel(
+            model=chat.model_id,
+            region=aws_region,
+            streaming=True
         )
     return model
 

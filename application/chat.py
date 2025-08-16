@@ -321,6 +321,8 @@ def get_chat(extended_thinking):
         STOP_SEQUENCE = '"\n\n<thinking>", "\n<thinking>", " <thinking>"'
     elif profile['model_type'] == 'claude':
         STOP_SEQUENCE = "\n\nHuman:" 
+    elif profile['model_type'] == 'openai':
+        STOP_SEQUENCE = "" 
                           
     # bedrock   
     if aws_access_key and aws_secret_key:
@@ -346,7 +348,8 @@ def get_chat(extended_thinking):
                 }
             )
         )
-    if extended_thinking=='Enable':
+
+    if profile['model_type'] != 'openai' and extended_thinking=='Enable':
         maxReasoningOutputTokens=64000
         logger.info(f"extended_thinking: {extended_thinking}")
         thinking_budget = min(maxOutputTokens, maxReasoningOutputTokens-1000)
@@ -360,7 +363,7 @@ def get_chat(extended_thinking):
             },
             "stop_sequences": [STOP_SEQUENCE]
         }
-    else:
+    elif profile['model_type'] != 'openai' and extended_thinking=='Disable':
         parameters = {
             "max_tokens":maxOutputTokens,     
             "temperature":0.1,
@@ -368,13 +371,20 @@ def get_chat(extended_thinking):
             "top_p":0.9,
             "stop_sequences": [STOP_SEQUENCE]
         }
+    elif profile['model_type'] == 'openai':
+        parameters = {
+            "max_tokens":maxOutputTokens,     
+            "temperature":0.1,
+            "top_k":250,
+            "top_p":0.9,
+        }
 
     chat = ChatBedrock(   # new chat model
         model_id=modelId,
         client=boto3_bedrock, 
         model_kwargs=parameters,
         region_name=bedrock_region
-    )    
+    )
     
     if multi_region=='Enable':
         selected_chat = selected_chat + 1
@@ -594,6 +604,8 @@ def get_parallel_processing_chat(models, selected):
         STOP_SEQUENCE = '"\n\n<thinking>", "\n<thinking>", " <thinking>"'
     elif profile['model_type'] == 'claude':
         STOP_SEQUENCE = "\n\nHuman:" 
+    elif profile['model_type'] == 'openai':
+        STOP_SEQUENCE = "" 
                           
     # bedrock   
     if aws_access_key and aws_secret_key:
@@ -620,20 +632,28 @@ def get_parallel_processing_chat(models, selected):
             )
         )
 
-    parameters = {
-        "max_tokens":maxOutputTokens,     
-        "temperature":0.1,
-        "top_k":250,
-        "top_p":0.9,
-        "stop_sequences": [STOP_SEQUENCE]
-    }
-    # print('parameters: ', parameters)
+    if profile['model_type'] != 'openai':
+        parameters = {
+            "max_tokens":maxOutputTokens,     
+            "temperature":0.1,
+            "top_k":250,
+            "top_p":0.9,
+            "stop_sequences": [STOP_SEQUENCE]
+        }
+    else:
+        parameters = {
+            "max_tokens":maxOutputTokens,     
+            "temperature":0.1,
+            "top_k":250,
+            "top_p":0.9,
+        }
 
     chat = ChatBedrock(   # new chat model
         model_id=modelId,
         client=boto3_bedrock, 
         model_kwargs=parameters,
     )        
+    
     return chat
 
 def print_doc(i, doc):

@@ -191,6 +191,22 @@ claude_3_5_haiku_models = [   # Haiku 3.5
     }
 ]
 
+openai_oss_120b_models = [
+    {
+        "bedrock_region": "us-west-2", # Oregon
+        "model_type": "openai",
+        "model_id": "openai.gpt-oss-120b-1:0"
+    }
+]
+
+openai_oss_20b_models = [
+    {
+        "bedrock_region": "us-west-2", # Oregon
+        "model_type": "openai",
+        "model_id": "openai.gpt-oss-20b-1:0"
+    }
+]
+
 def get_model_info(model_name):
     models = []
 
@@ -214,6 +230,10 @@ def get_model_info(model_name):
         models = claude_4_sonnet_models
     elif model_name == "Nova Premier":
         models = nova_premier
+    elif model_name == "OpenAI OSS 120B":
+        models = openai_oss_120b_models
+    elif model_name == "OpenAI OSS 20B":
+        models = openai_oss_20b_models
 
     return models
 

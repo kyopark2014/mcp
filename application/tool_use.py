@@ -7,7 +7,7 @@ import datetime
 import knowledge_base as kb
 import chat
 import utils
-import search
+import search as search_module
 import base64
 import uuid
 import yfinance as yf
@@ -286,7 +286,7 @@ def search_by_tavily(keyword: str) -> str:
     answer = ""
     
     keyword = keyword.replace('\'','')
-    relevant_documents = search.retrieve_documents_from_tavily(keyword, top_k=3)
+    relevant_documents = search_module.retrieve_documents_from_tavily(keyword, top_k=3)
     # logger.info(f"--> {len(relevant_documents)} docs from tavily")
 
     # grade  
