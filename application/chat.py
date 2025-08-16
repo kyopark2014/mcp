@@ -12,7 +12,7 @@ import utils
 import strands_agent
 import langgraph_agent
 import mcp_config
-import urllib3
+import agentcore_memory
 
 from io import BytesIO
 from PIL import Image
@@ -1657,32 +1657,32 @@ async def run_strands_agent(query, mcp_servers, history_mode, containers):
     image_url = []
     references = []
 
-    # # initate memory variables
-    # memory_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables(chat.user_id)
-    # logger.info(f"memory_id: {memory_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
+    # initate memory variables
+    memory_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables(user_id)
+    logger.info(f"memory_id: {memory_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
 
-    # if memory_id is None:
-    #     # retrieve memory id
-    #     memory_id = agentcore_memory.retrieve_memory_id()
-    #     logger.info(f"memory_id: {memory_id}")        
+    if memory_id is None:
+        # retrieve memory id
+        memory_id = agentcore_memory.retrieve_memory_id()
+        logger.info(f"memory_id: {memory_id}")        
         
-    #     # create memory if not exists
-    #     if memory_id is None:
-    #         logger.info(f"Memory will be created...")
-    #         memory_id = agentcore_memory.create_memory(namespace)
-    #         logger.info(f"Memory was created... {memory_id}")
+        # create memory if not exists
+        if memory_id is None:
+            logger.info(f"Memory will be created...")
+            memory_id = agentcore_memory.create_memory(namespace)
+            logger.info(f"Memory was created... {memory_id}")
         
-    #     # create strategy if not exists
-    #     agentcore_memory.create_strategy_if_not_exists(
-    #         memory_id=memory_id, namespace=namespace, strategy_name=chat.user_id)
+        # create strategy if not exists
+        agentcore_memory.create_strategy_if_not_exists(
+            memory_id=memory_id, namespace=namespace, strategy_name=user_id)
 
-    #     # save memory variables
-    #     agentcore_memory.update_memory_variables(
-    #         user_id=chat.user_id, 
-    #         memory_id=memory_id, 
-    #         actor_id=actor_id, 
-    #         session_id=session_id, 
-    #         namespace=namespace)
+        # save memory variables
+        agentcore_memory.update_memory_variables(
+            user_id=user_id, 
+            memory_id=memory_id, 
+            actor_id=actor_id, 
+            session_id=session_id, 
+            namespace=namespace)
     
     # initiate agent
     await strands_agent.initiate_agent(
@@ -1694,10 +1694,10 @@ async def run_strands_agent(query, mcp_servers, history_mode, containers):
     logger.info(f"tool_list: {tool_list}")    
 
     # run agent    
+    final_result = current = ""
     with strands_agent.mcp_manager.get_active_clients(mcp_servers) as _:
         agent_stream = strands_agent.agent.stream_async(query)
-
-        final_result = current = ""
+        
         async for event in agent_stream:
             text = ""            
             if "data" in event:
@@ -1780,41 +1780,41 @@ async def run_strands_agent(query, mcp_servers, history_mode, containers):
         if containers is not None:
             containers['notification'][index].markdown(final_result)
 
-        return final_result, image_url
-    
     # save event to memory
-    # if memory_id is not None and result:
-    #     agentcore_memory.save_conversation_to_memory(memory_id, actor_id, session_id, query, result) 
+    if memory_id is not None and result:
+        agentcore_memory.save_conversation_to_memory(memory_id, actor_id, session_id, query, result) 
+    
+    return final_result, image_url
 
 async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
     image_url = []
     references = []
 
     # initate memory variables    
-    # memory_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables(user_id)
-    # logger.info(f"memory_id: {memory_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
+    memory_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables(user_id)
+    logger.info(f"memory_id: {memory_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
 
-    # if memory_id is None:
-    #     # retrieve memory id
-    #     memory_id = agentcore_memory.retrieve_memory_id()
-    #     logger.info(f"memory_id: {memory_id}")        
+    if memory_id is None:
+        # retrieve memory id
+        memory_id = agentcore_memory.retrieve_memory_id()
+        logger.info(f"memory_id: {memory_id}")        
         
-    #     # create memory if not exists
-    #     if memory_id is None:
-    #         logger.info(f"Memory will be created...")
-    #         memory_id = agentcore_memory.create_memory(namespace)
-    #         logger.info(f"Memory was created... {memory_id}")
+        # create memory if not exists
+        if memory_id is None:
+            logger.info(f"Memory will be created...")
+            memory_id = agentcore_memory.create_memory(namespace)
+            logger.info(f"Memory was created... {memory_id}")
         
-    #     # create strategy if not exists
-    #     agentcore_memory.create_strategy_if_not_exists(memory_id=memory_id, namespace=namespace, strategy_name=user_id)
+        # create strategy if not exists
+        agentcore_memory.create_strategy_if_not_exists(memory_id=memory_id, namespace=namespace, strategy_name=user_id)
 
-    #     # save memory variables
-    #     agentcore_memory.update_memory_variables(
-    #         user_id=user_id, 
-    #         memory_id=memory_id, 
-    #         actor_id=actor_id, 
-    #         session_id=session_id, 
-    #         namespace=namespace)
+        # save memory variables
+        agentcore_memory.update_memory_variables(
+            user_id=user_id, 
+            memory_id=memory_id, 
+            actor_id=actor_id, 
+            session_id=session_id, 
+            namespace=namespace)
 
     mcp_json = mcp_config.load_selected_config(mcp_servers)
     logger.info(f"mcp_json: {mcp_json}")
@@ -1918,4 +1918,8 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
     if containers is not None:
         containers['notification'][index].markdown(result)
 
+    # save event to memory
+    if memory_id is not None and result:
+        agentcore_memory.save_conversation_to_memory(memory_id, actor_id, session_id, query, result) 
+    
     return result, image_url
