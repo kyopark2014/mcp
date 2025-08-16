@@ -501,16 +501,19 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                 }
 
                 if agentType == "langgraph":
-                    # response, image_url = asyncio.run(langgraph_agent.run_agent(prompt, mcp_servers, history_mode, containers))    
-                    response, image_url = asyncio.run(chat.run_langgraph_agent(prompt, mcp_servers, history_mode, containers))
+                    response, image_url = asyncio.run(chat.run_langgraph_agent(
+                        query=prompt, 
+                        mcp_servers=mcp_servers, 
+                        history_mode=history_mode, 
+                        containers=containers))
 
                 else:
-                    # response, image_url = asyncio.run(strands.run_agent(prompt, [], mcp_servers, history_mode, containers))
-                    response, image_url = asyncio.run(chat.run_strands_agent(prompt, mcp_servers, history_mode, containers))
-
-            # if langgraph_agent.response_msg:
-            #     with st.expander("### 수행 결과", expanded=False):
-            #         st.info('\n\n'.join(langgraph_agent.response_msg))
+                    response, image_url = asyncio.run(chat.run_strands_agent(
+                        query=prompt, 
+                        strands_tools=[], 
+                        mcp_servers=mcp_servers, 
+                        history_mode=history_mode, 
+                        containers=containers))
         
             st.session_state.messages.append({
                 "role": "assistant", 

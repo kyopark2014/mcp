@@ -1649,7 +1649,7 @@ tool_info_list = dict()
 tool_result_list = dict()
 tool_name_list = dict()
 
-async def run_strands_agent(query, mcp_servers, history_mode, containers):
+async def run_strands_agent(query, strands_tools, mcp_servers, history_mode, containers):
     global tool_list, index
     tool_list = []
     index = 0
@@ -1687,9 +1687,9 @@ async def run_strands_agent(query, mcp_servers, history_mode, containers):
     # initiate agent
     await strands_agent.initiate_agent(
         system_prompt=None, 
-        strands_tools=strands_agent.strands_tools, 
+        strands_tools=strands_tools, 
         mcp_servers=mcp_servers, 
-        historyMode='Disable'
+        historyMode=history_mode
     )
     logger.info(f"tool_list: {tool_list}")    
 
