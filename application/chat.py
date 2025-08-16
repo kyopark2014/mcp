@@ -12,6 +12,7 @@ import utils
 import strands_agent
 import langgraph_agent
 import mcp_config
+import urllib3
 
 from io import BytesIO
 from PIL import Image
@@ -42,13 +43,6 @@ logging.basicConfig(
         logging.StreamHandler(sys.stderr)
     ]
 )
-
-def ignore_urllib3_io_error(exctype, value, traceback):
-    if exctype == ValueError and "I/O operation on closed file" in str(value):
-        return
-    sys.__excepthook__(exctype, value, traceback)
-
-sys.excepthook = ignore_urllib3_io_error
 
 logger = logging.getLogger("chat")
 
@@ -1768,6 +1762,9 @@ async def run_strands_agent(query, mcp_servers, history_mode, containers):
 
 
 async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
+    image_url = []
+    references = []
+
     # initate memory variables    
     # memory_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables(user_id)
     # logger.info(f"memory_id: {memory_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
@@ -1806,13 +1803,22 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
     tool_list = [tool.name for tool in tools]
     logger.info(f"tool_list: {tool_list}")
 
-    app = langgraph_agent.buildChatAgentWithHistory(tools)
-    config = {
-        "recursion_limit": 50,
-        "configurable": {"thread_id": user_id},
-        "tools": tools,
-        "system_prompt": None
-    }
+    if history_mode == "Enable":
+        app = langgraph_agent.buildChatAgentWithHistory(tools)
+        config = {
+            "recursion_limit": 50,
+            "configurable": {"thread_id": user_id},
+            "tools": tools,
+            "system_prompt": None
+        }
+    else:
+        app = langgraph_agent.buildChatAgent(tools)
+        config = {
+            "recursion_limit": 50,
+            "configurable": {"thread_id": user_id},
+            "tools": tools,
+            "system_prompt": None
+        }        
     
     inputs = {
         "messages": [HumanMessage(content=query)]
@@ -1821,7 +1827,7 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
     result = ""
     tool_used = False  # Track if tool was used
     async for output in app.astream(inputs, config, stream_mode="messages"):
-        logger.info(f"output: {output}")
+        # logger.info(f"output: {output}")
 
         # Handle tuple output (message, metadata)
         if isinstance(output, tuple) and len(output) > 0 and isinstance(output[0], AIMessageChunk):
@@ -1831,7 +1837,7 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
                     if isinstance(content_item, dict):
                         if content_item.get('type') == 'text':
                             text_content = content_item.get('text', '')
-                            logger.info(f"text_content: {text_content}")
+                            # logger.info(f"text_content: {text_content}")
                             
                             # If tool was used, start fresh result
                             if tool_used:
@@ -1840,31 +1846,51 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
                             else:
                                 result += text_content
                                 
-                            logger.info(f"result: {result}")
-                    
+                            # logger.info(f"result: {result}")                
                             update_streaming_result(containers, result)
 
                         elif content_item.get('type') == 'tool_use':
                             tool_name = content_item.get('name', '')
-                            toolUseId = content_item.get('id', '')
-                            input = content_item.get('input', {})   
-                            logger.info(f"tool_name: {tool_name}, input: {input}, toolUseId: {toolUseId}")
-
                             if tool_name:
+                                toolUseId = content_item.get('id', '')
+                                input = content_item.get('input', {})   
+                                logger.info(f"tool_name: {tool_name}, input: {input}, toolUseId: {toolUseId}")
                                 add_notification(containers, f"Tool: {tool_name}, Input: {input}")
         
         elif isinstance(output, tuple) and len(output) > 0 and isinstance(output[0], ToolMessage):
             message = output[0]
             logger.info(f"ToolMessage: {message.name}, {message.content}")
+            tool_name = message.name
             toolResult = message.content
             toolUseId = message.tool_call_id
             logger.info(f"toolResult: {toolResult}, toolUseId: {toolUseId}")
             add_notification(containers, f"Tool Result: {toolResult}")
             tool_used = True
+            
+            content, urls, refs = langgraph_agent.get_tool_info(tool_name, toolResult)
+            if refs:
+                for r in refs:
+                    references.append(r)
+                logger.info(f"refs: {refs}")
+            if urls:
+                for url in urls:
+                    image_url.append(url)
+                logger.info(f"urls: {urls}")
+
+            if content:
+                logger.info(f"content: {content}")                
     
     if not result:
         result = "답변을 찾지 못하였습니다."        
     logger.info(f"result: {result}")
 
-    image_url = []
+    if references:
+        ref = "\n\n### Reference\n"
+        for i, reference in enumerate(references):
+            ref += f"{i+1}. [{reference['title']}]({reference['url']}), {reference['content']}...\n"    
+        result += ref
+    
+    if containers is not None:
+        containers['notification'][index].markdown(result)
+
     return result, image_url

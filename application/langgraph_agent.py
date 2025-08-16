@@ -367,30 +367,30 @@ async def call_model(state: State, config):
     tools = config.get("configurable", {}).get("tools", None)
     system_prompt = config.get("configurable", {}).get("system_prompt", None)
     
-    if isinstance(last_message, ToolMessage):
-        tool_name = last_message.name
-        tool_content = last_message.content
-        logger.info(f"tool_name: {tool_name}, content: {tool_content}")
+    # if isinstance(last_message, ToolMessage):
+    #     tool_name = last_message.name
+    #     tool_content = last_message.content
+    #     logger.info(f"tool_name: {tool_name}, content: {tool_content}")
 
-        global references
-        content, urls, refs = get_tool_info(tool_name, tool_content)
-        if refs:
-            for r in refs:
-                references.append(r)
-            logger.info(f"refs: {refs}")
-        if urls:
-            for url in urls:
-                image_url.append(url)
-            logger.info(f"urls: {urls}")
+    #     global references
+    #     content, urls, refs = get_tool_info(tool_name, tool_content)
+    #     if refs:
+    #         for r in refs:
+    #             references.append(r)
+    #         logger.info(f"refs: {refs}")
+    #     if urls:
+    #         for url in urls:
+    #             image_url.append(url)
+    #         logger.info(f"urls: {urls}")
 
-        if content:  # manupulate the output of tool message
-            messages = state["messages"]
-            messages[-1] = ToolMessage(
-                name=tool_name,
-                tool_call_id=last_message.tool_call_id,
-                content=content
-            )
-            state["messages"] = messages
+    #     if content:  # manupulate the output of tool message
+    #         messages = state["messages"]
+    #         messages[-1] = ToolMessage(
+    #             name=tool_name,
+    #             tool_call_id=last_message.tool_call_id,
+    #             content=content
+    #         )
+    #         state["messages"] = messages
 
     if system_prompt:
         system = system_prompt
