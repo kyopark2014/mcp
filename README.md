@@ -152,137 +152,91 @@ def load_mcp_server_parameters():
 from mcp.client.stdio import stdio_client
 from langchain_mcp_adapters.tools import load_mcp_tools
 
-async def mcp_rag_agent_single(query, st):
-    server_params = load_mcp_server_parameters()
+server_params = load_mcp_server_parameters()
 
-    async with stdio_client(server_params) as (read, write):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            tools = await load_mcp_tools(session)
-            with st.status("thinking...", expanded=True, state="running") as status:       
-                agent = create_agent(tools)
-                agent_response = await agent.ainvoke({"messages": query})                
+client = MultiServerMCPClient(server_params)
+tools = await client.get_tools()
 
-                result = agent_response["messages"][-1].content
-            st.markdown(result)
-            st.session_state.messages.append({
-                "role": "assistant", 
-                "content": result
-            })            
-            return result
+app = buildAgent(tools)
+config = {
+    "recursion_limit": 50,
+    "configurable": {"thread_id": user_id},
+    "tools": tools,
+    "system_prompt": None
+}
+
+inputs = {
+    "messages": [HumanMessage(content=query)]
+}
+
+async for output in app.astream(inputs, config):
+    for key, value in output.items():
+        if isinstance(value, dict) and "messages" in value:
+            final_output = value
+
+if final_output and "messages" in final_output and len(final_output["messages"]) > 0:
+    result = final_output["messages"][-1].content
+else:
+    result = "답변을 찾지 못하였습니다."
 ```
 
-MCP client는 아래와 같이 실행합니다. 비동기적으로 실행하기 위해서 asyncio를 이용하였습니다.  이후 사용자가 UI에서 MCP Config를 업데이트하면 정보를 업데이트 할 수 있습니다. 
+여기에서는 아래와 같이 ReAct 방식의 LangGraph agent를 이용합니다.
 
 ```python
-asyncio.run(mcp_rag_agent_single(query, st))
+def call_model(state: State, config):
+    system = (
+        "당신의 이름은 서연이고, 질문에 친근한 방식으로 대답하도록 설계된 대화형 AI입니다."
+        "상황에 맞는 구체적인 세부 정보를 충분히 제공합니다."
+        "모르는 질문을 받으면 솔직히 모른다고 말합니다."
+        "한국어로 답변하세요."
+    )
+    try:
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", system),
+                MessagesPlaceholder(variable_name="messages"),
+            ]
+        )
+        chain = prompt | model                
+        response = chain.invoke(state["messages"])
+    return {"messages": [response]}
+
+def should_continue(state: State) -> Literal["continue", "end"]:
+    messages = state["messages"]    
+    last_message = messages[-1]
+    if isinstance(last_message, AIMessage) and last_message.tool_calls:
+        return "continue"        
+    else:
+        return "end"
+
+def buildAgent(tools):
+    tool_node = ToolNode(tools)
+
+    workflow = StateGraph(State)
+
+    workflow.add_node("agent", call_model)
+    workflow.add_node("action", tool_node)
+    workflow.add_edge(START, "agent")
+    workflow.add_conditional_edges(
+        "agent",
+        should_continue,
+        {
+            "continue": "action",
+            "end": END,
+        },
+    )
+    workflow.add_edge("action", "agent")
+
+    return workflow.compile()
 ```
 
-서버 정보가 여럿인 경우에 [langchain-mcp-adapters](https://github.com/langchain-ai/langchain-mcp-adapters)에서 제공하는 MultiServerMCPClient을 이용합니다. 먼저, 아래와 같이 서버 정보를 가져옵니다. 
+MCP client는 아래와 같이 실행합니다. 비동기적으로 실행하기 위해서 asyncio를 이용하였습니다. 
 
 ```python
-def load_multiple_mcp_server_parameters():
-    mcp_json = json.loads(mcp_config)
-    mcpServers = mcp_json.get("mcpServers")
-
-    server_info = {}
-    if mcpServers is not None:
-        command = ""
-        args = []
-        for server in mcpServers:
-            config = mcpServers.get(server)
-            if "command" in config:
-                command = config["command"]
-            if "args" in config:
-                args = config["args"]
-
-            server_info[server] = {
-                "command": command,
-                "args": args,
-                "transport": "stdio"
-            }
-    return server_info
-```
-
-이후 아래와 같이 MCP server정보와 MultiServerMCPClient로 client를 정의합니다. MCP server로 부터 가져온 tool 정보는 client.get_tools()로 가져와서 agent를 생성할 때에 사용합니다. Single MCP server와 마찬가지로 ainvoke로 실행하여 결과를 얻을 수 있습니다. 
-
-```python
-from langchain_mcp_adapters.client import MultiServerMCPClient
-asyncio.run(mcp_rag_agent_multiple(query, st))
-
-async def mcp_rag_agent_multiple(query, st):
-    server_params = load_multiple_mcp_server_parameters()
-    async with  MultiServerMCPClient(server_params) as client:
-        with st.status("thinking...", expanded=True, state="running") as status:                       
-            tools = client.get_tools()
-            agent = create_agent(tools)
-            response = await agent.ainvoke({"messages": query})
-            result = response["messages"][-1].content
-
-        st.markdown(result)
-        st.session_state.messages.append({
-            "role": "assistant", 
-            "content": result
-        })
-    return result
+asyncio.run(mcp_agent(query, st))
 ```
 
 여기서는 customize가 용이하도록 agent를 정의하였습니다.
-
-```python
-def create_agent(tools):
-    tool_node = ToolNode(tools)
-
-    chatModel = get_chat(extended_thinking="Disable")
-    model = chatModel.bind_tools(tools)
-
-    class State(TypedDict):
-        messages: Annotated[list, add_messages]
-
-    def call_model(state: State, config):
-        system = (
-            "당신의 이름은 서연이고, 질문에 친근한 방식으로 대답하도록 설계된 대화형 AI입니다."
-            "상황에 맞는 구체적인 세부 정보를 충분히 제공합니다."
-            "모르는 질문을 받으면 솔직히 모른다고 말합니다."
-            "한국어로 답변하세요."
-        )
-        try:
-            prompt = ChatPromptTemplate.from_messages(
-                [
-                    ("system", system),
-                    MessagesPlaceholder(variable_name="messages"),
-                ]
-            )
-            chain = prompt | model                
-            response = chain.invoke(state["messages"])
-        return {"messages": [response]}
-
-    def should_continue(state: State) -> Literal["continue", "end"]:
-        messages = state["messages"]    
-        last_message = messages[-1]
-        if isinstance(last_message, AIMessage) and last_message.tool_calls:
-            return "continue"        
-        else:
-            return "end"
-
-    def buildChatAgent():
-        workflow = StateGraph(State)
-        workflow.add_node("agent", call_model)
-        workflow.add_node("action", tool_node)
-        workflow.add_edge(START, "agent")
-        workflow.add_conditional_edges(
-            "agent",
-            should_continue,
-            {
-                "continue": "action",
-                "end": END,
-            },
-        )
-        workflow.add_edge("action", "agent")
-        return workflow.compile() 
-    
-    return buildChatAgent()
-```
 
 ## MCP Servers의 활용
 
