@@ -390,7 +390,7 @@ def load_config(mcp_type):
     elif mcp_type == "arxiv-manual":
         return {
             "mcpServers": {
-                "arxiv-manager": {
+                "arxiv-manual": {
                     "command": "python",
                     "args": [
                         f"{workingDir}/mcp_server_arxiv.py"
@@ -402,7 +402,7 @@ def load_config(mcp_type):
     elif mcp_type == "tavily-search":
         return {
             "mcpServers": {
-                "tavily-manager": {
+                "tavily-search": {
                     "command": "python",
                     "args": [
                         f"{workingDir}/mcp_server_tavily.py"
