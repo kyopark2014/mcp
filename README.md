@@ -14,8 +14,7 @@ MCP(Model Context Protocol)은 생성형 AI application이 외부 데이터를 �
 
 사용자는 자신의 Computer에 설치된 Claude Desktop, Cursor와 같은 AI 도구뿐 아니라 주로 Agent형태로 개발된 어플리케이션을 통해 MCP 서버에 연결할 수 있습니다. MCP server는 MCP client의 요청에 자신이 할수 있는 기능을 capability로 제공하고 client의 요청을 수행합니다. MCP server는 local computer의 파일이나 데이터베이스를 조회할 수 있을뿐 아니라 인터넷에 있는 외부 서버의 API를 이용해 필요한 정보를 조회할 수 있습니다. MCP Client는 Server와 JSON-RPC 2.0 프로토콜을 이용해 연결되는데, stdio나 SSE (Server-Sent Events)을 선택하여, Host의 요청을 MCP에 전달할 수 있고, 응답을 받아서 활용할 수 있습니다.  
 
-<img src="https://github.com/user-attachments/assets/36d2d24c-865b-4b71-b708-5c611ab7785e" width="750">
-
+<img src="https://github.com/user-attachments/assets/31065469-69f0-4ce8-a241-747fc3504e6f" width="750">
 
 MCP의 주요 요소의 정의와 동작은 아래와 같습니다.
 
