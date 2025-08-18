@@ -596,7 +596,12 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                     "status": st.empty(),
                     "notification": [st.empty() for _ in range(500)]
                 }         
-                response, urls = asyncio.run(swarm_agent.run_swarm_agent(prompt, mcp_servers, containers))                                    
+
+                if multiRegion == 'Disable':
+                    response, urls = asyncio.run(swarm_agent.run_swarm_agent(prompt, mcp_servers, containers))                                    
+                else:
+                    response, urls = asyncio.run(swarm_agent.run_swarm_agent_parallel(prompt, mcp_servers, containers))                                    
+                    
                 logger.info(f"response: {response}")
                 st.write(response)
 
