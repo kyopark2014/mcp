@@ -51,6 +51,8 @@ def load_config(mcp_type):
         mcp_type = 'aws-api-mcp-server'
     elif mcp_type == "aws-knowledge":
         mcp_type = 'aws-knowledge-mcp-server'
+    elif mcp_type == "aws ccapi":
+        mcp_type = 'ccapi'
 
     if mcp_type == "basic":
         return {
@@ -421,23 +423,7 @@ def load_config(mcp_type):
                 }
             }
         }
-    
-    elif mcp_type == "use_aws":
-        return {
-            "mcpServers": {
-                "use_aws": {
-                    "command": "python",
-                    "args": [
-                        f"{workingDir}/mcp_server_use_aws.py"
-                    ],
-                    "env": {
-                        "AWS_REGION": aws_region,
-                        "FASTMCP_LOG_LEVEL": "ERROR"
-                    }
-                }
-            }
-        }
-    
+        
     elif mcp_type == "aws_knowledge_base":  # AWS Labs cloudwatch-logs MCP Server
         return {
             "mcpServers": {
@@ -503,6 +489,26 @@ def load_config(mcp_type):
             }
         }
     
+    elif mcp_type == "ccapi":
+        return {
+            "mcpServers": {
+                "awslabs.ccapi-mcp-server": {
+                    "command": "uvx",
+                    "args": [
+                        "awslabs.ccapi-mcp-server@latest"
+                    ],
+                    "env": {
+                        "AWS_PROFILE": "default",
+                        "DEFAULT_TAGS": "enabled",
+                        "SECURITY_SCANNING": "enabled",
+                        "FASTMCP_LOG_LEVEL": "ERROR"
+                    },
+                    "disabled": "false",
+                    "autoApprove": "[]"
+                }
+            }
+        }
+        
     elif mcp_type == "short-term memory":
         return {
             "mcpServers": {

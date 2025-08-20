@@ -2216,6 +2216,7 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
                             update_streaming_result(containers, result)
 
                         elif content_item.get('type') == 'tool_use':
+                            logger.info(f"content_item: {content_item}")
                             tool_name = content_item.get('name', '')
                             if tool_name:
                                 toolUseId = content_item.get('id', '')
