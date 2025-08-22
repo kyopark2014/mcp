@@ -1666,7 +1666,7 @@ def update_tool_notification(containers, tool_index, message):
         containers['notification'][tool_index].info(message)
 
 tool_info_list = dict()
-tool_result_list = dict()
+tool_input_list = dict()
 tool_name_list = dict()
 
 sharing_url = config["sharing_url"] if "sharing_url" in config else None
@@ -2128,6 +2128,9 @@ async def run_strands_agent(query, strands_tools, mcp_servers, history_mode, con
     return final_result, image_url
 
 async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
+    global index
+    index = 0
+
     image_url = []
     references = []
 
@@ -2192,12 +2195,14 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
             
     result = ""
     tool_used = False  # Track if tool was used
+    tool_name = toolUseId = ""
     async for output in app.astream(inputs, config, stream_mode="messages"):
         # logger.info(f"output: {output}")
 
         # Handle tuple output (message, metadata)
         if isinstance(output, tuple) and len(output) > 0 and isinstance(output[0], AIMessageChunk):
-            message = output[0]            
+            message = output[0]    
+            input = {}        
             if isinstance(message.content, list):
                 for content_item in message.content:
                     if isinstance(content_item, dict):
@@ -2216,14 +2221,31 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
                             update_streaming_result(containers, result)
 
                         elif content_item.get('type') == 'tool_use':
-                            logger.info(f"content_item: {content_item}")
-                            tool_name = content_item.get('name', '')
-                            if tool_name:
+                            logger.info(f"content_item: {content_item}")      
+                            if 'id' in content_item and 'name' in content_item:
                                 toolUseId = content_item.get('id', '')
-                                input = content_item.get('input', {})   
-                                logger.info(f"tool_name: {tool_name}, input: {input}, toolUseId: {toolUseId}")
+                                tool_name = content_item.get('name', '')
+                                logger.info(f"tool_name: {tool_name}, toolUseId: {toolUseId}")
                                 add_notification(containers, f"Tool: {tool_name}, Input: {input}")
-        
+
+                                tool_info_list[toolUseId] = index                     
+                                tool_name_list[toolUseId] = tool_name     
+                                                                    
+                            if 'partial_json' in content_item:
+                                partial_json = content_item.get('partial_json', '')
+                                logger.info(f"partial_json: {partial_json}")
+                                
+                                if toolUseId not in tool_input_list:
+                                    tool_input_list[toolUseId] = ""                                
+                                tool_input_list[toolUseId] += partial_json
+                                input = tool_input_list[toolUseId]
+                                logger.info(f"input: {input}")
+
+                                logger.info(f"tool_name: {tool_name}, input: {input}, toolUseId: {toolUseId}")
+                                # add_notification(containers, f"Tool: {tool_name}, Input: {input}")
+                                index = tool_info_list[toolUseId]
+                                containers['notification'][index-1].info(f"Tool: {tool_name}, Input: {input}")
+                        
         elif isinstance(output, tuple) and len(output) > 0 and isinstance(output[0], ToolMessage):
             message = output[0]
             logger.info(f"ToolMessage: {message.name}, {message.content}")
@@ -2245,7 +2267,7 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
                 logger.info(f"urls: {urls}")
 
             if content:
-                logger.info(f"content: {content}")                
+                logger.info(f"content: {content}")        
     
     if not result:
         result = "답변을 찾지 못하였습니다."        
