@@ -183,16 +183,16 @@ with st.sidebar:
             mcp_options = [
                 "basic", "short-term memory", "long-term memory", "tavily-search", "aws-api", "aws-knowledge", "aws document", "aws cost", "aws cli", "aws ccapi",
                 "use_aws", "aws cloudwatch", "aws storage", "image generation", "aws diagram",
-                "repl coder","agentcore coder","knowledge base", "tavily", "perplexity", "ArXiv", "wikipedia", 
+                "repl coder","agentcore coder", "kb-retriever", "knowledge base", "tavily", "perplexity", "ArXiv", "wikipedia", 
                 "filesystem", "terminal", "text editor", "context7", "puppeteer", 
                 "agentcore-browser", "playwright", "firecrawl", "obsidian", "airbnb", 
                 "pubmed", "chembl", "clinicaltrial", "arxiv-manual", "사용자 설정"
             ]
         else:
             mcp_options = [ 
-                "basic", "short-term memory", "long-term memory", "tavily-search", "aws-api", "aws-knowledge", "aws document", "aws cost", "aws cli", "aws ccapi",
+                "basic", "short-term memory", "long-term memory", "tavily-search", "aws-api", "aws-knowledge", "kb-retriever", "aws document", "aws cost", "aws cli", "aws ccapi",
                 "use_aws", "aws cloudwatch", "aws storage", "image generation", "aws diagram",
-                "repl coder", "agentcore coder", "knowledge base", "tavily", "ArXiv", "wikipedia", 
+                "repl coder", "agentcore coder", "kb-retriever", "knowledge base", "tavily", "ArXiv", "wikipedia", 
                 "filesystem", "terminal", "text editor", "agentcore-browser", "playwright", "airbnb",
                 "pubmed", "chembl", "clinicaltrial", "arxiv-manual", "사용자 설정"
             ]

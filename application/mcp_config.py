@@ -53,6 +53,8 @@ def load_config(mcp_type):
         mcp_type = 'aws-knowledge-mcp-server'
     elif mcp_type == "aws ccapi":
         mcp_type = 'ccapi'
+    elif mcp_type == "kb-retriever":
+        mcp_type = 'mcp_server_retrieve'
 
     if mcp_type == "basic":
         return {
@@ -515,6 +517,15 @@ def load_config(mcp_type):
                 "short-term memory": {
                     "command": "python",
                     "args": [f"{workingDir}/mcp_server_short_term_memory.py"]
+                }
+            }
+        }
+    elif mcp_type == "mcp_server_retrieve":
+        return {
+            "mcpServers": {
+                "mcp_server_retrieve": {
+                    "command": "python",
+                    "args": [f"{workingDir}/mcp_server_retrieve.py"]
                 }
             }
         }
