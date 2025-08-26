@@ -6,7 +6,6 @@ import logging
 import sys
 import utils
 import boto3
-import agentcore_memory
 
 from contextlib import contextmanager
 from typing import Dict, List, Optional

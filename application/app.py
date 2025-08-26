@@ -510,7 +510,7 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                 containers = {
                     "tools": st.empty(),
                     "status": st.empty(),
-                    "notification": [st.empty() for _ in range(500)]
+                    "notification": [st.empty() for _ in range(1000)]
                 }
 
                 if agentType == "langgraph":

@@ -2115,7 +2115,8 @@ async def run_strands_agent(query, strands_tools, mcp_servers, history_mode, con
         if references:
             ref = "\n\n### Reference\n"
             for i, reference in enumerate(references):
-                ref += f"{i+1}. [{reference['title']}]({reference['url']}), {reference['content']}...\n"    
+                content = reference['content'][:100].replace("\n", "")
+                ref += f"{i+1}. [{reference['title']}]({reference['url']}), {content}...\n"    
             final_result += ref
 
         if containers is not None:
@@ -2286,7 +2287,8 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
     if references:
         ref = "\n\n### Reference\n"
         for i, reference in enumerate(references):
-            ref += f"{i+1}. [{reference['title']}]({reference['url']}), {reference['content']}...\n"    
+            page_content = reference['content'][:100].replace("\n", "")
+            ref += f"{i+1}. [{reference['title']}]({reference['url']}), {page_content}...\n"    
         result += ref
     
     if containers is not None:

@@ -1,4 +1,3 @@
-import chat
 import logging
 import sys
 import utils
