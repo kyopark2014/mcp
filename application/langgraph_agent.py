@@ -71,6 +71,12 @@ async def call_model(state: State, config):
     # Use reasoning_mode with fallback to default
     reasoning_mode = getattr(chat, 'reasoning_mode', 'Disable')
     chatModel = chat.get_chat(extended_thinking=reasoning_mode)
+    
+    # Ensure tools is not None before binding
+    if tools is None:
+        logger.warning("tools is None, using empty list")
+        tools = []
+    
     model = chatModel.bind_tools(tools)
 
     try:
@@ -163,27 +169,23 @@ def load_multiple_mcp_server_parameters(mcp_json: dict):
   
     server_info = {}
     if mcpServers is not None:
-        command = ""
-        args = []
-        for server in mcpServers:
-            config = mcpServers.get(server)
-            if "command" in config:
-                command = config["command"]
-            if "args" in config:
-                args = config["args"]
-            if "env" in config:
-                env = config["env"]
-                server_info[server] = {
-                    "command": command,
-                    "args": args,
-                    "env": env,
-                    "transport": "stdio"
+        for server_name, config in mcpServers.items():
+            if config.get("type") == "streamable_http":
+                server_info[server_name] = {                    
+                    "transport": "streamable_http",
+                    "url": config.get("url"),
+                    "headers": config.get("headers", {})
                 }
             else:
-                server_info[server] = {
+                command = config.get("command", "")
+                args = config.get("args", [])
+                env = config.get("env", {})
+                
+                server_info[server_name] = {
+                    "transport": "stdio",
                     "command": command,
                     "args": args,
-                    "transport": "stdio"
+                    "env": env                    
                 }
     return server_info
 
