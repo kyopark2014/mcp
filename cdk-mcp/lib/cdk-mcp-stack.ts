@@ -723,6 +723,14 @@ export class CdkMcpStack extends cdk.Stack {
       "s3_arn": s3Bucket.bucketArn,
       "sharing_url": 'https://'+distribution.domainName,
       "agentcore_memory_role": agentcore_memory_role.roleArn,
+      "cognito": {
+        "client_id": "",
+        "client_name": "mcp-agentcore-client",
+        "region": region,
+        "test_username": "mcp-test-user@example.com",
+        "test_password": "TestPassword123!"
+      },
+      "secret_name": `${projectName}/credentials`
     }    
     new cdk.CfnOutput(this, `environment-for-${projectName}`, {
       value: JSON.stringify(environment),

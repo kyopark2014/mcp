@@ -1,6 +1,5 @@
 import logging
 import sys
-import json
 import traceback
 import chat
 import utils

@@ -2,6 +2,8 @@ import logging
 import sys
 import utils
 import os
+import boto3
+import json
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -15,12 +17,145 @@ logger = logging.getLogger("mcp-config")
 config = utils.load_config()
 print(f"config: {config}")
 
-aws_region = config["region"] if "region" in config else "us-west-2"
+region = config["region"] if "region" in config else "us-west-2"
 projectName = config["projectName"] if "projectName" in config else "mcp"
 workingDir = os.path.dirname(os.path.abspath(__file__))
 logger.info(f"workingDir: {workingDir}")
 
+def get_bearer_token(secret_name):
+    try:
+        session = boto3.Session()
+        client = session.client('secretsmanager', region_name=region)
+        response = client.get_secret_value(SecretId=secret_name)
+        bearer_token_raw = response['SecretString']
+        
+        token_data = json.loads(bearer_token_raw)        
+        if 'bearer_token' in token_data:
+            bearer_token = token_data['bearer_token']
+            return bearer_token
+        else:
+            print("No bearer token found in secret manager")
+            return None
+    
+    except Exception as e:
+        print(f"Error getting stored token: {e}")
+        return None
+
+def save_bearer_token(secret_name, bearer_token):
+    try:        
+        session = boto3.Session()
+        client = session.client('secretsmanager', region_name=region)
+        
+        # Create secret value with bearer_key 
+        secret_value = {
+            "bearer_key": "mcp_server_bearer_token",
+            "bearer_token": bearer_token
+        }
+        
+        # Convert to JSON string
+        secret_string = json.dumps(secret_value)
+        
+        # Check if secret already exists
+        try:
+            client.describe_secret(SecretId=secret_name)
+            # Secret exists, update it
+            client.put_secret_value(
+                SecretId=secret_name,
+                SecretString=secret_string
+            )
+            print(f"Bearer token updated in secret manager with key: {secret_value['bearer_key']}")
+        except client.exceptions.ResourceNotFoundException:
+            # Secret doesn't exist, create it
+            client.create_secret(
+                Name=secret_name,
+                SecretString=secret_string,
+                Description="MCP Server Cognito credentials with bearer key and token"
+            )
+            print(f"Bearer token created in secret manager with key: {secret_value['bearer_key']}")
+            
+    except Exception as e:
+        print(f"Error saving bearer token: {e}")
+        # Continue execution even if saving fails
+
+def create_cognito_bearer_token(config):
+    """Get a fresh bearer token from Cognito"""
+    try:
+        cognito_config = config['cognito']
+        region = cognito_config['region']
+        username = cognito_config['test_username']
+        password = cognito_config['test_password']
+
+        client_id = cognito_config['client_id']
+        if not client_id: # search client_id
+            client_name = cognito_config['client_name']
+            cognito_client = boto3.client('cognito-idp', region_name=region)
+            try:
+                response = cognito_client.list_user_pools(MaxResults=10)
+                for pool in response['UserPools']:
+                    print(f"Existing User Pool found: {pool['Id']}")
+                    user_pool_id = pool['Id']
+
+                    client_response = cognito_client.list_user_pool_clients(UserPoolId=user_pool_id)
+                    for client in client_response['UserPoolClients']:
+                        if client['ClientName'] == client_name:
+                            client_id = client['ClientId']
+                            print(f"Existing App client found: {client_id}")
+
+                            # Update config.json with client_id
+                            try:
+                                config['cognito']['client_id'] = client_id
+                                config_file = "config.json"
+                                with open(config_file, "w") as f:
+                                    json.dump(config, f, indent=2)
+                                print(f"Client ID updated in config.json: {client_id}")
+                            except Exception as e:
+                                print(f"Warning: Failed to update config.json with client_id: {e}")
+            except Exception as e:
+                logger.error(f"Failed to check User Pool list: {e}")
+        
+        # Create Cognito client
+        client = boto3.client('cognito-idp', region_name=region)
+        
+        # Authenticate and get tokens
+        response = client.initiate_auth(
+            ClientId=client_id,
+            AuthFlow='USER_PASSWORD_AUTH',
+            AuthParameters={
+                'USERNAME': username,
+                'PASSWORD': password
+            }
+        )
+        
+        auth_result = response['AuthenticationResult']
+        access_token = auth_result['AccessToken']
+        # id_token = auth_result['IdToken']
+        
+        print("Successfully obtained fresh Cognito tokens")
+        return access_token
+        
+    except Exception as e:
+        print(f"Error getting Cognito token: {e}")
+        return None
+
 mcp_user_config = {}    
+
+def get_agent_runtime_arn(mcp_type: str):
+    #logger.info(f"mcp_type: {mcp_type}")
+    agent_runtime_name = f"{projectName.lower()}_{mcp_type.replace('-', '_')}"
+    logger.info(f"agent_runtime_name: {agent_runtime_name}")
+    client = boto3.client('bedrock-agentcore-control', region_name=region)
+    response = client.list_agent_runtimes(
+        maxResults=100
+    )
+    logger.info(f"response: {response}")
+    
+    agentRuntimes = response['agentRuntimes']
+    for agentRuntime in agentRuntimes:
+        if agentRuntime["agentRuntimeName"] == agent_runtime_name:
+            logger.info(f"agent_runtime_name: {agent_runtime_name}, agentRuntimeArn: {agentRuntime["agentRuntimeArn"]}")
+            return agentRuntime["agentRuntimeArn"]
+    return None
+
 def load_config(mcp_type):
     if mcp_type == "image generation":
         mcp_type = 'image_generation'
@@ -52,8 +187,10 @@ def load_config(mcp_type):
         mcp_type = 'aws-knowledge-mcp-server'
     elif mcp_type == "aws ccapi":
         mcp_type = 'ccapi'
-    elif mcp_type == "kb-retriever":
-        mcp_type = 'mcp_server_retrieve'
+    elif mcp_type == "use_aws (remote)":
+        mcp_type = "use_aws"
+    elif mcp_type == "kb-retriever (remote)":        
+        mcp_type = "kb-retriever"
 
     if mcp_type == "basic":
         return {
@@ -66,6 +203,101 @@ def load_config(mcp_type):
                 }
             }
         }
+    
+    elif mcp_type == "use_aws (local)":
+        return {
+            "mcpServers": {
+                "use_aws": {
+                    "command": "python",
+                    "args": [
+                        f"{workingDir}/mcp_server_use_aws.py"
+                    ]
+                }
+            }
+        }
+    
+    elif mcp_type == "use_aws":
+        agent_arn = get_agent_runtime_arn(mcp_type)
+        logger.info(f"mcp_type: {mcp_type}, agent_arn: {agent_arn}")
+        encoded_arn = agent_arn.replace(':', '%3A').replace('/', '%2F')
+
+        secret_name = config['secret_name']
+        bearer_token = get_bearer_token(secret_name)
+        logger.info(f"Bearer token from secret manager: {bearer_token[:100] if bearer_token else 'None'}...")
+
+        if not bearer_token:    
+            # Try to get fresh bearer token from Cognito
+            print("No bearer token found in secret manager, getting fresh bearer token from Cognito...")
+            bearer_token = create_cognito_bearer_token(config)
+            print(f"Bearer token from cognito: {bearer_token[:100] if bearer_token else 'None'}...")
+            
+            if bearer_token:
+                secret_name = config['secret_name']
+                save_bearer_token(secret_name, bearer_token)
+            else:
+                print("Failed to get bearer token from Cognito. Exiting.")
+                return {}
+
+        return {
+            "mcpServers": {
+                "use_aws": {
+                    "type": "streamable_http",
+                    "url": f"https://bedrock-agentcore.{region}.amazonaws.com/runtimes/{encoded_arn}/invocations?qualifier=DEFAULT",
+                    "headers": {
+                        "Authorization": f"Bearer {bearer_token}",
+                        "Content-Type": "application/json",
+                        "Accept": "application/json, text/event-stream"
+                    }
+                }
+            }
+        }
+    
+    elif mcp_type == "kb-retriever (local)":
+        return {
+            "mcpServers": {
+                "kb_retriever": {
+                    "command": "python",
+                    "args": [f"{workingDir}/mcp_server_retrieve.py"]
+                }
+            }
+        }
+    
+    elif mcp_type == "kb-retriever":
+        agent_arn = get_agent_runtime_arn(mcp_type)
+        logger.info(f"mcp_type: {mcp_type}, agent_arn: {agent_arn}")
+        encoded_arn = agent_arn.replace(':', '%3A').replace('/', '%2F')
+
+        secret_name = config['secret_name']
+        bearer_token = get_bearer_token(secret_name)
+        logger.info(f"Bearer token from secret manager: {bearer_token[:100] if bearer_token else 'None'}...")
+
+        if not bearer_token:    
+            # Try to get fresh bearer token from Cognito
+            print("No bearer token found in secret manager, getting fresh bearer token from Cognito...")
+            bearer_token = create_cognito_bearer_token(config)
+            print(f"Bearer token from cognito: {bearer_token[:100] if bearer_token else 'None'}...")
+            
+            if bearer_token:
+                secret_name = config['secret_name']
+                save_bearer_token(secret_name, bearer_token)
+            else:
+                print("Failed to get bearer token from Cognito. Exiting.")
+                return {}
+
+        return {
+            "mcpServers": {
+                "kb-retriever": {
+                    "type": "streamable_http",
+                    "url": f"https://bedrock-agentcore.{region}.amazonaws.com/runtimes/{encoded_arn}/invocations?qualifier=DEFAULT",
+                    "headers": {
+                        "Authorization": f"Bearer {bearer_token}",
+                        "Content-Type": "application/json",
+                        "Accept": "application/json, text/event-stream"
+                    }
+                }
+            }
+        }
+
     elif mcp_type == "image_generation":
         return {
             "mcpServers": {
@@ -163,7 +395,7 @@ def load_config(mcp_type):
                         f"{workingDir}/mcp_server_aws_log.py"
                     ],
                     "env": {
-                        "AWS_REGION": aws_region,
+                        "region": region,
                         "FASTMCP_LOG_LEVEL": "ERROR"
                     }
                 }
@@ -413,17 +645,6 @@ def load_config(mcp_type):
                 }
             }
         }
-    elif mcp_type == "use_aws":
-        return {
-            "mcpServers": {
-                "use_aws": {
-                    "command": "python",
-                    "args": [
-                        f"{workingDir}/mcp_server_use_aws.py"
-                    ]
-                }
-            }
-        }
         
     elif mcp_type == "aws_knowledge_base":  # AWS Labs cloudwatch-logs MCP Server
         return {
@@ -449,7 +670,7 @@ def load_config(mcp_type):
                         "awslabs.aws-api-mcp-server@latest"
                     ],
                     "env": {
-                        "AWS_REGION": aws_region,
+                        "region": region,
                         "AWS_API_MCP_WORKING_DIR": workingDir
                     }
                 }
@@ -518,16 +739,7 @@ def load_config(mcp_type):
                     "args": [f"{workingDir}/mcp_server_short_term_memory.py"]
                 }
             }
-        }
-    elif mcp_type == "mcp_server_retrieve":
-        return {
-            "mcpServers": {
-                "mcp_server_retrieve": {
-                    "command": "python",
-                    "args": [f"{workingDir}/mcp_server_retrieve.py"]
-                }
-            }
-        }
+        }    
     
     elif mcp_type == "사용자 설정":
         return mcp_user_config
