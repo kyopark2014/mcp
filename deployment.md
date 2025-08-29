@@ -84,6 +84,14 @@ sudo ./aws/install
 ```java
 cdk deploy --require-approval never --all
 ```
+
+만약 arm64 계열의 MAC에서 빌드한다면, 아래와 같이 platform을 추가합니다.
+
+```python
+export CDK_DOCKER_BUILD_ARGS=\"--platform linux/amd64\"
+cd cdk-mcp && cdk deploy --all --require-approval never
+```
+
 인프라가 설치가 되면 아래와 같은 Output을 확인할 수 있습니다. 
 
 ![image](https://github.com/user-attachments/assets/05a74dcb-89ea-4e7e-9f6c-d58799c26d6f)
