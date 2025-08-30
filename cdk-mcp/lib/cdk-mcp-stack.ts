@@ -711,21 +711,6 @@ export class CdkMcpStack extends cdk.Stack {
     });
     lambdaKnowledgeBase.grantInvoke(new cdk.aws_iam.ServicePrincipal("bedrock.amazonaws.com"));     
 
-    // lambda-kb-retriever
-    const lambdaKbRetriever = new lambda.Function(this, `lambda-kb-retriever-for-${projectName}`, {
-      description: 'RAG based on Knoeledge Base using retriever',
-      functionName: `lambda-kb-retriever-for-${projectName}`,
-      code: lambda.Code.fromAsset(path.join(__dirname, '../../lambda-kb-retriever')),
-      handler: 'lambda_function.lambda_handler',
-      runtime: lambda.Runtime.PYTHON_3_12,
-      timeout: cdk.Duration.seconds(60),
-      role: roleLambdaRag,
-      environment: {
-        projectName: projectName,
-      }
-    });
-    lambdaKbRetriever.grantInvoke(new cdk.aws_iam.ServicePrincipal("bedrock.amazonaws.com"));   
-    
     const userData = ec2.UserData.forLinux();
     const environment = {
       "projectName": projectName,
@@ -737,15 +722,7 @@ export class CdkMcpStack extends cdk.Stack {
       "s3_bucket": s3Bucket.bucketName,      
       "s3_arn": s3Bucket.bucketArn,
       "sharing_url": 'https://'+distribution.domainName,
-      "agentcore_memory_role": agentcore_memory_role.roleArn,
-      "cognito": {
-        "client_id": "",
-        "client_name": "mcp-agentcore-client",
-        "region": region,
-        "test_username": "mcp-test-user@example.com",
-        "test_password": "TestPassword123!"
-      },
-      "secret_name": `${projectName}/credentials`
+      "agentcore_memory_role": agentcore_memory_role.roleArn
     }    
     new cdk.CfnOutput(this, `environment-for-${projectName}`, {
       value: JSON.stringify(environment),
