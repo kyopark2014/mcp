@@ -16,21 +16,72 @@ config = load_config()
 current_path = os.path.basename(script_dir)
 current_folder_name = current_path.split('/')[-1]
 targetname = current_folder_name
+projectName = config.get('projectName')
+region = config.get('region')
 
-cognito_config = config['cognito']
-region = cognito_config['region']
-client_id = cognito_config['client_id']
-username = cognito_config['test_username']
-password = cognito_config['test_password']
-user_pool_id = config['cognito']['user_pool_id']
+def get_cognito_config(cognito_config):    
+    user_pool_name = cognito_config.get('user_pool_name')
+    if not user_pool_name:        
+        user_pool_name = projectName + '-agentcore-user-pool'
+        print(f"No user pool name found in config, using default user pool name: {user_pool_name}")
+        cognito_config.setdefault('user_pool_name', user_pool_name)
 
-lambda_function_arn = config['lambda_function_arn']
+        cognito_client = boto3.client('cognito-idp', region_name=region)
+        response = cognito_client.list_user_pools(MaxResults=60)
+        for pool in response['UserPools']:
+            if pool['Name'] == user_pool_name:
+                user_pool_id = pool['Id']
+                print(f"Found cognito user pool: {user_pool_id}")
+                break
+        cognito_config['user_pool_id'] = user_pool_id
+
+    client_name = cognito_config.get('client_name')
+    if not client_name:        
+        client_name = f"{projectName}-agentcore-client"
+        print(f"No client name found in config, using default client name: {client_name}")
+        cognito_config['client_name'] = client_name
+
+    client_id = cognito_config.get('client_id')
+    if not client_id:
+        response = cognito_client.list_user_pool_clients(UserPoolId=user_pool_id)
+        for client in response['UserPoolClients']:
+            if client['ClientName'] == client_name:
+                client_id = client['ClientId']
+                print(f"Found cognito client: {client_id}")
+                break
+        cognito_config['client_id'] = client_id        
+        
+    username = cognito_config.get('test_username')
+    password = cognito_config.get('test_password')
+    if not username or not password:
+        print("No test username found in config, using default username and password. Please check config.json and update the test username and password.")
+        username = f"{projectName}-test-user@example.com"
+        password = "TestPassword123!"        
+    cognito_config['test_username'] = username
+    cognito_config['test_password'] = password
+
+    with open(config_path, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2)
+
+    return cognito_config
+
+# get config of cognito
+cognito_config = config.get('cognito', {})
+if not cognito_config:
+    cognito_config = get_cognito_config(cognito_config)
+    config['cognito'] = cognito_config
+
+# load variables from cognito_config
+client_id = cognito_config.get('client_id')
+user_pool_id = cognito_config.get('user_pool_id')
+username = cognito_config.get('test_username')
+password = cognito_config.get('test_password')
+
+lambda_function_arn = config.get('lambda_function_arn')
 if not lambda_function_arn:
-    # get current folder name
-    
     lambda_function_name = 'lambda-' + current_folder_name + '-for-' + config['projectName']
-
-    # lambda list에서 lambda_function_name의 arn을 찾기
+    print(f"No lambda function arn found in config, using default lambda function name: {lambda_function_name}")
+    
     lambda_client = boto3.client('lambda', region_name=region)
     response = lambda_client.list_functions()
     for function in response['Functions']:
@@ -125,7 +176,14 @@ def save_bearer_token(secret_name, bearer_token):
 
 def main():
     print("1. Getting bearer token...")       
-    secret_name = config['secret_name']
+    secret_name = config.get('secret_name')
+    if not secret_name:
+        secret_name = f'{projectName}/credentials'
+        print(f"No secret name found in config, using default secret name: {secret_name}")
+        config['secret_name'] = secret_name
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2)
+    
     bearer_token = get_bearer_token(secret_name)
     print(f"Bearer token from secret manager: {bearer_token if bearer_token else 'None'}")
 
@@ -141,20 +199,38 @@ def main():
             print("Failed to get bearer token from Cognito. Exiting.")
             return {}
 
-    gateway_client = boto3.client('bedrock-agentcore-control', region_name = region)
-
+    print("2. Getting or creating gateway...")
+    gateway_client = boto3.client('bedrock-agentcore-control', region_name=region)
+    
     cognito_discovery_url = f'https://cognito-idp.{region}.amazonaws.com/{user_pool_id}/.well-known/openid-configuration'
     print(f"Cognito discovery URL: {cognito_discovery_url}")
 
     # CreateGateway with Cognito authorizer without CMK. Use the Cognito user pool created in the previous step
     gateway_client = boto3.client('bedrock-agentcore-control', region_name=region)
 
-    gateway_name = config['projectName'] + '-kb-retriever'
-    gateway_id = config['gateway_id']
-    gateway_url = config['gateway_url']
-    print(f"gateway_id: {gateway_id}, gateway_url: {gateway_url}")
+    gateway_name = config.get('gateway_name')
+    if not gateway_name:
+        gateway_name = config['projectName'] + '-kb-retriever'
+        print(f"No gateway name found in config, using default gateway name: {gateway_name}")
+        config['gateway_name'] = gateway_name
 
-    print("2. Getting or creating gateway...")
+    gateway_id = config.get('gateway_id')    
+    if not gateway_id:
+        response = gateway_client.list_gateways(maxResults=60)
+        for gateway in response['items']:
+            if gateway['name'] == gateway_name:
+                print(f"gateway: {gateway}")
+                gateway_id = gateway.get('gatewayId')
+                config['gateway_id'] = gateway_id
+                break
+    
+    gateway_url = config.get('gateway_url')
+    if not gateway_url:
+        gateway_url = f'https://{gateway_name}.gateway.bedrock-agentcore.{region}.amazonaws.com/mcp'
+        print(f"gateway url: {gateway_url}")
+        config['gateway_url'] = gateway_url
+
+    # create gateway if not exists
     if not gateway_id or not gateway_url:
         print("Creating gateway...")
         agentcore_gateway_iam_role = config['agentcore_gateway_iam_role']
@@ -189,18 +265,18 @@ def main():
     
     print("3. Getting or creating lambda target...")
 
-    target_id = config.get('target_id', "")
+    target_id = config.get('target_id')
     if not target_id:
         response = gateway_client.list_gateway_targets(
             gatewayIdentifier=gateway_id,
-            maxResults=100
+            maxResults=60
         )
         print(f"response: {response}")
 
         target_id = None
         for target in response['items']:
             if target['name'] == targetname:
-                print(f"Target already exists: {targetname}, {target['targetId']}")
+                print(f"Target already exists.")
                 target_id = target['targetId']
                 break
 
