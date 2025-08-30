@@ -1,5 +1,0 @@
-aws bedrock-agentcore retrieve-memory-records \
-    --memory-id "mcp-w4Wd0tBc5g" \
-    --namespace "/users/langgraph" \
-    --search-criteria '{"topK":100, "searchQuery":"이메일 주소"}' \
-    --max-results 20
