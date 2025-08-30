@@ -7,6 +7,19 @@ import requests
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 
+import logging
+import sys
+
+logging.basicConfig(
+    level=logging.INFO,  # Default to INFO level
+    format='%(filename)s:%(lineno)d | %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stderr)
+    ]
+)
+logger = logging.getLogger("test_mcp_remote")
+
+
 def load_config():
     config = None
     
@@ -129,8 +142,6 @@ async def main():
             print("Failed to get bearer token from Cognito. Exiting.")
             return
                     
-    # Try different endpoint URLs based on common patterns
-    #mcp_url = f"https://bedrock-agentcore.{region}.amazonaws.com/runtimes/{encoded_arn}/invocations?qualifier=DEFAULT"
     mcp_url = config['gateway_url']
     headers = {
         "Authorization": f"Bearer {bearer_token}",
@@ -177,7 +188,9 @@ async def main():
             if response.status_code == 403 or "Invalid Bearer token" in response.text:
                 print("403 Forbidden - Token may be expired, trying to get fresh token from Cognito...")
                 # Try to get fresh bearer token from Cognito
+                print(f"config: {config}")
                 fresh_bearer_token = create_cognito_bearer_token(config)
+                print(f"refreshed bearer token: {fresh_bearer_token}")
                 if fresh_bearer_token:
                     print("Successfully obtained fresh token, updating headers and retrying...")
                     # Update headers with fresh token
@@ -195,8 +208,7 @@ async def main():
                     )
                     
                     if response.status_code == 200:
-                        print("Success with fresh token!")
-                        print(f"refreshed bearer token: {fresh_bearer_token}")
+                        print("Success with fresh token!")                        
                         successful_url = mcp_url
                         successful_headers = headers
                     else:
@@ -272,7 +284,10 @@ async def main():
                 }
                 
                 try:
-                    result = await asyncio.wait_for(session.call_tool("retrieve", params), timeout=30)
+                    targret_name = config['target_name']
+                    tool_name = f"{targret_name}___retrieve"
+
+                    result = await asyncio.wait_for(session.call_tool(tool_name, params), timeout=30)
                     print(f"retrieve result: {result}")
                     
                     if hasattr(result, 'content') and result.content:

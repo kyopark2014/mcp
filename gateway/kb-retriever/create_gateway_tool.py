@@ -337,7 +337,7 @@ def main():
     
     gateway_url = config.get('gateway_url')
     if not gateway_url:
-        gateway_url = f'https://{gateway_name}.gateway.bedrock-agentcore.{region}.amazonaws.com/mcp'
+        gateway_url = f'https://{gateway_id}.gateway.bedrock-agentcore.{region}.amazonaws.com/mcp'
         print(f"gateway url: {gateway_url}")
         config['gateway_url'] = gateway_url
 

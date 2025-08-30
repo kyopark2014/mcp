@@ -31,7 +31,7 @@ number_of_results = 5
 
 bedrock_agent_runtime_client = boto3.client("bedrock-agent-runtime", region_name=bedrock_region)
 
-def retrieve(query):
+def retrieve(query: str) -> str:
     response = bedrock_agent_runtime_client.retrieve(
         retrievalQuery={"text": query},
         knowledgeBaseId=knowledge_base_id,

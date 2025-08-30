@@ -35,7 +35,7 @@ if accountId is None:
     config['accountId'] = accountId
     with open(config_path, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=2)
-
+ 
 projectName = config.get('projectName')
 if not projectName:
     projectName = input("Enter project name: ")
