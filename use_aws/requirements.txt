@@ -1,5 +1,0 @@
-boto3
-mcp
-uv
-rich
-colorama
