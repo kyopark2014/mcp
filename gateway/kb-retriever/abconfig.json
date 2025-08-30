@@ -1,0 +1,22 @@
+{
+  "projectName": "mcp",
+  "region": "us-west-2",
+  "accountId": "262976740991",
+  "lambda_function_arn": "arn:aws:lambda:us-west-2:262976740991:function:lambda-kb-retriever-for-mcp",
+  "lambda_function_name": "",
+  "gateway_name": "",
+  "gateway_id": "mcp-kb-retriever-bdrms3yqvg",
+  "gateway_url": "https://mcp-kb-retriever-bdrms3yqvg.gateway.bedrock-agentcore.us-west-2.amazonaws.com/mcp",
+  "cognito": {
+    "user_pool_id": "us-west-2_xXojNPDue",
+    "client_id": "7tj4i1k2m15hvi5bca7s9kdhcs",
+    "client_name": "mcp-agentcore-client",
+    "region": "us-west-2",
+    "test_username": "mcp-test-user@example.com",
+    "test_password": "TestPassword123!"
+  },
+  "secret_name": "mcp/credentials",
+  "agentcore_gateway_iam_role": "arn:aws:iam::262976740991:role/AgentCoreGatewayRoleFormcp",
+  "target_name": "kb-retriever",
+  "target_id": "ABVZWAINLC"
+}

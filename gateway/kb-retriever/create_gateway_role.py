@@ -7,25 +7,41 @@ config_path = os.path.join(script_dir, "config.json")
 
 def load_config():
     config = None    
-    with open(config_path, "r", encoding="utf-8") as f:
-        config = json.load(f)    
-    return config
+
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            config = json.load(f)    
+        return config
+    except FileNotFoundError:
+        print(f"Configuration file not found: {config_path}")
+        return {}
+    except Exception as e:
+        print(f"Error loading config: {e}")
+        return {}
 
 config = load_config()
 
-region = config['region']
-accountId = config['accountId']
+region = config.get('region')
+accountId = config.get('accountId')
 if accountId is None:
     session = boto3.Session()
     region = session.region_name
-    accountId = session.account_id
+    
+    # Get account ID using STS client
+    sts_client = session.client('sts')
+    accountId = sts_client.get_caller_identity()['Account']
 
     config['region'] = region
     config['accountId'] = accountId
     with open(config_path, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=2)
 
-projectName = config['projectName']
+projectName = config.get('projectName')
+if not projectName:
+    projectName = input("Enter project name: ")
+    config['projectName'] = projectName
+    with open(config_path, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2)
 
 agentcore_gateway_policy = "AgentCoreGatewayPolicy"+"For"+projectName
 
@@ -307,14 +323,8 @@ def create_agentcore_gateway_role():
         return None
 
 def update_agentcore_config(role_arn):
-    """Update AgentCore configuration"""
-    
-    config_file = "config.json"
-    
+    """Update AgentCore configuration"""    
     try:
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        config_path = os.path.join(script_dir, "config.json")
-
         with open(config_path, "r") as f:
             config = json.load(f)
         
@@ -322,13 +332,13 @@ def update_agentcore_config(role_arn):
         print(f"✓ Gateway configuration updated: {role_arn}")
         
         # Save configuration file
-        with open(config_file, "w") as f:
+        with open(config_path, "w") as f:
             json.dump(config, f, indent=2)  
         
-        print(f"✓ Configuration file updated: {config_file}")
+        print(f"✓ Configuration file updated: {config_path}")
         
     except FileNotFoundError:
-        print(f"Configuration file not found: {config_file}")
+        print(f"Configuration file not found: {config_path}")
     except Exception as e:
         print(f"Configuration update failed: {e}")
 
