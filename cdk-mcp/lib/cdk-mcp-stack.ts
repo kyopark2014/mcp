@@ -713,6 +713,7 @@ export class CdkMcpStack extends cdk.Stack {
 
     // lambda-kb-retriever
     const lambdaKbRetriever = new lambda.Function(this, `lambda-kb-retriever-for-${projectName}`, {
+      description: 'RAG based on Knoeledge Base using retriever',
       functionName: `lambda-kb-retriever-for-${projectName}`,
       code: lambda.Code.fromAsset(path.join(__dirname, '../../lambda-kb-retriever')),
       handler: 'lambda_function.lambda_handler',
