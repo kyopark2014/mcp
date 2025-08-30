@@ -3,20 +3,47 @@ import json
 import os
 from datetime import datetime
 
+script_dir = os.path.dirname(os.path.abspath(__file__))
+config_path = os.path.join(script_dir, "config.json")
+
 def load_config():
-    config = None
-    
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    config_path = os.path.join(script_dir, "config.json")
-    
-    with open(config_path, "r", encoding="utf-8") as f:
-        config = json.load(f)    
-    return config
+    config = None    
+
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            config = json.load(f)    
+        return config
+    except FileNotFoundError:
+        print(f"Configuration file not found: {config_path}")
+        return {}
+    except Exception as e:
+        print(f"Error loading config: {e}")
+        return {}
 
 config = load_config()
-region = config['region']
-accountId = config['accountId']
-projectName = config['projectName']
+
+region = config.get('region')
+accountId = config.get('accountId')
+if accountId is None:
+    session = boto3.Session()
+    region = session.region_name
+    
+    # Get account ID using STS client
+    sts_client = session.client('sts')
+    accountId = sts_client.get_caller_identity()['Account']
+
+    config['region'] = region
+    config['accountId'] = accountId
+    with open(config_path, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2)
+
+projectName = config.get('projectName')
+if not projectName:
+    projectName = input("Enter project name: ")
+    config['projectName'] = projectName
+    with open(config_path, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2)
+        
 agent_runtime_role_name = "BedrockAgentCoreMCPRole"+"For"+projectName
 
 def create_bedrock_agentcore_policy():
@@ -294,23 +321,21 @@ def create_bedrock_agentcore_role():
 def update_agentcore_config(role_arn):
     """Update AgentCore configuration"""
     
-    config_file = "config.json"
-    
     try:
-        with open(config_file, "r") as f:
+        with open(config_path, "r") as f:
             config = json.load(f)
         
         config['agent_runtime_role'] = role_arn
         print(f"✓ AgentCore configuration updated: {role_arn}")
         
         # Save configuration file
-        with open(config_file, "w") as f:
+        with open(config_path, "w") as f:
             json.dump(config, f, indent=2)  
         
-        print(f"✓ Configuration file updated: {config_file}")
+        print(f"✓ Configuration file updated: {config_path}")
         
     except FileNotFoundError:
-        print(f"Configuration file not found: {config_file}")
+        print(f"Configuration file not found: {config_path}")
     except Exception as e:
         print(f"Configuration update failed: {e}")
 
