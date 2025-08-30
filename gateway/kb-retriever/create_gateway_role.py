@@ -1,22 +1,32 @@
 import boto3
 import json
 import os
-from datetime import datetime
+
+script_dir = os.path.dirname(os.path.abspath(__file__))
+config_path = os.path.join(script_dir, "config.json")
 
 def load_config():
-    config = None
-    
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    config_path = os.path.join(script_dir, "config.json")
-    
+    config = None    
     with open(config_path, "r", encoding="utf-8") as f:
         config = json.load(f)    
     return config
 
 config = load_config()
+
 region = config['region']
 accountId = config['accountId']
+if accountId is None:
+    session = boto3.Session()
+    region = session.region_name
+    accountId = session.account_id
+
+    config['region'] = region
+    config['accountId'] = accountId
+    with open(config_path, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2)
+
 projectName = config['projectName']
+
 agentcore_gateway_policy = "AgentCoreGatewayPolicy"+"For"+projectName
 
 def create_agentcore_gateway_policy():
@@ -29,14 +39,20 @@ def create_agentcore_gateway_policy():
         "Version": "2012-10-17",
         "Statement": [
             {
-                "Sid": "BedrockAgentAccess",
+                "Sid": "AmazonBedrockAgentCoreGatewayLambdaProd",
+                "Effect": "Allow",
+                "Action": [
+                    "lambda:*"
+                ],
+                "Resource": f"arn:aws:lambda:{region}:{accountId}:function:*"
+            },
+            {
+                "Sid": "GetGateway",
                 "Effect": "Allow",
                 "Action": [
                     "bedrock-agentcore:*"
                 ],
-                "Resource": [
-                    "*"
-                ]
+                "Resource": f"arn:aws:bedrock-agentcore:{region}:{accountId}:gateway/*"
             },
             {
                 "Sid": "SecretsManagerAccess",
@@ -296,11 +312,14 @@ def update_agentcore_config(role_arn):
     config_file = "config.json"
     
     try:
-        with open(config_file, "r") as f:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(script_dir, "config.json")
+
+        with open(config_path, "r") as f:
             config = json.load(f)
         
-        config['agent_runtime_role'] = role_arn
-        print(f"✓ AgentCore configuration updated: {role_arn}")
+        config['agentcore_gateway_iam_role'] = role_arn
+        print(f"✓ Gateway configuration updated: {role_arn}")
         
         # Save configuration file
         with open(config_file, "w") as f:
