@@ -181,23 +181,32 @@ with st.sidebar:
         # Change radio to checkbox
         if environment == "user":        
             mcp_options = [
-                "basic", "short-term memory", "long-term memory", "tavily-search", "aws-api", "aws-knowledge", "aws document", "aws cost", "aws cli", "aws ccapi",
-                "use_aws (local)", "use_aws (remote)", "aws cloudwatch", "aws storage", "image generation", "aws diagram",
-                "repl coder","agentcore coder", "kb-retriever (local)", "kb-retriever (remote)", "knowledge base", "tavily", "perplexity", "ArXiv", "wikipedia", 
-                "filesystem", "terminal", "text editor", "context7", "puppeteer", 
-                "agentcore-browser", "playwright", "firecrawl", "obsidian", "airbnb", 
+                "basic", "short-term memory", "long-term memory", 
+                "knowledge base", "kb-retriever (local)", "kb-retriever (runtime)", "kb-retriever (gateway)", 
+                "use-aws (local)", "use-aws (runtime)", 
+                "aws-knowledge", "aws-api", "aws document", "aws cost", "aws cli", "aws ccapi",
+                "aws cloudwatch", "aws storage", "image generation", "aws diagram",
+                "repl coder","agentcore coder", 
+                "tavily-search", "tavily", "perplexity", "ArXiv", "wikipedia", 
+                "filesystem", "terminal", "text editor", 
+                "context7", "puppeteer", "agentcore-browser", "playwright", "firecrawl", "obsidian", "airbnb", 
                 "pubmed", "chembl", "clinicaltrial", "arxiv-manual", "사용자 설정"
             ]
         else:
             mcp_options = [ 
-                "basic", "short-term memory", "long-term memory", "tavily-search", "aws-api", "aws-knowledge", "kb-retriever (local)", "kb-retriever (remote)", "aws document", "aws cost", "aws cli", "aws ccapi",
-                "use_aws (local)", "use_aws (remote)", "aws cloudwatch", "aws storage", "image generation", "aws diagram",
-                "repl coder", "agentcore coder", "kb-retriever (local)", "kb-retriever (remote)", "knowledge base", "tavily", "ArXiv", "wikipedia", 
-                "filesystem", "terminal", "text editor", "agentcore-browser", "playwright", "airbnb",
+                "basic", "short-term memory", "long-term memory",  
+                "knowledge base", "kb-retriever (local)", "kb-retriever (runtime)", "kb-retriever (gateway)", 
+                "use-aws (local)", "use-aws (runtime)", 
+                "aws-knowledge", "aws-api", "aws document", "aws cost", "aws cli", "aws ccapi",
+                "aws cloudwatch", "aws storage", "image generation", "aws diagram",
+                "repl coder", "agentcore coder", 
+                "tavily-search", "tavily", "ArXiv", "wikipedia", 
+                "filesystem", "terminal", "text editor", 
+                "agentcore-browser", "playwright", "airbnb",
                 "pubmed", "chembl", "clinicaltrial", "arxiv-manual", "사용자 설정"
             ]
         mcp_selections = {}
-        default_selections = ["basic", "use_aws", "tavily-manual", "filesystem", "terminal"]
+        default_selections = ["basic", "use-aws", "tavily-manual", "filesystem", "terminal"]
         
         if mode=='Agent' or mode=='Agent (Chat)':
             agentType = st.radio(

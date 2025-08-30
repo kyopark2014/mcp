@@ -187,10 +187,12 @@ def load_config(mcp_type):
         mcp_type = 'aws-knowledge-mcp-server'
     elif mcp_type == "aws ccapi":
         mcp_type = 'ccapi'
-    elif mcp_type == "use_aws (remote)":
-        mcp_type = "use_aws"
-    elif mcp_type == "kb-retriever (remote)":        
+    elif mcp_type == "use-aws (runtime)":
+        mcp_type = "use-aws"
+    elif mcp_type == "kb-retriever (runtime)":        
         mcp_type = "kb-retriever"
+    elif mcp_type == "kb-retriever (gateway)":
+        mcp_type = "kb-retriever-gateway"
 
     if mcp_type == "basic":
         return {
@@ -204,10 +206,10 @@ def load_config(mcp_type):
             }
         }
     
-    elif mcp_type == "use_aws (local)":
+    elif mcp_type == "use-aws (local)":
         return {
             "mcpServers": {
-                "use_aws": {
+                "use-aws": {
                     "command": "python",
                     "args": [
                         f"{workingDir}/mcp_server_use_aws.py"
@@ -216,7 +218,7 @@ def load_config(mcp_type):
             }
         }
     
-    elif mcp_type == "use_aws":
+    elif mcp_type == "use-aws":
         agent_arn = get_agent_runtime_arn(mcp_type)
         logger.info(f"mcp_type: {mcp_type}, agent_arn: {agent_arn}")
         encoded_arn = agent_arn.replace(':', '%3A').replace('/', '%2F')
@@ -289,6 +291,40 @@ def load_config(mcp_type):
                 "kb-retriever": {
                     "type": "streamable_http",
                     "url": f"https://bedrock-agentcore.{region}.amazonaws.com/runtimes/{encoded_arn}/invocations?qualifier=DEFAULT",
+                    "headers": {
+                        "Authorization": f"Bearer {bearer_token}",
+                        "Content-Type": "application/json",
+                        "Accept": "application/json, text/event-stream"
+                    }
+                }
+            }
+        }
+
+    elif mcp_type == "kb-retriever-gateway":
+        gateway_url = "https://mcp-kb-retriever-8qpxquebkp.gateway.bedrock-agentcore.us-west-2.amazonaws.com/mcp"
+
+        secret_name = config['secret_name']
+        bearer_token = get_bearer_token(secret_name)
+        logger.info(f"Bearer token from secret manager: {bearer_token[:100] if bearer_token else 'None'}...")
+
+        if not bearer_token:    
+            # Try to get fresh bearer token from Cognito
+            print("No bearer token found in secret manager, getting fresh bearer token from Cognito...")
+            bearer_token = create_cognito_bearer_token(config)
+            print(f"Bearer token from cognito: {bearer_token[:100] if bearer_token else 'None'}...")
+            
+            if bearer_token:
+                secret_name = config['secret_name']
+                save_bearer_token(secret_name, bearer_token)
+            else:
+                print("Failed to get bearer token from Cognito. Exiting.")
+                return {}
+
+        return {
+            "mcpServers": {
+                "kb-retriever": {
+                    "type": "streamable_http",
+                    "url": gateway_url,
                     "headers": {
                         "Authorization": f"Bearer {bearer_token}",
                         "Content-Type": "application/json",
