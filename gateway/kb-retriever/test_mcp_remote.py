@@ -26,7 +26,6 @@ def create_cognito_bearer_token(config):
     """Get a fresh bearer token from Cognito"""
     try:
         cognito_config = config['cognito']
-        region = cognito_config['region']
         client_id = cognito_config['client_id']
         username = cognito_config['test_username']
         password = cognito_config['test_password']

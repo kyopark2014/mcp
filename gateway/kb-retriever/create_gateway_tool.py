@@ -1,6 +1,5 @@
 import os
 import boto3
-from botocore.exceptions import ClientError
 import json
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -19,8 +18,98 @@ targetname = current_folder_name
 projectName = config.get('projectName')
 region = config.get('region')
 
+def create_user_pool(user_pool_name):
+    cognito_client = boto3.client('cognito-idp', region_name=region)   
+
+    print("Creating new Cognito User Pool...")
+    response = cognito_client.create_user_pool(
+        PoolName=user_pool_name,
+        Policies={
+            'PasswordPolicy': {
+                'MinimumLength': 8,
+                'RequireUppercase': True,
+                'RequireLowercase': True,
+                'RequireNumbers': True,
+                'RequireSymbols': False
+            }
+        },
+        AutoVerifiedAttributes=['email'],
+        UsernameAttributes=['email'],
+        MfaConfiguration='OFF',
+        AdminCreateUserConfig={
+            'AllowAdminCreateUserOnly': True
+        }
+    )        
+    user_pool_id = response['UserPool']['Id']
+    
+    return user_pool_id
+
+def create_client(user_pool_id, client_name):
+    cognito_client = boto3.client('cognito-idp', region_name=region)   
+
+    response = cognito_client.create_user_pool_client(
+            UserPoolId=user_pool_id,
+            ClientName=client_name,
+            GenerateSecret=False,
+            ExplicitAuthFlows=[
+                'ALLOW_USER_PASSWORD_AUTH',
+                'ALLOW_REFRESH_TOKEN_AUTH'
+            ]
+        )        
+    client_id = response['UserPoolClient']['ClientId']
+    
+    return client_id
+
+def check_user(user_pool_id, username):
+    cognito_idp_client = boto3.client('cognito-idp', region_name=region)
+    try:
+        response = cognito_idp_client.admin_get_user(
+            UserPoolId=user_pool_id,
+            Username=username
+        )
+        print(f"response: {response}")
+        print(f"✓ User '{username}' already exists")        
+        return True
+    except cognito_idp_client.exceptions.UserNotFoundException:
+        print(f"User '{username}' does not exist, creating...")
+        return False
+    
+def create_user(user_pool_id, username, password):
+    cognito_idp_client = boto3.client('cognito-idp', region_name=region)
+    try:
+        cognito_idp_client.admin_create_user(
+            UserPoolId=user_pool_id,
+            Username=username,
+            UserAttributes=[
+                {
+                    'Name': 'email',
+                    'Value': username
+                },
+                {
+                    'Name': 'email_verified',
+                    'Value': 'true'
+                }
+            ],
+            TemporaryPassword=password,
+            MessageAction='SUPPRESS'  # Don't send welcome email
+        )
+
+        cognito_idp_client.admin_set_user_password(
+            UserPoolId=user_pool_id,
+            Username=username,
+            Password=password,
+            Permanent=True
+        )
+        print(f"✓ Password set for user '{username}'")
+        return True
+    except Exception as e:
+        print(f"Warning: Could not set permanent password: {e}")
+        print("User may need to change password on first login")
+        return False
+    
 def get_cognito_config(cognito_config):    
     user_pool_name = cognito_config.get('user_pool_name')
+    user_pool_id = cognito_config.get('user_pool_id')
     if not user_pool_name:        
         user_pool_name = projectName + '-agentcore-user-pool'
         print(f"No user pool name found in config, using default user pool name: {user_pool_name}")
@@ -32,8 +121,14 @@ def get_cognito_config(cognito_config):
             if pool['Name'] == user_pool_name:
                 user_pool_id = pool['Id']
                 print(f"Found cognito user pool: {user_pool_id}")
+                cognito_config['user_pool_id'] = user_pool_id
                 break
-        cognito_config['user_pool_id'] = user_pool_id
+
+        # create user pool if not exists
+        if not user_pool_id: 
+            user_pool_id = create_user_pool(user_pool_name)
+            print(f"✓ User Pool created successfully: {user_pool_id}")
+            cognito_config['user_pool_id'] = user_pool_id
 
     client_name = cognito_config.get('client_name')
     if not client_name:        
@@ -48,20 +143,28 @@ def get_cognito_config(cognito_config):
             if client['ClientName'] == client_name:
                 client_id = client['ClientId']
                 print(f"Found cognito client: {client_id}")
+                cognito_config['client_id'] = client_id     
                 break
-        cognito_config['client_id'] = client_id        
-        
+
+        # create client if not exists
+        if not client_id:
+            client_id = create_client(user_pool_id, client_name)
+            print(f"✓ Client created successfully: {client_id}")
+            cognito_config['client_id'] = client_id
+                   
     username = cognito_config.get('test_username')
     password = cognito_config.get('test_password')
     if not username or not password:
         print("No test username found in config, using default username and password. Please check config.json and update the test username and password.")
         username = f"{projectName}-test-user@example.com"
         password = "TestPassword123!"        
-    cognito_config['test_username'] = username
-    cognito_config['test_password'] = password
-
-    with open(config_path, "w", encoding="utf-8") as f:
-        json.dump(config, f, indent=2)
+        cognito_config['test_username'] = username
+        cognito_config['test_password'] = password
+    
+        if not check_user(user_pool_id, username):
+            print(f"Creating test user in User Pool: {user_pool_id}")        
+            create_user(user_pool_id, username, password)
+        print(f"✓ User '{username}' created successfully")    
 
     return cognito_config
 
@@ -69,7 +172,12 @@ def get_cognito_config(cognito_config):
 cognito_config = config.get('cognito', {})
 if not cognito_config:
     cognito_config = get_cognito_config(cognito_config)
-    config['cognito'] = cognito_config
+    if 'cognito' not in config:
+        config['cognito'] = {}
+    config['cognito'].update(cognito_config)
+
+    with open(config_path, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2)
 
 # load variables from cognito_config
 client_id = cognito_config.get('client_id')
@@ -178,7 +286,7 @@ def main():
     print("1. Getting bearer token...")       
     secret_name = config.get('secret_name')
     if not secret_name:
-        secret_name = f'{projectName}/credentials'
+        secret_name = f'{projectName.lower()}/credentials'
         print(f"No secret name found in config, using default secret name: {secret_name}")
         config['secret_name'] = secret_name
         with open(config_path, "w", encoding="utf-8") as f:
@@ -193,8 +301,11 @@ def main():
         print(f"Bearer token from cognito: {bearer_token if bearer_token else 'None'}")
         
         if bearer_token:
-            secret_name = config['secret_name']
-            save_bearer_token(secret_name, bearer_token)
+            secret_name = config.get('secret_name')
+            if secret_name:
+                save_bearer_token(secret_name, bearer_token)
+            else:
+                print("Warning: No secret_name in config, cannot save bearer token")
         else:
             print("Failed to get bearer token from Cognito. Exiting.")
             return {}
