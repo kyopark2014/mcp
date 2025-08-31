@@ -198,7 +198,6 @@ except Exception as e:
 notion_key = ""
 def get_notion_key():
     global notion_key
-    logger.info('notion_key: ', notion_key)
 
     if not notion_key:
         try:

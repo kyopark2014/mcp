@@ -789,7 +789,6 @@ def load_config(mcp_type):
         }    
     elif mcp_type == "notion":
         token = utils.get_notion_key()
-        logger.info(f"notion_key: {token}")
         return {
             "mcpServers": {
                 "notionApi": {
