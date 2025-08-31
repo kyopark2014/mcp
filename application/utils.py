@@ -194,6 +194,25 @@ except Exception as e:
     # raise e
     pass
 
+# api key to use notion
+notion_key = ""
+try:
+    get_notion_api_secret = secretsmanager.get_secret_value(
+        SecretId=f"notionapikey-{projectName}"
+    )
+    #print('get_perplexity_api_secret: ', get_perplexity_api_secret)
+    secret = json.loads(get_notion_api_secret['SecretString'])
+    #print('secret: ', secret)
+
+    if "notion_api_key" in secret:
+        notion_key = secret['notion_api_key']
+        #print('notion_api_key: ', notion_api_key)
+
+except Exception as e: 
+    logger.info(f"nova act credential is required: {e}")
+    # raise e
+    pass
+
 async def generate_pdf_report(report_content: str, filename: str) -> str:
     """
     Generates a PDF report from the research findings.

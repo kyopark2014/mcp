@@ -364,6 +364,17 @@ export class CdkMcpStack extends cdk.Stack {
     });
     novaActSecret.grantRead(ec2Role) 
 
+    const notionSecret = new secretsmanager.Secret(this, `notion-secret-for-${projectName}`, {
+      description: 'secret for notion api key', // notion
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      secretName: `notionapikey-${projectName}`,
+      secretObjectValue: {
+        project_name: cdk.SecretValue.unsafePlainText(projectName),
+        nova_act_api_key: cdk.SecretValue.unsafePlainText(''),
+      },
+    });
+    notionSecret.grantRead(ec2Role) 
+
     // Cost Explorer Policy
     const costExplorerPolicy = new iam.PolicyStatement({  
       resources: ['*'],
