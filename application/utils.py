@@ -106,9 +106,9 @@ try:
     get_weather_api_secret = secretsmanager.get_secret_value(
         SecretId=f"openweathermap-{projectName}"
     )
-    #print('get_weather_api_secret: ', get_weather_api_secret)
+    #logger.info('get_weather_api_secret: ', get_weather_api_secret)
     secret = json.loads(get_weather_api_secret['SecretString'])
-    #print('secret: ', secret)
+    #logger.info('secret: ', secret)
     weather_api_key = secret['weather_api_key']
 
 except Exception as e:
@@ -121,13 +121,13 @@ try:
     get_tavily_api_secret = secretsmanager.get_secret_value(
         SecretId=f"tavilyapikey-{projectName}"
     )
-    #print('get_tavily_api_secret: ', get_tavily_api_secret)
+    #logger.info('get_tavily_api_secret: ', get_tavily_api_secret)
     secret = json.loads(get_tavily_api_secret['SecretString'])
-    #print('secret: ', secret)
+    #logger.info('secret: ', secret)
 
     if "tavily_api_key" in secret:
         tavily_key = secret['tavily_api_key']
-        #print('tavily_api_key: ', tavily_api_key)
+        #logger.info('tavily_api_key: ', tavily_api_key)
 
         if tavily_key:
             tavily_api_wrapper = TavilySearchAPIWrapper(tavily_api_key=tavily_key)
@@ -150,7 +150,7 @@ try:
 
     if "firecrawl_api_key" in secret:
         firecrawl_key = secret['firecrawl_api_key']
-        # print('firecrawl_api_key: ', firecrawl_key)
+        # logger.info('firecrawl_api_key: ', firecrawl_key)
 except Exception as e: 
     logger.info(f"Firecrawl credential is required: {e}")
     # raise e
@@ -162,13 +162,13 @@ try:
     get_perplexity_api_secret = secretsmanager.get_secret_value(
         SecretId=f"perplexityapikey-{projectName}"
     )
-    #print('get_perplexity_api_secret: ', get_perplexity_api_secret)
+    #logger.info('get_perplexity_api_secret: ', get_perplexity_api_secret)
     secret = json.loads(get_perplexity_api_secret['SecretString'])
-    #print('secret: ', secret)
+    #logger.info('secret: ', secret)
 
     if "perplexity_api_key" in secret:
         perplexity_key = secret['perplexity_api_key']
-        #print('perplexity_api_key: ', perplexity_api_key)
+        #logger.info('perplexity_api_key: ', perplexity_api_key)
 
 except Exception as e: 
     logger.info(f"perplexity credential is required: {e}")
@@ -181,13 +181,13 @@ try:
     get_nova_act_api_secret = secretsmanager.get_secret_value(
         SecretId=f"novaactapikey-{projectName}"
     )
-    #print('get_perplexity_api_secret: ', get_perplexity_api_secret)
+    #logger.info('get_perplexity_api_secret: ', get_perplexity_api_secret)
     secret = json.loads(get_nova_act_api_secret['SecretString'])
-    #print('secret: ', secret)
+    #logger.info('secret: ', secret)
 
     if "nova_act_api_key" in secret:
         nova_act_key = secret['nova_act_api_key']
-        #print('nova_act_api_key: ', nova_act_api_key)
+        #logger.info('nova_act_api_key: ', nova_act_api_key)
 
 except Exception as e: 
     logger.info(f"nova act credential is required: {e}")
@@ -196,22 +196,28 @@ except Exception as e:
 
 # api key to use notion
 notion_key = ""
-try:
-    get_notion_api_secret = secretsmanager.get_secret_value(
-        SecretId=f"notionapikey-{projectName}"
-    )
-    #print('get_perplexity_api_secret: ', get_perplexity_api_secret)
-    secret = json.loads(get_notion_api_secret['SecretString'])
-    #print('secret: ', secret)
+def get_notion_key():
+    global notion_key
+    logger.info('notion_key: ', notion_key)
 
-    if "notion_api_key" in secret:
-        notion_key = secret['notion_api_key']
-        #print('notion_api_key: ', notion_api_key)
+    if not notion_key:
+        try:
+            get_notion_api_secret = secretsmanager.get_secret_value(
+                SecretId=f"notionapikey-{projectName}"
+            )
+            #logger.info('get_perplexity_api_secret: ', get_perplexity_api_secret)
+            secret = json.loads(get_notion_api_secret['SecretString'])
+            #logger.info('secret: ', secret)
 
-except Exception as e: 
-    logger.info(f"nova act credential is required: {e}")
-    # raise e
-    pass
+            if "notion_api_key" in secret:
+                notion_key = secret['notion_api_key']
+                # logger.info('updated notion_key: ', notion_key)
+
+        except Exception as e: 
+            logger.info(f"nova act credential is required: {e}")
+            # raise e
+            pass
+    return notion_key
 
 async def generate_pdf_report(report_content: str, filename: str) -> str:
     """

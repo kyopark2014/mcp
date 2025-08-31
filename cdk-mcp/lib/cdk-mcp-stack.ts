@@ -370,7 +370,7 @@ export class CdkMcpStack extends cdk.Stack {
       secretName: `notionapikey-${projectName}`,
       secretObjectValue: {
         project_name: cdk.SecretValue.unsafePlainText(projectName),
-        nova_act_api_key: cdk.SecretValue.unsafePlainText(''),
+        notion_api_key: cdk.SecretValue.unsafePlainText(''),
       },
     });
     notionSecret.grantRead(ec2Role) 
