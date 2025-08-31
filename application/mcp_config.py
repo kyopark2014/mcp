@@ -4,6 +4,7 @@ import utils
 import os
 import boto3
 import json
+import requests
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -15,7 +16,7 @@ logging.basicConfig(
 logger = logging.getLogger("mcp-config")
 
 config = utils.load_config()
-print(f"config: {config}")
+logger.info(f"config: {config}")
 
 region = config["region"] if "region" in config else "us-west-2"
 projectName = config["projectName"] if "projectName" in config else "mcp"
@@ -34,11 +35,11 @@ def get_bearer_token_from_secret_manager(secret_name):
             bearer_token = token_data['bearer_token']
             return bearer_token
         else:
-            print("No bearer token found in secret manager")
+            logger.info("No bearer token found in secret manager")
             return None
     
     except Exception as e:
-        print(f"Error getting stored token: {e}")
+        logger.info(f"Error getting stored token: {e}")
         return None
 
 def retrieve_bearer_token(secret_name):
@@ -48,16 +49,91 @@ def retrieve_bearer_token(secret_name):
 
     if not bearer_token:    
         # Try to get fresh bearer token from Cognito
-        print("No bearer token found in secret manager, getting fresh bearer token from Cognito...")
+        logger.info("No bearer token found in secret manager, getting fresh bearer token from Cognito...")
         bearer_token = create_cognito_bearer_token(config)
-        print(f"Bearer token from cognito: {bearer_token[:100] if bearer_token else 'None'}...")
+        logger.info(f"Bearer token from cognito: {bearer_token[:100] if bearer_token else 'None'}...")
         
         if bearer_token:
             secret_name = config['secret_name']
             save_bearer_token(secret_name, bearer_token)
         else:
-            print("Failed to get bearer token from Cognito. Exiting.")
+            logger.info("Failed to get bearer token from Cognito. Exiting.")
             return {}
+    
+    # verify bearer token
+    mcp_url = "https://mcp-kb-retriever-8qpxquebkp.gateway.bedrock-agentcore.us-west-2.amazonaws.com/mcp"
+    headers = {
+        "Authorization": f"Bearer {bearer_token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream"
+    }
+    logger.info(f"MCP URL: {mcp_url}")
+    logger.info(f"Headers: {headers}")
+
+    # Prepare the request body for MCP initialization
+    request_body = json.dumps({
+        "jsonrpc": "2.0",
+        "id": "1",
+        "method": "initialize", 
+        "params": {
+            "protocolVersion": "2024-11-05", 
+            "capabilities": {}, 
+            "clientInfo": {
+                "name": "test-client", 
+                "version": "1.0.0"
+            }
+        }
+    })
+    
+    # url test
+    try:
+        response = requests.post(
+            mcp_url,
+            headers=headers,
+            data=request_body,
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            logger.info("Success!")
+        else:
+            logger.info(f"Error: {response.status_code}")
+            logger.info(f"Response body: {response.text}")
+            if response.status_code == 403:
+                logger.info("403 Forbidden - Token may be expired, trying to get fresh token from Cognito...")
+                # Try to get fresh bearer token from Cognito
+                fresh_bearer_token = create_cognito_bearer_token(config)
+                if fresh_bearer_token:
+                    logger.info("Successfully obtained fresh token, updating headers and retrying...")
+                    # Update headers with fresh token
+                    headers["Authorization"] = f"Bearer {fresh_bearer_token}"
+                    # Save the fresh token
+                    secret_name = config['secret_name']
+                    save_bearer_token(secret_name, fresh_bearer_token)
+                    
+                    # Retry the request with fresh token
+                    response = requests.post(
+                        mcp_url,
+                        headers=headers,
+                        data=request_body,
+                        timeout=30
+                    )
+                    
+                    if response.status_code == 200:
+                        logger.info("Success with fresh token!")
+                    else:
+                        logger.info(f"Still getting error with fresh token: {response.status_code}")
+                        logger.info(f"Response body: {response.text}")
+                        return
+                else:
+                    logger.info("Failed to get fresh token from Cognito")
+                    return
+            else:
+                return
+    except Exception as e:
+        logger.info(f"Connection failed: {e}")
+        return 
+
     return bearer_token
 
 def save_bearer_token(secret_name, bearer_token):
@@ -82,7 +158,7 @@ def save_bearer_token(secret_name, bearer_token):
                 SecretId=secret_name,
                 SecretString=secret_string
             )
-            print(f"Bearer token updated in secret manager with key: {secret_value['bearer_key']}")
+            logger.info(f"Bearer token updated in secret manager with key: {secret_value['bearer_key']}")
         except client.exceptions.ResourceNotFoundException:
             # Secret doesn't exist, create it
             client.create_secret(
@@ -90,10 +166,10 @@ def save_bearer_token(secret_name, bearer_token):
                 SecretString=secret_string,
                 Description="MCP Server Cognito credentials with bearer key and token"
             )
-            print(f"Bearer token created in secret manager with key: {secret_value['bearer_key']}")
+            logger.info(f"Bearer token created in secret manager with key: {secret_value['bearer_key']}")
             
     except Exception as e:
-        print(f"Error saving bearer token: {e}")
+        logger.info(f"Error saving bearer token: {e}")
         # Continue execution even if saving fails
 
 def create_cognito_bearer_token(config):
@@ -111,14 +187,14 @@ def create_cognito_bearer_token(config):
             try:
                 response = cognito_client.list_user_pools(MaxResults=10)
                 for pool in response['UserPools']:
-                    print(f"Existing User Pool found: {pool['Id']}")
+                    logger.info(f"Existing User Pool found: {pool['Id']}")
                     user_pool_id = pool['Id']
 
                     client_response = cognito_client.list_user_pool_clients(UserPoolId=user_pool_id)
                     for client in client_response['UserPoolClients']:
                         if client['ClientName'] == client_name:
                             client_id = client['ClientId']
-                            print(f"Existing App client found: {client_id}")
+                            logger.info(f"Existing App client found: {client_id}")
 
                             # Update config.json with client_id
                             try:
@@ -126,9 +202,9 @@ def create_cognito_bearer_token(config):
                                 config_file = "config.json"
                                 with open(config_file, "w") as f:
                                     json.dump(config, f, indent=2)
-                                print(f"Client ID updated in config.json: {client_id}")
+                                logger.info(f"Client ID updated in config.json: {client_id}")
                             except Exception as e:
-                                print(f"Warning: Failed to update config.json with client_id: {e}")
+                                logger.info(f"Warning: Failed to update config.json with client_id: {e}")
             except Exception as e:
                 logger.error(f"Failed to check User Pool list: {e}")
         
@@ -149,14 +225,17 @@ def create_cognito_bearer_token(config):
         access_token = auth_result['AccessToken']
         # id_token = auth_result['IdToken']
         
-        print("Successfully obtained fresh Cognito tokens")
+        logger.info("Successfully obtained fresh Cognito tokens")
         return access_token
         
     except Exception as e:
-        print(f"Error getting Cognito token: {e}")
+        logger.info(f"Error getting Cognito token: {e}")
         return None
 
 mcp_user_config = {}    
+
+bearer_token = retrieve_bearer_token(config['secret_name'])
+logger.info(f"Bearer token from secret manager: {bearer_token[:100] if bearer_token else 'None'}...")
 
 def get_agent_runtime_arn(mcp_type: str):
     #logger.info(f"mcp_type: {mcp_type}")
@@ -241,7 +320,9 @@ def load_config(mcp_type):
         agent_arn = get_agent_runtime_arn(mcp_type)
         logger.info(f"mcp_type: {mcp_type}, agent_arn: {agent_arn}")
         encoded_arn = agent_arn.replace(':', '%3A').replace('/', '%2F')
-        bearer_token = retrieve_bearer_token(config['secret_name'])
+
+        if not bearer_token:
+            bearer_token = retrieve_bearer_token(config['secret_name'])
 
         return {
             "mcpServers": {
@@ -271,7 +352,9 @@ def load_config(mcp_type):
         agent_arn = get_agent_runtime_arn(mcp_type)
         logger.info(f"mcp_type: {mcp_type}, agent_arn: {agent_arn}")
         encoded_arn = agent_arn.replace(':', '%3A').replace('/', '%2F')
-        bearer_token = retrieve_bearer_token(config['secret_name'])
+
+        if not bearer_token:
+            bearer_token = retrieve_bearer_token(config['secret_name'])
 
         return {
             "mcpServers": {
