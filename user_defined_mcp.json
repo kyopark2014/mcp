@@ -1,17 +1,7 @@
 {
     "mcpServers": {
-        "awslabs.ccapi-mcp-server": {
-            "command": "uvx",
-            "args": [
-                "awslabs.ccapi-mcp-server@latest"
-            ],
-            "env": {
-                "DEFAULT_TAGS": "enabled",
-                "SECURITY_SCANNING": "enabled",
-                "FASTMCP_LOG_LEVEL": "ERROR"
-            },
-            "disabled": false,
-            "autoApprove": []
+        "Notion": {
+            "url": "https://mcp.notion.com/mcp"
         }
     }
 }

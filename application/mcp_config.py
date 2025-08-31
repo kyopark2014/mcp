@@ -243,8 +243,8 @@ def load_config(mcp_type):
         mcp_type = "use-aws"
     elif mcp_type == "kb-retriever (runtime)":        
         mcp_type = "kb-retriever"
-    elif mcp_type == "kb-retriever (gateway)":
-        mcp_type = "kb-retriever-gateway"
+    elif mcp_type == "agentcore gateway":
+        mcp_type = "agentcore gateway"
 
     if mcp_type == "basic":
         return {
@@ -326,14 +326,14 @@ def load_config(mcp_type):
             }
         }
 
-    elif mcp_type == "kb-retriever-gateway":                    
+    elif mcp_type == "agentcore gateway":                    
         bearer_token = retrieve_bearer_token(config['secret_name'])
         if not gateway_url:            
             gateway_url = get_gateway_url()
 
         return {
             "mcpServers": {
-                "kb-retriever": {
+                "agentcore-gateway": {
                     "type": "streamable_http",
                     "url": gateway_url,
                     "headers": {
