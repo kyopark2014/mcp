@@ -1,0 +1,21 @@
+{
+  "projectName": "mcp",
+  "accountId": "262976740991",
+  "region": "us-west-2",
+  "knowledge_base_role": "arn:aws:iam::262976740991:role/role-knowledge-base-for-mcp-us-west-2",
+  "collectionArn": "arn:aws:aoss:us-west-2:262976740991:collection/9kath35y9e5gtt8j2zz5",
+  "opensearch_url": "https://9kath35y9e5gtt8j2zz5.us-west-2.aoss.amazonaws.com",
+  "s3_bucket": "storage-for-mcp-262976740991-us-west-2",
+  "s3_arn": "arn:aws:s3:::storage-for-mcp-262976740991-us-west-2",
+  "sharing_url": "https://d3dr5qnmzhho1a.cloudfront.net",
+  "agentcore_memory_role": "arn:aws:iam::262976740991:role/role-agentcore-memory-for-mcp-us-west-2",
+  "knowledge_base_id": "1CMBJP5NME",
+  "cognito": {
+    "client_id": "2slq62fna87mfrgd706mha5ohm",
+    "client_name": "mcp-agentcore-client",
+    "region": "us-west-2",
+    "test_username": "mcp-test-user@example.com",
+    "test_password": "TestPassword123!"
+  },
+  "secret_name": "mcp/credentials"
+}

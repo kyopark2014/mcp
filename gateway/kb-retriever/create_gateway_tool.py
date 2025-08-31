@@ -316,12 +316,9 @@ def main():
     cognito_discovery_url = f'https://cognito-idp.{region}.amazonaws.com/{user_pool_id}/.well-known/openid-configuration'
     print(f"Cognito discovery URL: {cognito_discovery_url}")
 
-    # CreateGateway with Cognito authorizer without CMK. Use the Cognito user pool created in the previous step
-    gateway_client = boto3.client('bedrock-agentcore-control', region_name=region)
-
     gateway_name = config.get('gateway_name')
     if not gateway_name:
-        gateway_name = config['projectName'] + '-kb-retriever'
+        gateway_name = config['projectName']
         print(f"No gateway name found in config, using default gateway name: {gateway_name}")
         config['gateway_name'] = gateway_name
 
@@ -358,7 +355,7 @@ def main():
             protocolType='MCP',
             authorizerType='CUSTOM_JWT',
             authorizerConfiguration=auth_config, 
-            description='AgentCore Gateway for KB Retriever'
+            description=f'AgentCore Gateway for {projectName}'
         )
         print(f"response: {response}")
 
