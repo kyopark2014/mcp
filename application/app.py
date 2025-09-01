@@ -544,9 +544,9 @@ if prompt := st.chat_input("메시지를 입력하세요."):
             })
 
             for url in image_url:
-                    logger.info(f"url: {url}")
-                    file_name = url[url.rfind('/')+1:]
-                    st.image(url, caption=file_name, use_container_width=True)
+                logger.info(f"url: {url}")
+                file_name = url[url.rfind('/')+1:]
+                st.image(url, caption=file_name, use_container_width=True)
 
         elif mode == "Multi-agent Supervisor (Router)":
             sessionState = ""
