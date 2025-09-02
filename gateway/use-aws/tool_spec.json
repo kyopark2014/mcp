@@ -1,0 +1,40 @@
+{
+    "name": "use_aws",
+    "description": "Make a boto3 client call with the specified service, operation, and parameters. Boto3 operations are snake_case.",
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "service_name": {
+                "type": "string",
+                "description": "The name of the AWS service"
+            },
+            "operation_name": {
+                "type": "string",
+                "description": "The name of the operation to perform"
+            },
+            "parameters": {
+                "type": "object",
+                "description": "The parameters for the operation"
+            },
+            "region": {
+                "type": "string",
+                "description": "Region name for calling the operation on AWS boto3"
+            },
+            "label": {
+                "type": "string",
+                "description": "Label of AWS API operations human readable explanation. This is useful for communicating with human."
+            },
+            "profile_name": {
+                "type": "string",
+                "description": "Optional: AWS profile name to use from ~/.aws/credentials. Defaults to default profile if not specified."
+            }
+        },
+        "required": [
+            "region",
+            "service_name",
+            "operation_name",
+            "parameters",
+            "label"
+        ]
+    }
+}
