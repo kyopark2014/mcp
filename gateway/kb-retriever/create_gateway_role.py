@@ -271,16 +271,10 @@ def create_trust_policy_for_bedrock():
     
     return trust_policy
 
-def create_agentcore_gateway_role():
+def create_agentcore_gateway_role(policy_arn):
     """Create IAM role for AgentCore Gateway access"""
     
-    role_name = "AgentCoreGatewayRole"+"For"+projectName
-    policy_arn = create_agentcore_gateway_policy()
-    
-    if not policy_arn:
-        print("Role creation aborted due to policy creation failure")
-        return None
-    
+    role_name = "AgentCoreGatewayRole"+"For"+projectName    
     try:
         iam_client = boto3.client('iam')
         
@@ -351,7 +345,7 @@ def main():
     
     # Create Bedrock AgentCore role
     print("\n2. Creating AgentCore Gateway role...")
-    role_arn = create_agentcore_gateway_role()
+    role_arn = create_agentcore_gateway_role(policy_arn)
     
     # Update AgentCore configuration
     print("\n3. Updating AgentCore configuration...")

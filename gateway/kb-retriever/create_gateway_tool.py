@@ -1,6 +1,7 @@
 import os
 import boto3
 import json
+import zipfile 
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 config_path = os.path.join(script_dir, "config.json")
@@ -462,21 +463,39 @@ user_pool_id = cognito_config.get('user_pool_id')
 username = cognito_config.get('test_username')
 password = cognito_config.get('test_password')
 
-def get_lambda_function_arn():
-    lambda_function_arn = config.get('lambda_function_arn')
-    if not lambda_function_arn:
-        lambda_function_name = 'lambda-' + current_folder_name + '-for-' + config['projectName']
-        print(f"No lambda function arn found in config, using default lambda function name: {lambda_function_name}")
-        
-        lambda_client = boto3.client('lambda', region_name=region)
+def update_lambda_function_arn():
+    # zip lambda
+    lambda_function_name = 'lambda-' + current_folder_name + '-for-' + config['projectName']
+    lambda_function_zip_path = os.path.join(script_dir, lambda_function_name, "lambda_function.zip")
+    
+    # Create zip with all files and folders recursively
+    with zipfile.ZipFile(lambda_function_zip_path, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        lambda_dir = os.path.join(script_dir, lambda_function_name)
+        for root, dirs, files in os.walk(lambda_dir):
+            for file in files:
+                if file == 'lambda_function.zip':
+                    continue
+                file_path = os.path.join(root, file)
+                arcname = os.path.relpath(file_path, lambda_dir)
+                zip_file.write(file_path, arcname)
+    print(f"✓ Lambda function zip created successfully: {lambda_function_zip_path}")
+
+    lambda_function_arn = config.get('lambda_function_arn')    
+    lambda_client = boto3.client('lambda', region_name=region)
+    
+    need_update = True
+    if not lambda_function_arn:        
+        print(f"search lambda function name: {lambda_function_name}")
+                
         response = lambda_client.list_functions()
         for function in response['Functions']:
             if function['FunctionName'] == lambda_function_name:
                 lambda_function_arn = function['FunctionArn']
-                print(f"Found lambda function: {lambda_function_arn}")
+                print(f"Lambda function found: {lambda_function_arn}")
                 break
 
         if not lambda_function_arn:
+            print(f"Lambda function not found, creating new lambda function")
             # create lambda function role
             lambda_function_role = create_lambda_function_role(lambda_function_name)
             
@@ -485,8 +504,7 @@ def get_lambda_function_arn():
                 return None
 
             # create lambda function
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            lambda_function_zip_path = os.path.join(script_dir, lambda_function_name, "lambda_function.zip")
+            need_update = False
             try:
                 response = lambda_client.create_function(
                     FunctionName=lambda_function_name,
@@ -503,12 +521,23 @@ def get_lambda_function_arn():
             except Exception as e:
                 print(f"Failed to create Lambda function: {e}")
                 return None
+    
+    if need_update:
+        # update lambda
+        response = lambda_client.update_function_code(
+            FunctionName=lambda_function_name,
+            ZipFile=open(lambda_function_zip_path, 'rb').read()
+        )
+        print(f"✓ Lambda function updated successfully: {response['FunctionArn']}")
+        lambda_function_arn = response['FunctionArn']
+        print(f"✓ Lambda function updated successfully: {lambda_function_arn}")
 
-        if lambda_function_arn:
-            config['lambda_function_arn'] = lambda_function_arn
+    # update config
+    if lambda_function_arn:
+        config['lambda_function_arn'] = lambda_function_arn
 
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2)
 
     return lambda_function_arn
 
@@ -681,8 +710,11 @@ def main():
 
     print(f"Gateway ID: {gateway_id}")
     
-    print("3. Getting or creating lambda target...")
+    print("3. updating lambda function...")
+    lambda_function_arn = update_lambda_function_arn()
+    print(f"lambda_function_arn: {lambda_function_arn}")
 
+    print("4. Getting or creating lambda target...")
     target_id = config.get('target_id')
     if not target_id:
         response = gateway_client.list_gateway_targets(
@@ -697,11 +729,8 @@ def main():
                 print(f"Target already exists.")
                 target_id = target['targetId']
                 break
-
-        if not target_id:
-            lambda_function_arn = get_lambda_function_arn()
-            print(f"lambda_function_arn: {lambda_function_arn}")
-
+        
+        if not target_id:            
             print("Creating lambda target...")
             lambda_target_config = {
                 "mcp": {
