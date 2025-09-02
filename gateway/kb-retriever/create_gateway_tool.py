@@ -732,26 +732,13 @@ def main():
         
         if not target_id:            
             print("Creating lambda target...")
+            TOOL_SPEC = json.load(open(os.path.join(script_dir, "tool_spec.json")))     
             lambda_target_config = {
                 "mcp": {
                     "lambda": {
                         "lambdaArn": lambda_function_arn, 
                         "toolSchema": {
-                            "inlinePayload": [
-                                {
-                                    "name": "retrieve",
-                                    "description": "keyword to retrieve the knowledge base",
-                                    "inputSchema": {
-                                        "type": "object",
-                                        "properties": {
-                                            "keyword": {
-                                                "type": "string"
-                                            }
-                                        },
-                                        "required": ["keyword"]
-                                    }
-                                }
-                            ]
+                            "inlinePayload": [TOOL_SPEC]
                         }
                     }
                 }

@@ -1,0 +1,13 @@
+{
+    "name": "retrieve",
+    "description": "keyword to retrieve the knowledge base",
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "keyword": {
+                "type": "string"
+            }
+        },
+        "required": ["keyword"]
+    }
+}
