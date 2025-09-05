@@ -2,7 +2,7 @@ import json
 import boto3
 import os
 
-knowledge_base_id = "1CMBJP5NME"
+knowledge_base_id = os.environ.get('KNOWLEDGE_BASE_ID', '')
 number_of_results = 5
 
 bedrock_agent_runtime_client = boto3.client("bedrock-agent-runtime")

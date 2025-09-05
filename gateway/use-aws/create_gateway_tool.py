@@ -1,7 +1,8 @@
 import os
 import boto3
 import json
-import zipfile 
+import zipfile
+import time 
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 config_path = os.path.join(script_dir, "config.json")
@@ -20,7 +21,7 @@ projectName = config.get('projectName')
 region = config.get('region')
 accountId = config.get('accountId')
 
-def create_user_pool(user_pool_name):
+def create_user_pool(user_pool_name: str):
     cognito_client = boto3.client('cognito-idp', region_name=region)   
 
     print("Creating new Cognito User Pool...")
@@ -354,87 +355,6 @@ def create_lambda_function_policy(lambda_function_name):
         print(f"Policy creation failed: {e}")
         return None
 
-knowledge_base_id = "1CMBJP5NME"
-number_of_results = 5
-
-bedrock_agent_runtime_client = boto3.client("bedrock-agent-runtime")
-
-def retrieve(query: str) -> str:
-    response = bedrock_agent_runtime_client.retrieve(
-        retrievalQuery={"text": query},
-        knowledgeBaseId=knowledge_base_id,
-            retrievalConfiguration={
-                "vectorSearchConfiguration": {"numberOfResults": number_of_results},
-            },
-        )
-    
-    # print(f"response: {response}")
-    retrieval_results = response.get("retrievalResults", [])
-    # print(f"retrieval_results: {retrieval_results}")
-
-    json_docs = []
-    for result in retrieval_results:
-        text = url = name = None
-        if "content" in result:
-            content = result["content"]
-            if "text" in content:
-                text = content["text"]
-
-        if "location" in result:
-            location = result["location"]
-            if "s3Location" in location:
-                uri = location["s3Location"]["uri"] if location["s3Location"]["uri"] is not None else ""
-                
-                name = uri.split("/")[-1]
-                # encoded_name = parse.quote(name)                
-                # url = f"{path}/{doc_prefix}{encoded_name}"
-                url = uri # TODO: add path and doc_prefix
-                
-            elif "webLocation" in location:
-                url = location["webLocation"]["url"] if location["webLocation"]["url"] is not None else ""
-                name = "WEB"
-
-        json_docs.append({
-            "contents": text,              
-            "reference": {
-                "url": url,                   
-                "title": name,
-                "from": "RAG"
-            }
-        })
-    print(f"json_docs: {json_docs}")
-
-    return json.dumps(json_docs, ensure_ascii=False)
-
-def lambda_handler(event, context):
-    print(f"event: {event}")
-    print(f"context: {context}")
-
-    toolName = context.client_context.custom['bedrockAgentCoreToolName']
-    print(f"context.client_context: {context.client_context}")
-    print(f"Original toolName: {toolName}")
-    
-    delimiter = "___"
-    if delimiter in toolName:
-        toolName = toolName[toolName.index(delimiter) + len(delimiter):]
-    print(f"Converted toolName: {toolName}")
-
-    keyword = event.get('keyword')
-    print(f"keyword: {keyword}")
-
-    if toolName == 'retrieve':
-        result = retrieve(keyword)
-        print(f"result: {result}")
-        return {
-            'statusCode': 200, 
-            'body': result
-        }
-    else:
-        return {
-            'statusCode': 200, 
-            'body': f"{toolName} is not supported"
-        }
-
 def create_dummpy_lambda_function(lambda_function_path: str):
     body = """import json
 import boto3
@@ -644,6 +564,8 @@ def update_lambda_function_arn():
             # create lambda function
             need_update = False
             try:
+                # Set environment variables
+                environment_variables = {}
                 response = lambda_client.create_function(
                     FunctionName=lambda_function_name,
                     Runtime='python3.13',
@@ -670,15 +592,35 @@ def update_lambda_function_arn():
         lambda_function_arn = response['FunctionArn']
         print(f"✓ Lambda function code updated successfully: {lambda_function_arn}")
         
-        # update lambda configuration (timeout)
-        try:
-            lambda_client.update_function_configuration(
-                FunctionName=lambda_function_name,
-                Timeout=60
-            )
-            print(f"✓ Lambda function timeout updated to 60 seconds")
-        except Exception as e:
-            print(f"Warning: Failed to update Lambda timeout: {e}")
+        # Wait for code update to complete before updating configuration
+        print("Waiting for Lambda function code update to complete...")
+        time.sleep(5)
+        
+        # update lambda configuration (timeout and environment variables)
+        max_retries = 3
+        retry_count = 0
+        
+        while retry_count < max_retries:
+            try:
+                # Set environment variables
+                environment_variables = {}
+                lambda_client.update_function_configuration(
+                    FunctionName=lambda_function_name,
+                    Timeout=60,
+                    Environment={
+                        'Variables': environment_variables
+                    }
+                )
+                print(f"✓ Lambda function timeout and environment variables updated")
+                break
+            except Exception as e:
+                retry_count += 1
+                if "ResourceConflictException" in str(e) and retry_count < max_retries:
+                    print(f"Lambda function is still updating, waiting 10 seconds before retry {retry_count}/{max_retries}...")
+                    time.sleep(10)
+                else:
+                    print(f"Warning: Failed to update Lambda configuration after {retry_count} attempts: {e}")
+                    break
 
     # update config
     if lambda_function_arn:
@@ -863,7 +805,7 @@ def main():
     print(f"lambda_function_arn: {lambda_function_arn}")
 
     print("4. Getting or creating lambda target...")
-    target_id = config.get('target_id')
+    target_id = config.get('target_id', "")
     if not target_id:
         response = gateway_client.list_gateway_targets(
             gatewayIdentifier=gateway_id,
@@ -919,6 +861,7 @@ def main():
 
     # save gateway_url
     config['gateway_url'] = gateway_url
+    config['target_name'] = targetname
     config['target_id'] = target_id
     with open(config_path, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=2)
