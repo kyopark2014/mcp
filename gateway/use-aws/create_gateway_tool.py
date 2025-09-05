@@ -579,6 +579,9 @@ def update_lambda_function_arn():
                 )
                 lambda_function_arn = response['FunctionArn']
                 print(f"✓ Lambda function created successfully: {lambda_function_arn}")
+
+                print("Waiting for Lambda function code creation to complete...")
+                time.sleep(5)
             except Exception as e:
                 print(f"Failed to create Lambda function: {e}")
                 return None
