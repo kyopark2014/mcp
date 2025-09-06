@@ -17,5 +17,6 @@
     "test_username": "mcp-test-user@example.com",
     "test_password": "TestPassword123!"
   },
-  "secret_name": "mcp/credentials"
+  "secret_name": "mcp/credentials",
+  "knowledge_base_name": "mcp"
 }

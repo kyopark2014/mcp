@@ -29,25 +29,6 @@ logger.info(f"workingDir: {workingDir}")
 gateway_url = ""
 bearer_token = ""
 
-def get_bearer_token_from_secret_manager(secret_name):
-    try:
-        session = boto3.Session()
-        client = session.client('secretsmanager', region_name=region)
-        response = client.get_secret_value(SecretId=secret_name)
-        bearer_token_raw = response['SecretString']
-        
-        token_data = json.loads(bearer_token_raw)        
-        if 'bearer_token' in token_data:
-            bearer_token = token_data['bearer_token']
-            return bearer_token
-        else:
-            logger.info("No bearer token found in secret manager")
-            return None
-    
-    except Exception as e:
-        logger.info(f"Error getting stored token: {e}")
-        return None
-
 def get_cognito_config(cognito_config):    
     user_pool_name = cognito_config.get('user_pool_name')
     user_pool_id = cognito_config.get('user_pool_id')
@@ -92,16 +73,67 @@ def get_cognito_config(cognito_config):
     
     return cognito_config
 
-# get config of cognito
-cognito_config = config.get('cognito', {})
-if not cognito_config:
-    cognito_config = get_cognito_config(cognito_config)
-    if 'cognito' not in config:
-        config['cognito'] = {}
-    config['cognito'].update(cognito_config)
+def initialize_config():
+    global config
 
+    # knowledge base name
+    knowledge_base_name = config.get("knowledge_base_name", "")
+    if not knowledge_base_name:
+        knowledge_base_name = projectName
+        config['knowledge_base_name'] = knowledge_base_name
+
+    # knowledge base id
+    knowledge_base_id = config.get("knowledge_base_id", "")
+    if not knowledge_base_id:
+        # search knowledge base id using knowledge base name
+        bedrock_agent_client = boto3.client("bedrock-agent")
+        response = bedrock_agent_client.list_knowledge_bases()
+        for knowledge_base in response["knowledgeBaseSummaries"]:
+            if knowledge_base["name"] == projectName:
+                knowledge_base_id = knowledge_base["knowledgeBaseId"]
+                break
+        knowledge_base_id = projectName
+        logger.info(f"knowledge_base_id: {knowledge_base_id}")
+        config['knowledge_base_id'] = knowledge_base_id
+        
+    # secret name
+    if not "secret_name" in config:
+        secret_name = f"{projectName}/credentials"
+        config['secret_name'] = secret_name
+        logger.info(f"secret_name: {secret_name}")
+
+    # cognito
+    cognito_config = config.get('cognito', {})
+    if not cognito_config:
+        cognito_config = get_cognito_config(cognito_config)
+        if 'cognito' not in config:
+            config['cognito'] = {}
+        config['cognito'].update(cognito_config)
+
+    # save config
     with open(config_path, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=2)
+
+initialize_config()
+
+def get_bearer_token_from_secret_manager(secret_name):
+    try:
+        session = boto3.Session()
+        client = session.client('secretsmanager', region_name=region)
+        response = client.get_secret_value(SecretId=secret_name)
+        bearer_token_raw = response['SecretString']
+        
+        token_data = json.loads(bearer_token_raw)        
+        if 'bearer_token' in token_data:
+            bearer_token = token_data['bearer_token']
+            return bearer_token
+        else:
+            logger.info("No bearer token found in secret manager")
+            return None
+    
+    except Exception as e:
+        logger.info(f"Error getting stored token: {e}")
+        return None
 
 def retrieve_bearer_token(secret_name):
     secret_name = config['secret_name']
