@@ -30,7 +30,6 @@
             }
         },
         "required": [
-            "region",
             "service_name",
             "operation_name",
             "parameters",

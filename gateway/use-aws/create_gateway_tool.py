@@ -282,6 +282,14 @@ def create_lambda_function_policy(lambda_function_name):
                     "ec2:*"
                 ],
                 "Resource": "*"
+            },
+            {
+                "Sid": "EKSAccess",
+                "Effect": "Allow",
+                "Action": [
+                    "eks:*"
+                ],
+                "Resource": "*"
             }
         ]
     }

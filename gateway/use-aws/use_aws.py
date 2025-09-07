@@ -322,7 +322,6 @@ def check_boto3_validity(service_name: str, operation_name: str) -> Tuple[bool, 
     except Exception as e:  # pragma: no cover
         return False, str(e)
 
-
 def generate_input_schema(service_name: str, operation_name: str) -> Dict[str, Any]:
     """
     Generate an input schema for a given AWS service operation.

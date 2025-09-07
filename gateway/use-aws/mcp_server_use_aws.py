@@ -197,7 +197,6 @@ TOOL_SPEC = {
                 },
             },
             "required": [
-                "region",
                 "service_name",
                 "operation_name",
                 "parameters",
@@ -224,7 +223,7 @@ def use_aws(
     service_name: str,
     operation_name: str,
     parameters: Dict[str, Any],
-    region: Optional[str] = None,
+    region: Optional[str] = "us-west-2",
     label: str = "AWS Operation Details",
     profile_name: Optional[str] = None
 ) -> Dict[str, Any]:
