@@ -92,10 +92,10 @@ def initialize_config():
             if knowledge_base["name"] == projectName:
                 knowledge_base_id = knowledge_base["knowledgeBaseId"]
                 break
-        knowledge_base_id = projectName
         logger.info(f"knowledge_base_id: {knowledge_base_id}")
+        config['knowledge_base_name'] = projectName
         config['knowledge_base_id'] = knowledge_base_id
-        
+    
     # secret name
     if not "secret_name" in config:
         secret_name = f"{projectName}/credentials"
