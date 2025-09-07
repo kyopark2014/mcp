@@ -15,6 +15,9 @@ def load_config():
 
 config = load_config()
 
+script_dir = os.path.dirname(os.path.abspath(__file__))
+config_path = os.path.join(script_dir, "config.json")
+
 aws_region = config['region']
 accountId = config['accountId']
 projectName = config['projectName']
@@ -41,23 +44,6 @@ imageTags = latestImage['imageTags'][0]
 print(f"imageTags: {imageTags}")
 
 client = boto3.client('bedrock-agentcore-control', region_name=aws_region)
-response = client.list_agent_runtimes()
-print(f"response: {response}")
-
-isExist = False
-agentRuntimeId = None
-agentRuntimes = response['agentRuntimes']
-targetAgentRuntime = projectName.lower().replace('-', '_')+'_'+target.lower().replace('-', '_')
-if len(agentRuntimes) > 0:
-    for agentRuntime in agentRuntimes:
-        agentRuntimeName = agentRuntime['agentRuntimeName']
-        print(f"agentRuntimeName: {agentRuntimeName}")
-        if agentRuntimeName == targetAgentRuntime:
-            print(f"agentRuntimeName: {agentRuntimeName} is already exists")
-            agentRuntimeId = agentRuntime['agentRuntimeId']
-            print(f"agentRuntimeId: {agentRuntimeId}")
-            isExist = True        
-            break
 
 def update_agentcore_json(agentRuntimeArn):
     fname = 'config.json'        
@@ -80,7 +66,7 @@ def update_agentcore_json(agentRuntimeArn):
         pass
 
 # Check for duplicate Agent Runtime name
-def create_agent_runtime():
+def create_agent_runtime(targetAgentRuntime):
     runtime_name = targetAgentRuntime
     print(f"create agent runtime!")    
     print(f"Trying to create agent: {runtime_name}")
@@ -117,9 +103,7 @@ def create_agent_runtime():
 
     update_agentcore_json(agentRuntimeArn)
 
-def update_agent_runtime():
-    print(f"update agent runtime: {targetAgentRuntime}")
-
+def update_agent_runtime(agentRuntimeId):
     response = client.update_agent_runtime(
         agentRuntimeId=agentRuntimeId,
         description="Update agent runtime",
@@ -146,10 +130,41 @@ def update_agent_runtime():
     print(f"agentRuntimeArn: {agentRuntimeArn}")
     update_agentcore_json(agentRuntimeArn)
 
-print(f"isExist: {isExist}")
-if isExist:
-    print(f"update agent runtime: {targetAgentRuntime}, imageTags: {imageTags}")
-    update_agent_runtime()
-else:
-    print(f"create agent runtime: {targetAgentRuntime}, imageTags: {imageTags}")
-    create_agent_runtime()
+def main():
+    targetAgentRuntime = projectName.lower().replace('-', '_')+'_'+target.lower().replace('-', '_')
+    print(f"targetAgentRuntime: {targetAgentRuntime}")
+
+    client = boto3.client('bedrock-agentcore-control', region_name=aws_region)
+    response = client.list_agent_runtimes()
+    print(f"response: {response}")
+
+    isExist = False
+    agentRuntimeId = None
+    agentRuntimes = response['agentRuntimes']    
+    if len(agentRuntimes) > 0:
+        for agentRuntime in agentRuntimes:
+            agentRuntimeName = agentRuntime['agentRuntimeName']
+            print(f"agentRuntimeName: {agentRuntimeName}")
+            if agentRuntimeName == targetAgentRuntime:
+                print(f"agentRuntimeName: {agentRuntimeName} is already exists")
+                agentRuntimeId = agentRuntime['agentRuntimeId']
+                print(f"agentRuntimeId: {agentRuntimeId}")
+                isExist = True        
+                break
+    print(f"isExist: {isExist}")
+
+    if isExist:
+        print(f"update agent runtime: {targetAgentRuntime}, imageTags: {imageTags}")
+        agentRuntimeArn = update_agent_runtime(agentRuntimeId)
+    else:
+        print(f"create agent runtime: {targetAgentRuntime}, imageTags: {imageTags}")
+        agentRuntimeArn = create_agent_runtime(targetAgentRuntime)
+
+    config['agent_runtime_arn'] = agentRuntimeArn           
+
+    # update config
+    with open(config_path, 'w', encoding='utf-8') as f:
+        json.dump(config, f, ensure_ascii=False, indent=4) 
+
+if __name__ == "__main__":
+    main()
