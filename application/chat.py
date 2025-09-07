@@ -1878,7 +1878,20 @@ def get_tool_info(tool_name, tool_content):
             json_data = json.loads(tool_content)
         
         logger.info(f"json_data: {json_data}")
-        payload = json_data["response"]["payload"]
+
+        if "content" in json_data:
+            content = json_data["content"]
+            logger.info(f"content: {content}")
+            if "result" in content:
+                result = content["result"]
+                logger.info(f"result: {result}")
+                
+        payload = {}
+        if "response" in json_data:
+            payload = json_data["response"]["payload"]
+        elif "content" in json_data:
+            payload = json_data
+
         if "content" in payload:
             payload_content = payload["content"]
             if "result" in payload_content:
