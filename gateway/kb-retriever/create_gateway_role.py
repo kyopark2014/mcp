@@ -68,7 +68,7 @@ def create_agentcore_gateway_policy():
                 "Action": [
                     "bedrock-agentcore:*"
                 ],
-                "Resource": f"arn:aws:bedrock-agentcore:{region}:{accountId}:gateway/*"
+                "Resource": "*"
             },
             {
                 "Sid": "SecretsManagerAccess",
@@ -78,9 +78,7 @@ def create_agentcore_gateway_policy():
                     "secretsmanager:DescribeSecret",
                     "secretsmanager:UpdateSecret"
                 ],
-                "Resource": [
-                    f"arn:aws:secretsmanager:{region}:*:secret:{projectName}/cognito/credentials*"
-                ]
+                "Resource": "*"
             },
             {
                 "Sid": "CognitoAccess",

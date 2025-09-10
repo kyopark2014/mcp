@@ -194,7 +194,7 @@ def create_lambda_function_policy(lambda_function_name):
                 "Action": [
                     "bedrock-agentcore:*"
                 ],
-                "Resource": f"arn:aws:bedrock-agentcore:{region}:{accountId}:gateway/*"
+                "Resource": "*"
             },
             {
                 "Sid": "SecretsManagerAccess",
@@ -204,9 +204,7 @@ def create_lambda_function_policy(lambda_function_name):
                     "secretsmanager:DescribeSecret",
                     "secretsmanager:UpdateSecret"
                 ],
-                "Resource": [
-                    f"arn:aws:secretsmanager:{region}:*:secret:{projectName}/cognito/credentials*"
-                ]
+                "Resource": "*"
             },
             {
                 "Sid": "CognitoAccess",
