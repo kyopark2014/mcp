@@ -18,7 +18,6 @@ from mcp import stdio_client, StdioServerParameters
 from mcp.client.streamable_http import streamablehttp_client
 from botocore.config import Config
 from speak import speak
-from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -562,8 +561,7 @@ async def initiate_agent(system_prompt, strands_tools, mcp_servers, historyMode)
 
     logger.info(f"initiated: {initiated}, update_required: {update_required}")
 
-    if not initiated or update_required:
-        
+    if not initiated or update_required:        
         init_mcp_clients(mcp_servers)
         tools = update_tools(strands_tools, mcp_servers)
         logger.info(f"tools: {tools}")

@@ -1654,12 +1654,15 @@ def add_notification(containers, message):
         containers['notification'][index].info(message)
     index += 1
 
-def update_streaming_result(containers, message):
+def update_streaming_result(containers, message, type):
     global streaming_index
-    streaming_index = index 
+    streaming_index = index
 
     if containers is not None:
-        containers['notification'][streaming_index].markdown(message)
+        if type == "markdown":
+            containers['notification'][streaming_index].markdown(message)
+        elif type == "info":
+            containers['notification'][streaming_index].info(message)
 
 def update_tool_notification(containers, tool_index, message):
     if containers is not None:
@@ -2058,7 +2061,7 @@ async def run_strands_agent(query, strands_tools, mcp_servers, history_mode, con
                 text = event["data"]
                 logger.info(f"[data] {text}")
                 current += text
-                update_streaming_result(containers, current)
+                update_streaming_result(containers, current, "markdown")
 
             elif "result" in event:
                 final = event["result"]                
@@ -2141,12 +2144,9 @@ async def run_strands_agent(query, strands_tools, mcp_servers, history_mode, con
     
     return final_result, image_url
 
-async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
-    global index
-    index = 0
-
-    image_url = []
-    references = []
+memory_id = actor_id = session_id = None
+def initiate_memory():
+    global memory_id, actor_id, session_id
 
     # initate memory variables    
     memory_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables(user_id)
@@ -2173,6 +2173,20 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
             actor_id=actor_id, 
             session_id=session_id, 
             namespace=namespace)
+    
+enable_short_term_memory = "Enable"
+    
+def save_to_memory(query, result):
+    if memory_id is None:
+        initiate_memory()    
+    agentcore_memory.save_conversation_to_memory(memory_id, actor_id, session_id, query, result) 
+
+async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
+    global index, streaming_index
+    index = 0
+
+    image_url = []
+    references = []
 
     mcp_json = mcp_config.load_selected_config(mcp_servers)
     logger.info(f"mcp_json: {mcp_json}")
@@ -2180,21 +2194,11 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
     server_params = langgraph_agent.load_multiple_mcp_server_parameters(mcp_json)
     logger.info(f"server_params: {server_params}")    
 
-    try:
-        client = MultiServerMCPClient(server_params)
-        tools = await client.get_tools()
+    client = MultiServerMCPClient(server_params)
+    tools = await client.get_tools()
 
-        if tools is None:
-            logger.error("tools is None")
-            tools = []
-        
-        tool_list = [tool.name for tool in tools]
-        logger.info(f"tool_list: {tool_list}")
-
-    except Exception as e:
-        logger.error(f"Error getting tools: {e}")
-        tools = []
-        tool_list = []        
+    tool_list = [tool.name for tool in tools]
+    logger.info(f"tool_list: {tool_list}")
 
     if history_mode == "Enable":
         app = langgraph_agent.buildChatAgentWithHistory(tools)
@@ -2220,12 +2224,9 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
     result = ""
     tool_used = False  # Track if tool was used
     tool_name = toolUseId = ""
-    async for output in app.astream(inputs, config, stream_mode="messages"):
-        # logger.info(f"output: {output}")
-
-        # Handle tuple output (message, metadata)
-        if isinstance(output, tuple) and len(output) > 0 and isinstance(output[0], AIMessageChunk):
-            message = output[0]    
+    async for stream in app.astream(inputs, config, stream_mode="messages"):
+        if isinstance(stream[0], AIMessageChunk):
+            message = stream[0]    
             input = {}        
             if isinstance(message.content, list):
                 for content_item in message.content:
@@ -2242,7 +2243,7 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
                                 result += text_content
                                 
                             # logger.info(f"result: {result}")                
-                            update_streaming_result(containers, result)
+                            update_streaming_result(containers, result, "markdown")
 
                         elif content_item.get('type') == 'tool_use':
                             logger.info(f"content_item: {content_item}")      
@@ -2250,10 +2251,8 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
                                 toolUseId = content_item.get('id', '')
                                 tool_name = content_item.get('name', '')
                                 logger.info(f"tool_name: {tool_name}, toolUseId: {toolUseId}")
-                                add_notification(containers, f"Tool: {tool_name}, Input: {input}")
-
-                                tool_info_list[toolUseId] = index                     
-                                tool_name_list[toolUseId] = tool_name     
+                                streaming_index = index                                                                                                                         
+                                index += 1
                                                                     
                             if 'partial_json' in content_item:
                                 partial_json = content_item.get('partial_json', '')
@@ -2266,12 +2265,10 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
                                 logger.info(f"input: {input}")
 
                                 logger.info(f"tool_name: {tool_name}, input: {input}, toolUseId: {toolUseId}")
-                                # add_notification(containers, f"Tool: {tool_name}, Input: {input}")
-                                index = tool_info_list[toolUseId]
-                                containers['notification'][index-1].info(f"Tool: {tool_name}, Input: {input}")
+                                update_streaming_result(containers, f"Tool: {tool_name}, Input: {input}", "info")
                         
-        elif isinstance(output, tuple) and len(output) > 0 and isinstance(output[0], ToolMessage):
-            message = output[0]
+        elif isinstance(stream[0], ToolMessage):
+            message = stream[0]
             logger.info(f"ToolMessage: {message.name}, {message.content}")
             tool_name = message.name
             toolResult = message.content
@@ -2306,9 +2303,5 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
     
     if containers is not None:
         containers['notification'][index].markdown(result)
-
-    # save event to memory
-    if memory_id is not None and result:
-        agentcore_memory.save_conversation_to_memory(memory_id, actor_id, session_id, query, result) 
     
     return result, image_url

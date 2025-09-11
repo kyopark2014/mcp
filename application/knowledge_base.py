@@ -201,7 +201,7 @@ def initiate_knowledge_base():
             )
             
         response = client.list_knowledge_bases(
-            maxResults=10
+            maxResults=50
         )
         logger.info(f"(list_knowledge_bases) response: {response}")
         
