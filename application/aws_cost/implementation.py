@@ -1,7 +1,5 @@
 """This file was generated using `langgraph-gen` version 0.0.3.
-
 This file provides a placeholder implementation for the corresponding stub.
-
 Replace the placeholder implementation with your own logic.
 """
 
@@ -35,6 +33,7 @@ import aws_cost.reflection_agent as reflection_agent
 import string
 import trans
 import utils
+import cost_analysis as cost
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -686,6 +685,9 @@ def create_final_report(request_id, question, body, urls):
 
 def run_cost_agent(mcp_servers, st):
     logger.info(f"###### run_cost_agent ######")
+
+    st.info("비용 데이터를 가져옵니다...")
+    cost.get_visualiation() 
     
     request_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))    
     template = open(os.path.join(os.path.dirname(__file__), f"report.html")).read()

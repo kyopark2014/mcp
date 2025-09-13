@@ -201,15 +201,19 @@ def initiate():
 
 def clear_chat_history():
     global memory_chain
-    memory_chain = []
+    if memory_chain and hasattr(memory_chain, 'chat_memory'):
+        memory_chain.chat_memory.clear()
+    else:
+        memory_chain = ConversationBufferWindowMemory(memory_key="chat_history", output_key='answer', return_messages=True, k=5)
     map_chain[user_id] = memory_chain
 
 def save_chat_history(text, msg):
-    memory_chain.chat_memory.add_user_message(text)
-    if len(msg) > MSG_LENGTH:
-        memory_chain.chat_memory.add_ai_message(msg[:MSG_LENGTH])                          
-    else:
-        memory_chain.chat_memory.add_ai_message(msg) 
+    if memory_chain and hasattr(memory_chain, 'chat_memory'):
+        memory_chain.chat_memory.add_user_message(text)
+        if len(msg) > MSG_LENGTH:
+            memory_chain.chat_memory.add_ai_message(msg[:MSG_LENGTH])                          
+        else:
+            memory_chain.chat_memory.add_ai_message(msg) 
 
 def create_object(key, body):
     """
@@ -784,6 +788,8 @@ def grade_documents(question, documents):
 # General Conversation
 #########################################################
 def general_conversation(query):
+    global memory_chain
+    initiate()  # Initialize memory_chain
     llm = get_chat(extended_thinking=reasoning_mode)
 
     system = (
@@ -800,7 +806,10 @@ def general_conversation(query):
         ("human", human)
     ])
                 
-    history = memory_chain.load_memory_variables({})["chat_history"]
+    if memory_chain and hasattr(memory_chain, 'load_memory_variables'):
+        history = memory_chain.load_memory_variables({})["chat_history"]
+    else:
+        history = []
 
     chain = prompt | llm | StrOutputParser()
     try: 
@@ -1664,10 +1673,6 @@ def update_streaming_result(containers, message, type):
         elif type == "info":
             containers['notification'][streaming_index].info(message)
 
-def update_tool_notification(containers, tool_index, message):
-    if containers is not None:
-        containers['notification'][tool_index].info(message)
-
 tool_info_list = dict()
 tool_input_list = dict()
 tool_name_list = dict()
@@ -2014,33 +2019,6 @@ async def run_strands_agent(query, strands_tools, mcp_servers, history_mode, con
     image_url = []
     references = []
 
-    # initate memory variables
-    memory_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables(user_id)
-    logger.info(f"memory_id: {memory_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
-
-    if memory_id is None:
-        # retrieve memory id
-        memory_id = agentcore_memory.retrieve_memory_id()
-        logger.info(f"memory_id: {memory_id}")        
-        
-        # create memory if not exists
-        if memory_id is None:
-            logger.info(f"Memory will be created...")
-            memory_id = agentcore_memory.create_memory(namespace)
-            logger.info(f"Memory was created... {memory_id}")
-        
-        # create strategy if not exists
-        agentcore_memory.create_strategy_if_not_exists(
-            memory_id=memory_id, namespace=namespace, strategy_name=user_id)
-
-        # save memory variables
-        agentcore_memory.update_memory_variables(
-            user_id=user_id, 
-            memory_id=memory_id, 
-            actor_id=actor_id, 
-            session_id=session_id, 
-            namespace=namespace)
-    
     # initiate agent
     await strands_agent.initiate_agent(
         system_prompt=None, 
@@ -2138,10 +2116,6 @@ async def run_strands_agent(query, strands_tools, mcp_servers, history_mode, con
         if containers is not None:
             containers['notification'][index].markdown(final_result)
 
-    # save event to memory
-    if memory_id is not None and result:
-        agentcore_memory.save_conversation_to_memory(memory_id, actor_id, session_id, query, result) 
-    
     return final_result, image_url
 
 memory_id = actor_id = session_id = None
@@ -2174,10 +2148,10 @@ def initiate_memory():
             session_id=session_id, 
             namespace=namespace)
     
-enable_short_term_memory = "Enable"
+enable_short_term_memory = "Disable"
     
 def save_to_memory(query, result):
-    if memory_id is None:
+    if memory_id is None and enable_short_term_memory=="Enable":
         initiate_memory()    
     agentcore_memory.save_conversation_to_memory(memory_id, actor_id, session_id, query, result) 
 

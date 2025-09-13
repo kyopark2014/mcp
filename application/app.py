@@ -350,7 +350,7 @@ with st.sidebar:
     if mode=='이미지 분석':
         st.subheader("🌇 이미지 업로드")
         uploaded_file = st.file_uploader("이미지 요약을 위한 파일을 선택합니다.", type=["png", "jpg", "jpeg"])
-    elif mode=='RAG' or mode=="Agent" or mode=="Agent (Chat)" or mode=='비용 분석':
+    elif mode=='RAG' or mode=="Agent" or mode=="Agent (Chat)":
         st.subheader("📋 문서 업로드")
         uploaded_file = st.file_uploader("RAG를 위한 파일을 선택합니다.", type=["pdf", "txt", "py", "md", "csv", "json"], key=chat.fileId)
 

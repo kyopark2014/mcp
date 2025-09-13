@@ -244,8 +244,6 @@ def get_visualiation():
     except Exception as e:
         logger.info(f"Error to earn cost data: {str(e)}")   
 
-get_visualiation() 
-
 def ask_cost_insights(question):
     if cost_data:
         cost_data_dict = {
