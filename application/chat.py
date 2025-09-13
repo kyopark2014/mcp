@@ -178,6 +178,7 @@ memorystores = dict()
 
 checkpointer = MemorySaver()
 memorystore = InMemoryStore()
+memory_chain = None  # Initialize memory_chain as global variable
 
 def initiate():
     global memory_chain, checkpointer, memorystore, checkpointers, memorystores
@@ -201,6 +202,10 @@ def initiate():
 
 def clear_chat_history():
     global memory_chain
+    # Initialize memory_chain if it doesn't exist
+    if memory_chain is None:
+        initiate()
+    
     if memory_chain and hasattr(memory_chain, 'chat_memory'):
         memory_chain.chat_memory.clear()
     else:
@@ -208,6 +213,11 @@ def clear_chat_history():
     map_chain[user_id] = memory_chain
 
 def save_chat_history(text, msg):
+    global memory_chain
+    # Initialize memory_chain if it doesn't exist
+    if memory_chain is None:
+        initiate()
+    
     if memory_chain and hasattr(memory_chain, 'chat_memory'):
         memory_chain.chat_memory.add_user_message(text)
         if len(msg) > MSG_LENGTH:

@@ -72,7 +72,7 @@ def create_agent_runtime(targetAgentRuntime):
     print(f"Trying to create agent: {runtime_name}")
 
     # create agent runtime
-    agentRuntimeArn = None
+    agentRuntimeArn = ""
     try:        
         response = client.create_agent_runtime(
             agentRuntimeName=runtime_name,
@@ -102,6 +102,7 @@ def create_agent_runtime(targetAgentRuntime):
         print(f"[ERROR] ConflictException: {e}")
 
     update_agentcore_json(agentRuntimeArn)
+    return agentRuntimeArn
 
 def update_agent_runtime(agentRuntimeId):
     response = client.update_agent_runtime(
@@ -129,6 +130,7 @@ def update_agent_runtime(agentRuntimeId):
     agentRuntimeArn = response['agentRuntimeArn']
     print(f"agentRuntimeArn: {agentRuntimeArn}")
     update_agentcore_json(agentRuntimeArn)
+    return agentRuntimeArn
 
 def main():
     targetAgentRuntime = projectName.lower().replace('-', '_')+'_'+target.lower().replace('-', '_')
@@ -149,6 +151,9 @@ def main():
                 print(f"agentRuntimeName: {agentRuntimeName} is already exists")
                 agentRuntimeId = agentRuntime['agentRuntimeId']
                 print(f"agentRuntimeId: {agentRuntimeId}")
+                agentRuntimeArn = agentRuntime['agentRuntimeArn']
+                print(f"agentRuntimeArn: {agentRuntimeArn}")
+                config['agent_runtime_arn'] = agentRuntimeArn
                 isExist = True        
                 break
     print(f"isExist: {isExist}")
@@ -160,6 +165,7 @@ def main():
         print(f"create agent runtime: {targetAgentRuntime}, imageTags: {imageTags}")
         agentRuntimeArn = create_agent_runtime(targetAgentRuntime)
 
+    print(f"agentRuntimeArn: {agentRuntimeArn}")
     config['agent_runtime_arn'] = agentRuntimeArn           
 
     # update config

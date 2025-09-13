@@ -115,6 +115,12 @@ async def main():
     agent_arn = config['agent_runtime_arn']
     region = config['region']
     
+    # Check if agent_arn is properly configured
+    if not agent_arn:
+        print("Error: agent_runtime_arn is not configured in config.json")
+        print("Please set the agent_runtime_arn value in config.json to your AWS Bedrock Agent Runtime ARN")
+        return
+    
     # Check basic AWS connectivity
     bearer_token = get_bearer_token()
     print(f"Bearer token from secret manager: {bearer_token[:100] if bearer_token else 'None'}...")

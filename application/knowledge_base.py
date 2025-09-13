@@ -29,7 +29,7 @@ aws_region = os.environ.get('AWS_DEFAULT_REGION', 'us-west-2')
 config = utils.load_config()
 
 # variables
-projectName = config["projectName"] if "projectName" in config else "mcp-rag"
+projectName = config["projectName"] if "projectName" in config else "mcp"
 
 vectorIndexName = projectName
 knowledge_base_name = projectName

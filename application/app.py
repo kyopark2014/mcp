@@ -321,7 +321,7 @@ with st.sidebar:
             'Claude 3.5 Haiku', 
             'OpenAI OSS 120B',
             'OpenAI OSS 20B'
-        ), index=7
+        ), index=6
     )
 
     # debug checkbox
