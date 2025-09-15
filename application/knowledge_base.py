@@ -2,6 +2,7 @@ import traceback
 import json
 import time
 import boto3
+from pydantic.types import T
 import utils
 import os
 
@@ -96,11 +97,16 @@ os_client = OpenSearch(
 def is_not_exist(index_name):    
     logger.info(f"index_name: {index_name}")
         
-    if os_client.indices.exists(index=index_name):
-        logger.info(f"use exist index: {index_name}")
-        return False
-    else:
-        logger.info(f"no index: {index_name}")
+    try:
+        if os_client.indices.exists(index=index_name):
+            logger.info(f"use exist index: {index_name}")
+            return False
+        else:
+            logger.info(f"no index: {index_name}")
+            return True
+    except Exception:
+        err_msg = traceback.format_exc()
+        logger.info(f"error message: {err_msg}")
         return True
     
 def initiate_knowledge_base():

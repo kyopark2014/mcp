@@ -50,7 +50,7 @@ reasoning_mode = 'Disable'
 debug_messages = []  # List to store debug messages
 
 config = utils.load_config()
-print(f"config: {config}")
+logger.info(f"config: {config}")
 
 bedrock_region = config["region"] if "region" in config else "us-west-2"
 projectName = config["projectName"] if "projectName" in config else "mcp-rag"
@@ -488,6 +488,7 @@ def check_grammer(text):
     return msg
 
 reference_docs = []
+
 # api key to get weather information in agent
 if aws_access_key and aws_secret_key:
     secretsmanager = boto3.client(
@@ -504,38 +505,47 @@ else:
     )
 
 # api key for weather
-weather_api_key = ""
-try:
-    get_weather_api_secret = secretsmanager.get_secret_value(
-        SecretId=f"openweathermap-{projectName}"
-    )
-    #print('get_weather_api_secret: ', get_weather_api_secret)
-    secret = json.loads(get_weather_api_secret['SecretString'])
-    #print('secret: ', secret)
-    weather_api_key = secret['weather_api_key']
+def get_weather_api_key():
+    weather_api_key = ""
+    try:
+        get_weather_api_secret = secretsmanager.get_secret_value(
+            SecretId=f"openweathermap-{projectName}"
+        )
+        #print('get_weather_api_secret: ', get_weather_api_secret)
+        secret = json.loads(get_weather_api_secret['SecretString'])
+        #print('secret: ', secret)
+        weather_api_key = secret['weather_api_key']
 
-except Exception as e:
-    raise e
+    except Exception as e:
+        logger.info(f"weather api key is required: {e}")
+        pass
 
-# api key to use LangSmith
-langsmith_api_key = ""
-try:
-    get_langsmith_api_secret = secretsmanager.get_secret_value(
-        SecretId=f"langsmithapikey-{projectName}"
-    )
-    #print('get_langsmith_api_secret: ', get_langsmith_api_secret)
-    secret = json.loads(get_langsmith_api_secret['SecretString'])
-    #print('secret: ', secret)
-    langsmith_api_key = secret['langsmith_api_key']
-    langchain_project = secret['langchain_project']
-except Exception as e:
-    raise e
+    return weather_api_key
 
-if langsmith_api_key:
+def get_langsmith_api_key():
+    # api key to use LangSmith
+    langsmith_api_key = langchain_project = ""
+    try:
+        get_langsmith_api_secret = secretsmanager.get_secret_value(
+            SecretId=f"langsmithapikey-{projectName}"
+        )
+        #print('get_langsmith_api_secret: ', get_langsmith_api_secret)
+        secret = json.loads(get_langsmith_api_secret['SecretString'])
+        #print('secret: ', secret)
+        langsmith_api_key = secret['langsmith_api_key']
+        langchain_project = secret['langchain_project']
+    except Exception as e:
+        logger.info(f"langsmith api key is required: {e}")
+        pass
+
+    return langsmith_api_key, langchain_project
+
+langsmith_api_key, langchain_project = get_langsmith_api_key()
+if langsmith_api_key and langchain_project:
     os.environ["LANGCHAIN_API_KEY"] = langsmith_api_key
     os.environ["LANGCHAIN_TRACING_V2"] = "true"
     os.environ["LANGCHAIN_PROJECT"] = langchain_project
-    
+
 def tavily_search(query, k):
     docs = []    
     try:

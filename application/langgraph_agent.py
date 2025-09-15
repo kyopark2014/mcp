@@ -31,7 +31,6 @@ sharing_url = config["sharing_url"] if "sharing_url" in config else None
 s3_prefix = "docs"
 capture_prefix = "captures"
 
-mcp_server_info = {}
 user_id = "langgraph"
 
 class State(TypedDict):
