@@ -19,8 +19,30 @@ from PIL import Image
 from langchain_aws import ChatBedrock
 from botocore.config import Config
 from langchain_core.prompts import MessagesPlaceholder, ChatPromptTemplate
-from langchain.memory import ConversationBufferWindowMemory
-from langchain.docstore.document import Document
+from langchain_core.documents import Document
+
+# Simple memory class to replace ConversationBufferWindowMemory
+class SimpleMemory:
+    def __init__(self, k=5):
+        self.k = k
+        self.chat_memory = SimpleChatMemory()
+    
+    def load_memory_variables(self, inputs):
+        return {"chat_history": self.chat_memory.messages[-self.k:] if len(self.chat_memory.messages) > self.k else self.chat_memory.messages}
+
+class SimpleChatMemory:
+    def __init__(self):
+        self.messages = []
+    
+    def add_user_message(self, message):
+        self.messages.append(HumanMessage(content=message))
+    
+    def add_ai_message(self, message):
+        self.messages.append(AIMessage(content=message))
+    
+    def clear(self):
+        self.messages = []
+        
 from tavily import TavilyClient  
 from urllib import parse
 from pydantic.v1 import BaseModel, Field
@@ -191,7 +213,7 @@ def initiate():
         memorystore = memorystores[user_id]
     else: 
         logger.info(f"memory not exist. create new memory!")
-        memory_chain = ConversationBufferWindowMemory(memory_key="chat_history", output_key='answer', return_messages=True, k=5)
+        memory_chain = SimpleMemory(k=5)
         map_chain[user_id] = memory_chain
 
         checkpointer = MemorySaver()
@@ -209,7 +231,7 @@ def clear_chat_history():
     if memory_chain and hasattr(memory_chain, 'chat_memory'):
         memory_chain.chat_memory.clear()
     else:
-        memory_chain = ConversationBufferWindowMemory(memory_key="chat_history", output_key='answer', return_messages=True, k=5)
+        memory_chain = SimpleMemory(k=5)
     map_chain[user_id] = memory_chain
 
 def save_chat_history(text, msg):
@@ -389,8 +411,8 @@ def get_chat(extended_thinking):
         parameters = {
             "max_tokens":maxOutputTokens,     
             "temperature":0.1,
-            "top_k":250,
-            "top_p":0.9,
+            "top_p":0.9
+            # Note: stream parameter removed for invoke requests
         }
 
     chat = ChatBedrock(   # new chat model
@@ -668,8 +690,8 @@ def get_parallel_processing_chat(models, selected):
         parameters = {
             "max_tokens":maxOutputTokens,     
             "temperature":0.1,
-            "top_k":250,
-            "top_p":0.9,
+            "top_p":0.9
+            # Note: stream parameter removed for invoke requests
         }
 
     chat = ChatBedrock(   # new chat model
@@ -807,7 +829,7 @@ def grade_documents(question, documents):
 ####################### LangChain #######################
 # General Conversation
 #########################################################
-def general_conversation(query):
+def general_conversation(query, st):
     global memory_chain
     initiate()  # Initialize memory_chain
     llm = get_chat(extended_thinking=reasoning_mode)
@@ -831,20 +853,50 @@ def general_conversation(query):
     else:
         history = []
 
-    chain = prompt | llm | StrOutputParser()
-    try: 
-        stream = chain.stream(
-            {
-                "history": history,
-                "input": query,
-            }
-        )  
-        logger.info(f"stream: {stream}")
+    if model_type == 'openai':
+        # For OpenAI models, use invoke instead of stream to avoid parsing issues
+        chain = prompt | llm
+        try: 
+            result = chain.invoke(
+                {
+                    "history": history,
+                    "input": query,
+                }
+            )  
+            logger.info(f"result: {result}")
             
-    except Exception:
-        err_msg = traceback.format_exc()
-        logger.info(f"error message: {err_msg}")      
-        raise Exception ("Not able to request to LLM: "+err_msg)
+            content = result.content
+            if '<reasoning>' in content and '</reasoning>' in content:
+                # Extract reasoning content and show it in st.info
+                reasoning_start = content.find('<reasoning>') + 11  # Length of '<reasoning>'
+                reasoning_end = content.find('</reasoning>')
+                reasoning_content = content[reasoning_start:reasoning_end]
+                st.info(f"{reasoning_content}")
+                
+                # Extract main content after reasoning tag
+                content = content.split('</reasoning>', 1)[1] if '</reasoning>' in content else content
+            stream = iter([content])
+            
+        except Exception:
+            err_msg = traceback.format_exc()
+            logger.info(f"error message: {err_msg}")      
+            raise Exception ("Not able to request to LLM: "+err_msg)
+    else:
+        # For other models, use streaming
+        chain = prompt | llm | StrOutputParser()
+        try: 
+            stream = chain.stream(
+                {
+                    "history": history,
+                    "input": query,
+                }
+            )  
+            logger.info(f"stream: {stream}")
+                
+        except Exception:
+            err_msg = traceback.format_exc()
+            logger.info(f"error message: {err_msg}")      
+            raise Exception ("Not able to request to LLM: "+err_msg)
         
     return stream
 
@@ -1512,7 +1564,8 @@ def get_rag_prompt(text):
             "{context}"
         ) 
         
-    elif model_type == "claude":
+    # elif model_type == "claude":
+    else: 
         if isKorean(text)==True:
             system = (
                 "당신의 이름은 서연이고, 질문에 대해 친절하게 답변하는 사려깊은 인공지능 도우미입니다."

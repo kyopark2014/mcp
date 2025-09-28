@@ -6,7 +6,7 @@ import chat
 import tool_use
 import os
 
-from langchain.docstore.document import Document
+from langchain_core.documents import Document
 from tavily import TavilyClient  
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_community.utilities.tavily_search import TavilySearchAPIWrapper

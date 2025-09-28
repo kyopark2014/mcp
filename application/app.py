@@ -173,6 +173,11 @@ with st.sidebar:
     )   
     st.info(mode_descriptions[mode][0])
     
+    if mode=='Agent' or mode=='Agent (Chat)':
+        agentType = st.radio(
+            label="Agent 타입을 선택하세요. ",options=["langgraph", "strands"], index=0
+        )
+
     # mcp selection    
     if mode=='Agent' or mode=='Agent (Chat)' or mode=='비용 분석' or mode=='Swarm Agent':
         # MCP Config JSON input
@@ -207,12 +212,7 @@ with st.sidebar:
             ]
         mcp_selections = {}
         default_selections = ["basic", "use-aws", "tavily-manual", "filesystem", "terminal"]
-        
-        if mode=='Agent' or mode=='Agent (Chat)':
-            agentType = st.radio(
-                label="Agent 타입을 선택하세요. ",options=["langgraph", "strands"], index=0
-            )
-
+                
         with st.expander("MCP 옵션 선택", expanded=True):            
             # Create two columns
             col1, col2 = st.columns(2)
@@ -489,7 +489,7 @@ if prompt := st.chat_input("메시지를 입력하세요."):
 
     with st.chat_message("assistant"):
         if mode == '일상적인 대화':
-            stream = chat.general_conversation(prompt)            
+            stream = chat.general_conversation(prompt, st)            
             response = st.write_stream(stream)
             logger.info(f"response: {response}")
             st.session_state.messages.append({"role": "assistant", "content": response})

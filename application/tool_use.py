@@ -23,7 +23,7 @@ from bs4 import BeautifulSoup
 from langchain_core.prompts import MessagesPlaceholder, ChatPromptTemplate
 from langchain_aws import AmazonKnowledgeBasesRetriever
 from pytz import timezone
-from langchain.docstore.document import Document
+from langchain_core.documents import Document
 from urllib import parse
 from langgraph.graph import START, END, StateGraph
 from io import BytesIO
