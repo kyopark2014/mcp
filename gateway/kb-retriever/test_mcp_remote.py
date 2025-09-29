@@ -123,7 +123,53 @@ def save_bearer_token(secret_name, bearer_token):
         print(f"Error saving bearer token: {e}")
         # Continue execution even if saving fails
 
+def get_tool_list(tools):
+    tool_list = []
+    
+    # Check if tools is a single tool or a list
+    if not isinstance(tools, (list, tuple)):
+        tools = [tools]
+    
+    for tool in tools:
+        if hasattr(tool, 'tool_name'):  # MCP tool
+            tool_list.append(tool.tool_name)
+        elif hasattr(tool, 'name'):  # MCP tool with name attribute
+            tool_list.append(tool.name)
+        elif str(tool).startswith("<module 'strands_tools."):   # strands_tools 
+            module_name = str(tool).split("'")[1].split('.')[-1]
+            tool_list.append(module_name)
+        else:
+            # Add the tool object itself or its string representation
+            tool_list.append(str(tool))
+    
+    return tool_list
+
+from mcp.types import Tool as MCPTool
+from strands.tools.mcp.mcp_client import MCPClient, MCPAgentTool
+from strands import Agent
+from strands.models import BedrockModel
+from strands.handlers import null_callback_handler    
+
+def get_search_tool(client):
+    mcp_tool = MCPTool(
+        name="x_amz_bedrock_agentcore_search",
+        description="A special tool that returns a trimmed down list of tools given a context. Use this tool only when there are many tools available and you want to get a subset that matches the provided context.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "search query to use for finding tools",
+                }
+            },
+            "required": ["query"],
+        },
+    )
+    return MCPAgentTool(mcp_tool, client)
+    
 async def main():
+    query = "보일러 에러 코드"
+
     # Check basic AWS connectivity
     bearer_token = get_bearer_token()
     print(f"Bearer token from secret manager: {bearer_token if bearer_token else 'None'}")
@@ -198,6 +244,8 @@ async def main():
                     # Save the fresh token
                     secret_name = config['secret_name']
                     save_bearer_token(secret_name, fresh_bearer_token)
+
+                    bearer_token = fresh_bearer_token
                     
                     # Retry the request with fresh token
                     response = requests.post(
@@ -280,7 +328,7 @@ async def main():
                 # Test retrieve function
                 print("\n=== Testing retrieve function ===")
                 params = {
-                    "keyword": "보일러 에러 코드"
+                    "keyword": query
                 }
                 
                 try:
@@ -308,6 +356,52 @@ async def main():
         print(f"Error type: {type(e)}")
         import traceback
         traceback.print_exc()
+
+    # tool list with sementic search
+    print("\n=== Testing tool list with sementic search ===\n")
+    
+    client = MCPClient(
+        lambda: streamablehttp_client(
+            mcp_url, headers={"Authorization": f"Bearer {bearer_token}"}
+        )
+    )
+
+    with client:
+        tools = get_search_tool(client)
+        print(f"tools: {tools}")
+
+        tool_list = get_tool_list(tools)
+        print(f"tool_list: {tool_list}")
+
+        session = boto3.Session()
+        bedrockmodel = BedrockModel(
+            model_id="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+            temperature=0.7,
+            streaming=True,
+            boto_session=session,
+        )
+        
+        simple_agent = Agent(
+            model=bedrockmodel,
+            tools=[get_search_tool(client)],
+            callback_handler=null_callback_handler,
+        )
+        try:
+            direct_result = simple_agent.tool.x_amz_bedrock_agentcore_search(query=query)
+            print(f"direct_result: {direct_result}")
+
+            if direct_result.get('status') == 'error':
+                print(f"error: {direct_result.get('content')}")
+                return
+            else:
+                resp_json = json.loads(direct_result["content"][0]["text"])
+                search_results = resp_json["tools"]
+                print(f"search_results: {search_results}")
+                
+        except Exception as e:
+            print(f"Error calling search tool: {e}")
+            import traceback
+            traceback.print_exc()
         
 if __name__ == "__main__":
     asyncio.run(main())

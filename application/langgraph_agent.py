@@ -139,6 +139,72 @@ def buildChatAgent(tools):
 
     return workflow.compile() 
 
+async def plan_node(state: State, config):
+    logger.info(f"###### plan_node ######")
+
+    containers = config.get("configurable", {}).get("containers", None)
+
+    system=(
+        "For the given objective, come up with a simple step by step plan."
+        "This plan should involve individual tasks, that if executed correctly will yield the correct answer." 
+        "Do not add any superfluous steps."
+        "The result of the final step should be the final answer. Make sure that each step has all the information needed."
+        "The plan should be returned in <plan> tag."
+    )
+
+    chatModel = chat.get_chat(extended_thinking="Disable")
+    
+    try:
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", system),
+                MessagesPlaceholder(variable_name="messages"),
+            ]
+        )
+        chain = prompt | chatModel
+            
+        result = await chain.ainvoke(state["messages"])
+        # logger.info(f"result of plan_node: {result.content}")
+
+        plan = result.content[result.content.find('<plan>')+6:result.content.find('</plan>')]
+        logger.info(f"plan: {plan}")
+
+        plan = plan.strip()
+        response = HumanMessage(content="다음의 plan을 참고하여 답변하세요.\n" + plan)
+
+        if containers is not None:
+            chat.add_notification(containers, '계획:\n' + plan)
+
+    except Exception:
+        response = HumanMessage(content="")
+
+        err_msg = traceback.format_exc()
+        logger.info(f"error message: {err_msg}")
+
+    return {"messages": [response]}
+
+def buildChatAgentWithPlan(tools):
+    tool_node = ToolNode(tools)
+
+    workflow = StateGraph(State)
+
+    workflow.add_node("plan", plan_node)
+    workflow.add_node("agent", call_model)
+    workflow.add_node("action", tool_node)
+    workflow.add_edge(START, "plan")
+    workflow.add_edge("plan", "agent")
+    workflow.add_conditional_edges(
+        "agent",
+        should_continue,
+        {
+            "continue": "action",
+            "end": END,
+        },
+    )
+    workflow.add_edge("action", "agent")
+
+    return workflow.compile() 
+
 def buildChatAgentWithHistory(tools):
     tool_node = ToolNode(tools)
 

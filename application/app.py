@@ -83,6 +83,9 @@ mode_descriptions = {
     "Swarm Agent": [
         "Swarm Agent를 이용한 Multi-agent Collaboration입니다. 여기에서는 Agent들 사이에 서로 정보를 교환합니다."
     ],
+    "Agent with Plan": [
+        "Agent와 Planning를 이용하여 향상된 답변을 제공합니다. 여기에서는 질문에 대해 답변하기 전에 계획을 생성하고, 계획에 따라 답변을 구합니다."
+    ],
     "번역하기": [
         "한국어와 영어에 대한 번역을 제공합니다. 한국어로 입력하면 영어로, 영어로 입력하면 한국어로 번역합니다."        
     ],
@@ -169,7 +172,7 @@ with st.sidebar:
     
     # radio selection
     mode = st.radio(
-        label="원하는 대화 형태를 선택하세요. ",options=["일상적인 대화", "RAG", "Agent", "Agent (Chat)", "Multi-agent Supervisor (Router)", "LangGraph Supervisor", "LangGraph Swarm", "Swarm Agent", "번역하기", "문법 검토하기", "이미지 분석", "비용 분석"], index=2
+        label="원하는 대화 형태를 선택하세요. ",options=["일상적인 대화", "RAG", "Agent", "Agent (Chat)", "Multi-agent Supervisor (Router)", "LangGraph Supervisor", "LangGraph Swarm", "Swarm Agent", "Agent with Plan", "번역하기", "문법 검토하기", "이미지 분석", "비용 분석"], index=2
     )   
     st.info(mode_descriptions[mode][0])
     
@@ -179,7 +182,7 @@ with st.sidebar:
         )
 
     # mcp selection    
-    if mode=='Agent' or mode=='Agent (Chat)' or mode=='비용 분석' or mode=='Swarm Agent':
+    if mode=='Agent' or mode=='Agent (Chat)' or mode=='비용 분석' or mode=='Swarm Agent' or mode=='Agent with Plan':
         # MCP Config JSON input
         st.subheader("⚙️ MCP Config")
 
@@ -615,6 +618,26 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                 st.write(response)
 
                 st.session_state.messages.append({"role": "assistant", "content": response})
+
+            if urls:
+                with st.expander(f"최종 결과"):
+                    url_msg = '\n\n'.join(urls)
+                    st.markdown(url_msg)
+
+        elif mode == "Agent with Plan":
+            containers = {
+                "tools": st.empty(),
+                "status": st.empty(),
+                "notification": [st.empty() for _ in range(500)]
+            }
+            
+            response, urls = asyncio.run(chat.run_langgraph_agent_with_plan(
+                query=prompt, 
+                mcp_servers=mcp_servers, 
+                containers=containers))
+            logger.info(f"response: {response}")
+
+            st.session_state.messages.append({"role": "assistant", "content": response})
 
             if urls:
                 with st.expander(f"최종 결과"):
