@@ -179,8 +179,8 @@ with st.sidebar:
     
     if mode=='Agent' or mode=='Agent (Chat)':
         agentType = st.radio(
-            # label="Agent 타입을 선택하세요. ",options=["langgraph", "strands", "claude"], index=2
-            label="Agent 타입을 선택하세요. ",options=["langgraph", "strands"], index=0
+            label="Agent 타입을 선택하세요. ",options=["langgraph", "strands", "claude"], index=2
+            # label="Agent 타입을 선택하세요. ",options=["langgraph", "strands"], index=0
         )
 
     # mcp selection    
@@ -541,12 +541,12 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                         mcp_servers=mcp_servers, 
                         history_mode=history_mode, 
                         containers=containers))
-                # else:
-                #     response, image_url = asyncio.run(claude_agent.run_claude_agent(
-                #         prompt=prompt, 
-                #         mcp_servers=mcp_servers, 
-                #         history_mode=history_mode, 
-                #         containers=containers))
+                else:
+                    response, image_url = asyncio.run(claude_agent.run_claude_agent(
+                        prompt=prompt, 
+                        mcp_servers=mcp_servers, 
+                        history_mode=history_mode, 
+                        containers=containers))
         
             st.session_state.messages.append({
                 "role": "assistant", 

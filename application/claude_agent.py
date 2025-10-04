@@ -1,10 +1,3 @@
-"""
-Claude Agent Module
-
-This module provides functionality to interact with Claude AI through the Claude Agent SDK,
-supporting MCP (Model Context Protocol) servers and multi-turn conversations.
-"""
-
 import json
 import re
 import logging
@@ -17,12 +10,12 @@ import mcp_config
 from claude_agent_sdk import (
     query,
     ClaudeAgentOptions,
-    AssistantMessage,
+    AssistantMessage,    
     SystemMessage,
     UserMessage,
     TextBlock,
     ToolResultBlock,
-    ToolUseBlock
+    ToolUseBlock    
 )
 
 logging.basicConfig(
@@ -44,8 +37,47 @@ def add_notification(containers, message):
         containers['notification'][index].info(message)
     index += 1
 
+def add_system_message(containers, message, type):
+    global index
+    index += 1
+
+    if containers is not None:
+        if type == "markdown":
+            containers['notification'][index].markdown(message)
+        elif type == "info":
+            containers['notification'][index].info(message)
+
+# Claude Code environment variables
 os.environ["CLAUDE_CODE_USE_BEDROCK"] = "1"
 os.environ["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = "4096"
+
+# WebSocket error prevention
+import tempfile
+
+# WebSocket mocking script generation
+websocket_mock_script = '''
+if (typeof window === 'undefined') {
+    global.window = {
+        WebSocket: function() {
+            return {
+                readyState: 1,
+                close: function() {},
+                send: function() {},
+                addEventListener: function() {},
+                removeEventListener: function() {}
+            };
+        }
+    };
+}
+'''
+
+# Save WebSocket mocking script to temporary file
+with tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False) as f:
+    f.write(websocket_mock_script)
+    websocket_mock_file = f.name
+
+# Add WebSocket mocking file to Node.js options
+os.environ["NODE_OPTIONS"] = f"--require {websocket_mock_file}"
 
 def get_model_id():
     models = []
@@ -170,7 +202,7 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
                 if isinstance(block, TextBlock):
                     logger.info(f"--> TextBlock: {block.text}")
                     if chat.debug_mode == 'Enable':
-                        add_notification(containers, f"{block.text}")
+                        add_system_message(containers, f"{block.text}", "markdown")
                     final_result = block.text
                 elif isinstance(block, ToolUseBlock):
                     logger.info(f"--> tool_use_id: {block.id=}, name: {block.name}, input: {block.input}")
