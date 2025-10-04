@@ -17,6 +17,7 @@ import aws_cost.implementation as aws_cost
 import swarm_agent
 import agentcore_memory
 import uuid
+import claude_agent
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -178,7 +179,7 @@ with st.sidebar:
     
     if mode=='Agent' or mode=='Agent (Chat)':
         agentType = st.radio(
-            label="Agent 타입을 선택하세요. ",options=["langgraph", "strands"], index=0
+            label="Agent 타입을 선택하세요. ",options=["langgraph", "strands", "claude"], index=2
         )
 
     # mcp selection    
@@ -214,7 +215,7 @@ with st.sidebar:
                 "pubmed", "chembl", "clinicaltrial", "arxiv-manual", "사용자 설정"
             ]
         mcp_selections = {}
-        default_selections = ["basic", "use-aws", "tavily-manual", "filesystem", "terminal"]
+        default_selections = ["basic", "use-aws (local)", "tavily-search", "filesystem", "terminal"]
                 
         with st.expander("MCP 옵션 선택", expanded=True):            
             # Create two columns
@@ -531,11 +532,16 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                         mcp_servers=mcp_servers, 
                         history_mode=history_mode, 
                         containers=containers))
-
-                else:
+                elif agentType == "strands":
                     response, image_url = asyncio.run(chat.run_strands_agent(
                         query=prompt, 
                         strands_tools=[], 
+                        mcp_servers=mcp_servers, 
+                        history_mode=history_mode, 
+                        containers=containers))
+                else:
+                    response, image_url = asyncio.run(claude_agent.run_claude_agent(
+                        prompt=prompt, 
                         mcp_servers=mcp_servers, 
                         history_mode=history_mode, 
                         containers=containers))
