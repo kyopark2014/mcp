@@ -97,7 +97,7 @@ def get_model():
         model = BedrockModel(
             client=bedrock_client,
             model_id=chat.model_id,
-            max_tokens=64000,
+            max_tokens=32000,  
             stop_sequences = [STOP_SEQUENCE],
             temperature = 1,
             additional_request_fields={
@@ -513,14 +513,16 @@ def create_agent(system_prompt, tools, history_mode):
             model=model,
             system_prompt=system_prompt,
             tools=tools,
-            conversation_manager=conversation_manager
+            conversation_manager=conversation_manager,
+            max_tokens=16000  # Add max_tokens limit to prevent MaxTokensReachedException
         )
     else:
         logger.info("history_mode: Disable")
         agent = Agent(
             model=model,
             system_prompt=system_prompt,
-            tools=tools
+            tools=tools,
+            max_tokens=16000  # Add max_tokens limit to prevent MaxTokensReachedException
             #max_parallel_tools=2
         )
     return agent
