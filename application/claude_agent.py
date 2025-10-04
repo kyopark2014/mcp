@@ -142,7 +142,7 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
             max_turns=100,
             permission_mode="bypassPermissions",
             model=get_model_id(),
-            #mcp_servers=server_params
+            mcp_servers=server_params
         ) 
     
     final_result = ""    
