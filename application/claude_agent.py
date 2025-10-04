@@ -96,8 +96,9 @@ def load_multiple_mcp_server_parameters(mcp_json: dict):
     if mcpServers is not None:
         for server_name, config in mcpServers.items():
             if config.get("type") == "streamable_http":
+                # Convert streamable_http to http type for Claude Agent SDK compatibility
                 server_info[server_name] = {                    
-                    "transport": "streamable_http",
+                    "type": "http",
                     "url": config.get("url"),
                     "headers": config.get("headers", {})
                 }
@@ -142,7 +143,7 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
     logger.info(f"mcp_json: {mcp_json}")
 
     server_params = load_multiple_mcp_server_parameters(mcp_json)
-    logger.info(f"server_params: {server_params}")    
+    logger.info(f"server_params: {server_params}")
 
     if isKorean(prompt):
         system = (
