@@ -513,16 +513,14 @@ def create_agent(system_prompt, tools, history_mode):
             model=model,
             system_prompt=system_prompt,
             tools=tools,
-            conversation_manager=conversation_manager,
-            max_tokens=16000  # Add max_tokens limit to prevent MaxTokensReachedException
+            conversation_manager=conversation_manager
         )
     else:
         logger.info("history_mode: Disable")
         agent = Agent(
             model=model,
             system_prompt=system_prompt,
-            tools=tools,
-            max_tokens=16000  # Add max_tokens limit to prevent MaxTokensReachedException
+            tools=tools
             #max_parallel_tools=2
         )
     return agent

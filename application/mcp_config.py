@@ -266,7 +266,7 @@ mcp_user_config = {}
 
 def get_agent_runtime_arn(mcp_type: str):
     #logger.info(f"mcp_type: {mcp_type}")
-    agent_runtime_name = f"{projectName.lower()}_{mcp_type.replace('-', '_')}"
+    agent_runtime_name = f"{projectName.lower().replace('-', '_')}_{mcp_type.replace('-', '_')}"
     logger.info(f"agent_runtime_name: {agent_runtime_name}")
     client = boto3.client('bedrock-agentcore-control', region_name=region)
     response = client.list_agent_runtimes(
@@ -663,13 +663,14 @@ def load_config(mcp_type):
         }
     
     elif mcp_type == "filesystem":
+        parent_dir = os.path.dirname(workingDir)
         return {
             "mcpServers": {
                 "filesystem": {
                     "command": "npx",
                     "args": [
                         "@modelcontextprotocol/server-filesystem",
-                        f"{workingDir}"
+                        parent_dir  
                     ]
                 }
             }

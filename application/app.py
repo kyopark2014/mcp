@@ -334,6 +334,11 @@ with st.sidebar:
     debugMode = 'Enable' if select_debugMode else 'Disable'
     #print('debugMode: ', debugMode)
 
+    # RAG grading
+    enable_memory = st.checkbox('Memory', value=False)
+    memoryMode = 'Enable' if enable_memory else 'Disable'
+    # logger.info(f"memory_mode: {memory_mode}")
+
     # multi region check box
     select_multiRegion = st.checkbox('Multi Region', value=False)
     multiRegion = 'Enable' if select_multiRegion else 'Disable'
@@ -359,7 +364,7 @@ with st.sidebar:
         st.subheader("📋 문서 업로드")
         uploaded_file = st.file_uploader("RAG를 위한 파일을 선택합니다.", type=["pdf", "txt", "py", "md", "csv", "json"], key=chat.fileId)
 
-    chat.update(modelName, debugMode, multiRegion, reasoningMode, gradingMode, agentType)    
+    chat.update(modelName, debugMode, multiRegion, reasoningMode, gradingMode, agentType, memoryMode)    
 
     st.success(f"Connected to {modelName}", icon="💚")
     clear_button = st.button("대화 초기화", key="clear")
