@@ -236,8 +236,5 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
                     logger.info(f"UserMessage: {block}")
         else:
             logger.info(f"Message: {message}")
-
-        if chat.enable_memory == "Enable":
-            chat.save_to_memory(prompt, final_result)
-
+    
     return final_result, image_url
