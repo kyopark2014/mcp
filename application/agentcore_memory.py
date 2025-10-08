@@ -259,20 +259,33 @@ def create_memory(namespace: str):
 def save_conversation_to_memory(memory_id, actor_id, session_id, query, result):
     logger.info(f"###### save_conversation_to_memory ######")
 
+    # Validate query and result are not empty
+    if not query or not isinstance(query, str) or len(query.strip()) == 0:
+        logger.warning(f"Query is empty or invalid, skipping memory save")
+        return
+    
+    if not result or not isinstance(result, str) or len(result.strip()) == 0:
+        logger.warning(f"Result is empty or invalid, skipping memory save")
+        return
+
     event_timestamp = datetime.now(timezone.utc)
     conversation = [
-        (query, "USER"),
-        (result, "ASSISTANT")
+        (query.strip(), "USER"),
+        (result.strip(), "ASSISTANT")
     ]
 
-    memory_result = memory_client.create_event(
-        memory_id=memory_id,
-        actor_id=actor_id, 
-        session_id=session_id, 
-        event_timestamp=event_timestamp,
-        messages=conversation
-    )
-    logger.info(f"result of save conversation to memory: {memory_result}")
+    try:
+        memory_result = memory_client.create_event(
+            memory_id=memory_id,
+            actor_id=actor_id, 
+            session_id=session_id, 
+            event_timestamp=event_timestamp,
+            messages=conversation
+        )
+        logger.info(f"result of save conversation to memory: {memory_result}")
+    except Exception as e:
+        logger.error(f"Error saving conversation to memory: {e}")
+        raise
 
 def get_memory_record(user_id: str):
     logger.info(f"###### get_memory_record ######")    

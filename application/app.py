@@ -552,6 +552,9 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                         mcp_servers=mcp_servers, 
                         history_mode=history_mode, 
                         containers=containers))
+
+                if debugMode == "Disable":
+                    st.markdown(response)
         
             st.session_state.messages.append({
                 "role": "assistant", 
@@ -563,6 +566,9 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                 logger.info(f"url: {url}")
                 file_name = url[url.rfind('/')+1:]
                 st.image(url, caption=file_name, use_container_width=True)
+
+            if memoryMode == "Enable":
+                chat.save_to_memory(prompt, response)            
 
         elif mode == "Multi-agent Supervisor (Router)":
             sessionState = ""
@@ -656,6 +662,9 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                 with st.expander(f"최종 결과"):
                     url_msg = '\n\n'.join(urls)
                     st.markdown(url_msg)
+            
+            if memoryMode == "Enable":
+                chat.save_to_memory(prompt, response)
                 
         elif mode == '번역하기':
             response = chat.translate_text(prompt)

@@ -2052,7 +2052,9 @@ async def run_strands_agent(query, strands_tools, mcp_servers, history_mode, con
                 text = event["data"]
                 logger.info(f"[data] {text}")
                 current += text
-                update_streaming_result(containers, current, "markdown")
+
+                if debug_mode == "Enable":   
+                    update_streaming_result(containers, current, "markdown")
 
             elif "result" in event:
                 final = event["result"]                
@@ -2079,10 +2081,14 @@ async def run_strands_agent(query, strands_tools, mcp_servers, history_mode, con
                     logger.info(f"new tool info: {toolUseId} -> {index}")
                     tool_info_list[toolUseId] = index
                     tool_name_list[toolUseId] = name
-                    add_notification(containers, f"Tool: {name}, Input: {input}")
+
+                    if debug_mode == "Enable":   
+                        add_notification(containers, f"Tool: {name}, Input: {input}")
                 else: # overwrite tool info if already exists
                     logger.info(f"overwrite tool info: {toolUseId} -> {tool_info_list[toolUseId]}")
-                    containers['notification'][tool_info_list[toolUseId]].info(f"Tool: {name}, Input: {input}")
+
+                    if debug_mode == "Enable":   
+                        containers['notification'][tool_info_list[toolUseId]].info(f"Tool: {name}, Input: {input}")
 
             elif "message" in event:
                 message = event["message"]
@@ -2098,7 +2104,9 @@ async def run_strands_agent(query, strands_tools, mcp_servers, history_mode, con
                         toolResult = toolContent[0].get("text", "")
                         tool_name = tool_name_list[toolUseId]
                         logger.info(f"[toolResult] {toolResult}, [toolUseId] {toolUseId}")
-                        add_notification(containers, f"Tool Result: {str(toolResult)}")
+
+                        if debug_mode == "Enable":   
+                            add_notification(containers, f"Tool Result: {str(toolResult)}")
 
                         content, urls, refs = get_tool_info(tool_name, toolResult)
                         if refs:
@@ -2126,12 +2134,9 @@ async def run_strands_agent(query, strands_tools, mcp_servers, history_mode, con
                 ref += f"{i+1}. [{reference['title']}]({reference['url']}), {content}...\n"    
             final_result += ref
 
-        if containers is not None:
+        if containers is not None and debug_mode == "Enable":
             containers['notification'][index].markdown(final_result)
 
-        if enable_memory == "Enable":
-            save_to_memory(query, final_result)
-    
     return final_result, image_url
 
 async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
@@ -2195,8 +2200,9 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
                             else:
                                 result += text_content
                                 
-                            # logger.info(f"result: {result}")                
-                            update_streaming_result(containers, result, "markdown")
+                            # logger.info(f"result: {result}")             
+                            if debug_mode == "Enable":   
+                                update_streaming_result(containers, result, "markdown")
 
                         elif content_item.get('type') == 'tool_use':
                             logger.info(f"content_item: {content_item}")      
@@ -2218,7 +2224,8 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
                                 logger.info(f"input: {input}")
 
                                 logger.info(f"tool_name: {tool_name}, input: {input}, toolUseId: {toolUseId}")
-                                update_streaming_result(containers, f"Tool: {tool_name}, Input: {input}", "info")
+                                if debug_mode == "Enable":   
+                                    update_streaming_result(containers, f"Tool: {tool_name}, Input: {input}", "info")
                         
         elif isinstance(stream[0], ToolMessage):
             message = stream[0]
@@ -2227,7 +2234,9 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
             toolResult = message.content
             toolUseId = message.tool_call_id
             logger.info(f"toolResult: {toolResult}, toolUseId: {toolUseId}")
-            add_notification(containers, f"Tool Result: {toolResult}")
+
+            if debug_mode == "Enable":   
+                add_notification(containers, f"Tool Result: {toolResult}")
             tool_used = True
             
             content, urls, refs = get_tool_info(tool_name, toolResult)
@@ -2254,12 +2263,9 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
             ref += f"{i+1}. [{reference['title']}]({reference['url']}), {page_content}...\n"    
         result += ref
     
-    if containers is not None:
+    if containers is not None and debug_mode == "Enable":
         containers['notification'][index].markdown(result)
 
-    if enable_memory == "Enable":
-        save_to_memory(query, result)
-    
     return result, image_url
 
 async def run_langgraph_agent_with_plan(query, mcp_servers, containers):
@@ -2386,7 +2392,4 @@ async def run_langgraph_agent_with_plan(query, mcp_servers, containers):
     with open(key, 'w') as f:
         f.write(body)
 
-    if enable_memory == "Enable":
-        save_to_memory(query, result)
-    
     return result, image_url
