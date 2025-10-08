@@ -16,11 +16,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger("mcp-log")
 
-aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
-aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
-aws_session_token = os.environ.get('AWS_SESSION_TOKEN')
-aws_region = os.environ.get('AWS_DEFAULT_REGION', 'us-west-2')
-
 async def list_groups(
     prefix: Optional[str] = None,
     region: Optional[str] = 'us-west-2'
@@ -28,19 +23,10 @@ async def list_groups(
     """List available CloudWatch log groups."""
 
     try:
-        if aws_access_key and aws_secret_key:
-            log_client = boto3.client(
-                service_name='logs',
-                region_name=region,
-                aws_access_key_id=aws_access_key,
-                aws_secret_access_key=aws_secret_key,
-                aws_session_token=aws_session_token,
-            )
-        else:
-            log_client = boto3.client(
-                service_name='logs',
-                region_name=region
-            )
+        log_client = boto3.client(
+            service_name='logs',
+            region_name=region
+        )
 
         kwargs = {}
         if prefix:
@@ -133,19 +119,10 @@ async def get_logs(
         f"region: {region}"
     )
 
-    if aws_access_key and aws_secret_key:
-        log_client = boto3.client(
-            service_name='logs',
-            region_name=region,
-            aws_access_key_id=aws_access_key,
-            aws_secret_access_key=aws_secret_key,
-            aws_session_token=aws_session_token,
-        )
-    else:
-        log_client = boto3.client(
-            service_name='logs',
-            region_name=region
-        )
+    log_client = boto3.client(
+        service_name='logs',
+        region_name=region
+    )
 
     # First, check if the log group exists
     try:

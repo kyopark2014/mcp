@@ -26,11 +26,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger("mcp-basic")
 
-aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
-aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
-aws_session_token = os.environ.get('AWS_SESSION_TOKEN')
-aws_region = os.environ.get('AWS_DEFAULT_REGION', 'us-west-2')
-
 def get_current_time(format: str=f"%Y-%m-%d %H:%M:%S")->str:
     """Returns the current date and time in the specified format"""
     # f"%Y-%m-%d %H:%M:%S"
@@ -105,29 +100,15 @@ def get_chat(extended_thinking):
         STOP_SEQUENCE = "\n\nHuman:" 
                           
     # bedrock   
-    if aws_access_key and aws_secret_key:
-        boto3_bedrock = boto3.client(
-            service_name='bedrock-runtime',
-            region_name=bedrock_region,
-            aws_access_key_id=aws_access_key,
-            aws_secret_access_key=aws_secret_key,
-            aws_session_token=aws_session_token,
-            config=Config(
-                retries = {
-                    'max_attempts': 30
-                }
-            )
+    boto3_bedrock = boto3.client(
+        service_name='bedrock-runtime',
+        region_name=bedrock_region,
+        config=Config(
+            retries = {
+                'max_attempts': 30
+            }
         )
-    else:
-        boto3_bedrock = boto3.client(
-            service_name='bedrock-runtime',
-            region_name=bedrock_region,
-            config=Config(
-                retries = {
-                    'max_attempts': 30
-                }
-            )
-        )
+    )
     if extended_thinking=='Enable':
         maxReasoningOutputTokens=64000
         logger.info(f"extended_thinking: {extended_thinking}")

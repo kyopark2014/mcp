@@ -22,11 +22,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger("knowledge_base")
 
-aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
-aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
-aws_session_token = os.environ.get('AWS_SESSION_TOKEN')
-aws_region = os.environ.get('AWS_DEFAULT_REGION', 'us-west-2')
-
 config = utils.load_config()
 
 # variables
@@ -192,19 +187,10 @@ def initiate_knowledge_base():
     logger.info(f"embeddingModelArn: {embeddingModelArn}")
     logger.info(f"knowledge_base_role: {knowledge_base_role}")
     try: 
-        if aws_access_key and aws_secret_key:   
-            client = boto3.client(
-                service_name='bedrock-agent',
-                region_name=bedrock_region,
-                aws_access_key_id=aws_access_key,
-                aws_secret_access_key=aws_secret_key,
-                aws_session_token=aws_session_token,
-            )
-        else:
-            client = boto3.client(
-                service_name='bedrock-agent',
-                region_name=bedrock_region
-            )
+        client = boto3.client(
+            service_name='bedrock-agent',
+            region_name=bedrock_region
+        )
             
         response = client.list_knowledge_bases(
             maxResults=50
@@ -429,19 +415,10 @@ def retrieve_documents_from_knowledge_base(query, top_k):
 def sync_data_source():
     if knowledge_base_id and data_source_id:
         try:
-            if aws_access_key and aws_secret_key:
-                bedrock_client = boto3.client(
-                    service_name='bedrock-agent',
-                    region_name=bedrock_region,
-                    aws_access_key_id=aws_access_key,
-                    aws_secret_access_key=aws_secret_key,
-                    aws_session_token=aws_session_token,
-                )
-            else:
-                bedrock_client = boto3.client(
-                    service_name='bedrock-agent',
-                    region_name=bedrock_region
-                )
+            bedrock_client = boto3.client(
+                service_name='bedrock-agent',
+                region_name=bedrock_region
+            )
                 
             response = bedrock_client.start_ingestion_job(
                 knowledgeBaseId=knowledge_base_id,

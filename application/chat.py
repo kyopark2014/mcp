@@ -129,11 +129,6 @@ model_id = models[0]["model_id"]
 debug_mode = "Enable"
 multi_region = "Disable"
 
-aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
-aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
-aws_session_token = os.environ.get('AWS_SESSION_TOKEN')
-aws_region = os.environ.get('AWS_DEFAULT_REGION', 'us-west-2')
-
 reasoning_mode = 'Disable'
 grading_mode = 'Disable'
 agent_type = 'langgraph'
@@ -266,19 +261,10 @@ def create_object(key, body):
     elif key.endswith('.md'):
         content_type = 'text/markdown'
     
-    if aws_access_key and aws_secret_key:
-        s3_client = boto3.client(
-            service_name='s3',
-            region_name=bedrock_region,
-            aws_access_key_id=aws_access_key,
-            aws_secret_access_key=aws_secret_key,
-            aws_session_token=aws_session_token,
-        )
-    else:
-        s3_client = boto3.client(
-            service_name='s3',
-            region_name=bedrock_region,
-        )
+    s3_client = boto3.client(
+        service_name='s3',
+        region_name=bedrock_region,
+    )
         
     s3_client.put_object(
         Bucket=s3_bucket,
@@ -291,19 +277,10 @@ def updata_object(key, body, direction):
     """
     Create an object in S3 and return the URL. If the file already exists, append the new content.
     """
-    if aws_access_key and aws_secret_key:
-        s3_client = boto3.client(
-            service_name='s3',
-            region_name=bedrock_region,
-            aws_access_key_id=aws_access_key,
-            aws_secret_access_key=aws_secret_key,
-            aws_session_token=aws_session_token,
-        )
-    else:
-        s3_client = boto3.client(
-            service_name='s3',
-            region_name=bedrock_region,
-        )
+    s3_client = boto3.client(
+        service_name='s3',
+        region_name=bedrock_region,
+    )
 
     try:
         # Check if file exists
@@ -368,29 +345,15 @@ def get_chat(extended_thinking):
         STOP_SEQUENCE = "" 
                           
     # bedrock   
-    if aws_access_key and aws_secret_key:
-        boto3_bedrock = boto3.client(
-            service_name='bedrock-runtime',
-            region_name=bedrock_region,
-            aws_access_key_id=aws_access_key,
-            aws_secret_access_key=aws_secret_key,
-            aws_session_token=aws_session_token,
-            config=Config(
-                retries = {
-                    'max_attempts': 30
-                }
-            )
+    boto3_bedrock = boto3.client(
+        service_name='bedrock-runtime',
+        region_name=bedrock_region,
+        config=Config(
+            retries = {
+                'max_attempts': 30
+            }
         )
-    else:
-        boto3_bedrock = boto3.client(
-            service_name='bedrock-runtime',
-            region_name=bedrock_region,
-            config=Config(
-                retries = {
-                    'max_attempts': 30
-                }
-            )
-        )
+    )
 
     if profile['model_type'] != 'openai' and extended_thinking=='Enable':
         maxReasoningOutputTokens=64000
@@ -519,19 +482,10 @@ def check_grammer(text):
 reference_docs = []
 
 # api key to get weather information in agent
-if aws_access_key and aws_secret_key:
-    secretsmanager = boto3.client(
-        service_name='secretsmanager',
-        region_name=bedrock_region,
-        aws_access_key_id=aws_access_key,
-        aws_secret_access_key=aws_secret_key,
-        aws_session_token=aws_session_token,
-    )
-else:
-    secretsmanager = boto3.client(
-        service_name='secretsmanager',
-        region_name=bedrock_region,
-    )
+secretsmanager = boto3.client(
+    service_name='secretsmanager',
+    region_name=bedrock_region,
+)
 
 # api key for weather
 def get_weather_api_key():
@@ -661,29 +615,15 @@ def get_parallel_processing_chat(models, selected):
         STOP_SEQUENCE = "" 
                           
     # bedrock   
-    if aws_access_key and aws_secret_key:
-        boto3_bedrock = boto3.client(
-            service_name='bedrock-runtime',
-            region_name=bedrock_region,
-            aws_access_key_id=aws_access_key,
-            aws_secret_access_key=aws_secret_key,
-            aws_session_token=aws_session_token,
-            config=Config(
-                retries = {
-                    'max_attempts': 30
-                }
-            )
+    boto3_bedrock = boto3.client(
+        service_name='bedrock-runtime',
+        region_name=bedrock_region,
+        config=Config(
+            retries = {
+                'max_attempts': 30
+            }
         )
-    else:
-        boto3_bedrock = boto3.client(
-            service_name='bedrock-runtime',
-            region_name=bedrock_region,
-            config=Config(
-                retries = {
-                    'max_attempts': 30
-                }
-            )
-        )
+    )
 
     if profile['model_type'] != 'openai':
         parameters = {
@@ -912,19 +852,10 @@ def upload_to_s3(file_bytes, file_name):
     Upload a file to S3 and return the URL
     """
     try:
-        if aws_access_key and aws_secret_key:
-            s3_client = boto3.client(
-                service_name='s3',
-                region_name=bedrock_region,
-                aws_access_key_id=aws_access_key,
-                aws_secret_access_key=aws_secret_key,
-                aws_session_token=aws_session_token,
-            )
-        else:
-            s3_client = boto3.client(
-                service_name='s3',
-                region_name=bedrock_region,
-            )
+        s3_client = boto3.client(
+            service_name='s3',
+            region_name=bedrock_region,
+        )
 
         # Generate a unique file name to avoid collisions
         #timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -967,18 +898,9 @@ def upload_to_s3_artifacts(file_bytes, file_name):
     Upload a file to S3 and return the URL
     """
     try:
-        if aws_access_key and aws_secret_key:
-            s3_client = boto3.client(
-                service_name='s3',
-                region_name=bedrock_region,
-                aws_access_key_id=aws_access_key,
-                aws_secret_access_key=aws_secret_key,
-                aws_session_token=aws_session_token
-            )
-        else:
-            s3_client = boto3.client(
-                service_name='s3',
-                region_name=bedrock_region
+        s3_client = boto3.client(
+            service_name='s3',
+            region_name=bedrock_region
         )
 
         content_type = utils.get_contents_type(file_name)       
@@ -1319,19 +1241,10 @@ def get_summary_of_uploaded_file(file_name, st):
     elif file_type == 'png' or file_type == 'jpeg' or file_type == 'jpg':
         logger.info(f"multimodal: {file_name}")
         
-        if aws_access_key and aws_secret_key:
-            s3_client = boto3.client(
-                service_name='s3',
-                region_name=bedrock_region,
-                aws_access_key_id=aws_access_key,
-                aws_secret_access_key=aws_secret_key,
-                aws_session_token=aws_session_token,
-            )
-        else:
-            s3_client = boto3.client(
-                service_name='s3',
-                region_name=bedrock_region,
-            )
+        s3_client = boto3.client(
+            service_name='s3',
+            region_name=bedrock_region,
+        )
 
         if debug_mode=="Enable":
             status = "이미지를 가져옵니다."
@@ -1433,19 +1346,10 @@ def get_summary_of_uploaded_file(file_name, st):
 #########################################################
 def get_image_summarization(object_name, prompt, st):
     # load image
-    if aws_access_key and aws_secret_key:
-        s3_client = boto3.client(
-            service_name='s3',
-            region_name=bedrock_region,
-            aws_access_key_id=aws_access_key,
-            aws_secret_access_key=aws_secret_key,
-            aws_session_token=aws_session_token,
-        )
-    else:
-        s3_client = boto3.client(
-            service_name='s3',
-            region_name=bedrock_region,
-        )
+    s3_client = boto3.client(
+        service_name='s3',
+        region_name=bedrock_region,
+    )
 
     if debug_mode=="Enable":
         status = "이미지를 가져옵니다."
@@ -1608,19 +1512,10 @@ def get_rag_prompt(text):
     return rag_chain
  
 def retrieve_knowledge_base(query):
-    if aws_access_key and aws_secret_key:
-        lambda_client = boto3.client(
-            service_name='lambda',
-            region_name=bedrock_region,
-            aws_access_key_id=aws_access_key,
-            aws_secret_access_key=aws_secret_key,
-            aws_session_token=aws_session_token,
-        )
-    else:
-        lambda_client = boto3.client(
-            service_name='lambda',
-            region_name=bedrock_region,
-        )
+    lambda_client = boto3.client(
+        service_name='lambda',
+        region_name=bedrock_region,
+    )
 
     functionName = f"knowledge-base-for-{projectName}"
     logger.info(f"functionName: {functionName}")
