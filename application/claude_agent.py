@@ -173,6 +173,7 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
 
     logger.info(f"mcp_servers: {mcp_servers}")
 
+    mcp_config.bearer_token = None
     mcp_json = mcp_config.load_selected_config(mcp_servers)
     logger.info(f"mcp_json: {mcp_json}")
 
