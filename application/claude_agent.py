@@ -9,13 +9,17 @@ import mcp_config
 
 from claude_agent_sdk import (
     query,
+    ClaudeSDKClient,
     ClaudeAgentOptions,
     AssistantMessage,    
     SystemMessage,
     UserMessage,
     TextBlock,
     ToolResultBlock,
-    ToolUseBlock    
+    ToolUseBlock,
+    ToolPermissionContext,
+    PermissionResultAllow,
+    PermissionResultDeny
 )
 
 logging.basicConfig(
@@ -130,6 +134,36 @@ def isKorean(text):
 
 session_id = None
 
+async def prompt_for_tool_approval(tool_name: str, input_params: dict, context: ToolPermissionContext):
+    logger.info(f"Tool Request:")
+    logger.info(f"Tool: {tool_name}")
+    logger.info(f"Context: {context}")
+    
+    # Display parameters
+    if input_params:
+        params = "Parameters:\n"
+        logger.info("Parameters:")
+        for key, value in input_params.items():
+            display_value = value
+            if isinstance(value, str) and len(value) > 100:
+                display_value = value[:100] + "..."
+            elif isinstance(value, (dict, list)):
+                display_value = json.dumps(value, indent=2)
+            logger.info(f"{key}: {display_value}")
+            params += f"{key}: {display_value}\n"
+
+    # Get user approval
+    # answer = input("\n   Approve this tool use? (y/n): ")    
+    # if answer.lower() in ['y', 'yes']:
+    #     logger.info("✅ Approved")
+    #     return PermissionResultAllow(updated_input=input_params)
+    # else:
+    #     logger.info("❌ Denied")
+    #     return PermissionResultDeny(message="User denied permission for this tool")
+    
+    # Auto-approve for streamlit app
+    return PermissionResultAllow(updated_input=input_params)
+
 async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
     global index, session_id
     index = 0
@@ -164,77 +198,141 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
         options = ClaudeAgentOptions(
             system_prompt=system,
             max_turns=100,
-            permission_mode="bypassPermissions",
+            permission_mode="default", # "default", "acceptEdits", "plan", "bypassPermissions"
             model=get_model_id(),
             mcp_servers=server_params,
-            resume=session_id
+            resume=session_id,
+            can_use_tool=prompt_for_tool_approval
         )
     else:
        options = ClaudeAgentOptions(
             system_prompt=system,
             max_turns=100,
-            permission_mode="bypassPermissions",
+            permission_mode="default", 
             model=get_model_id(),
-            mcp_servers=server_params
+            mcp_servers=server_params,
+            can_use_tool=prompt_for_tool_approval
         ) 
     
     final_result = ""    
-    async for message in query(prompt=prompt, options=options):
-        # logger.info(message)
-        if isinstance(message, SystemMessage):
-            logger.info(f"SystemMessage: {message}")
-            subtype = message.subtype
-            data = message.data
-            logger.info(f"SystemMessage: type={subtype}")
+    async with ClaudeSDKClient(options=options) as client:
+        await client.query(prompt)
 
-            if subtype == "init":
-                session_id = message.data.get('session_id')
-                logger.info(f"Session started with ID: {session_id}")
-                
-            if "tools" in data:
-                tools = data["tools"]
-                logger.info(f"--> tools: {tools}")
+        async for message in client.receive_response():
+            logger.info(f"message: {message}")
+            if isinstance(message, SystemMessage):
+                logger.info(f"SystemMessage: {message}")
+                subtype = message.subtype
+                data = message.data
+                logger.info(f"SystemMessage: type={subtype}")
 
-                if chat.debug_mode == 'Enable':
-                    add_notification(containers, f"Tools: {tools}")
-
-        elif isinstance(message, AssistantMessage):
-            for block in message.content:
-                if isinstance(block, TextBlock):
-                    logger.info(f"--> TextBlock: {block.text}")
-                    if chat.debug_mode == 'Enable':
-                        add_system_message(containers, f"{block.text}", "markdown")
-                    final_result = block.text
-                elif isinstance(block, ToolUseBlock):
-                    logger.info(f"--> tool_use_id: {block.id=}, name: {block.name}, input: {block.input}")
-                    if chat.debug_mode == 'Enable':
-                        add_notification(containers, f"Tool name: {block.name}, input: {block.input}")
-                elif isinstance(block, ToolResultBlock):
-                    logger.info(f"--> tool_use_id: {block.tool_use_id=}, content: {block.content}")
-                    if chat.debug_mode == 'Enable':
-                        add_notification(containers, f"Tool result: {block.content}")
-                else:
-                    logger.info(f"AssistantMessage: {block}")
-                
-        elif isinstance(message, UserMessage):
-            for block in message.content:
-                if isinstance(block, ToolResultBlock):
-                    logger.info(f"--> tool_use_id: {block.tool_use_id=}, content: {block.content}")
-                    if chat.debug_mode == 'Enable':
-                        add_notification(containers, f"Tool result: {block.content}")
+                if subtype == "init":
+                    session_id = message.data.get('session_id')
+                    logger.info(f"Session started with ID: {session_id}")
                     
-                    if isinstance(block.content, list):
-                        for item in block.content:
-                            if isinstance(item, dict) and "text" in item:
-                                logger.info(f"--> ToolResult: {item['text']}")
-                                if "path" in item['text']:
-                                    json_path = json.loads(item['text'])
-                                    path = json_path.get('path', "")
-                                    logger.info(f"path: {path}")
-                                    image_url.append(path)
-                else:
-                    logger.info(f"UserMessage: {block}")
-        else:
-            logger.info(f"Message: {message}")
+                if "tools" in data:
+                    tools = data["tools"]
+                    logger.info(f"--> tools: {tools}")
+
+                    if chat.debug_mode == 'Enable':
+                        add_notification(containers, f"Tools: {tools}")
+
+            elif isinstance(message, AssistantMessage):
+                for block in message.content:
+                    if isinstance(block, TextBlock):
+                        logger.info(f"--> TextBlock: {block.text}")
+                        if chat.debug_mode == 'Enable':
+                            add_system_message(containers, f"{block.text}", "markdown")
+                        final_result = block.text
+                    elif isinstance(block, ToolUseBlock):
+                        logger.info(f"--> tool_use_id: {block.id=}, name: {block.name}, input: {block.input}")
+                        if chat.debug_mode == 'Enable':
+                            add_notification(containers, f"Tool name: {block.name}, input: {block.input}")
+                    elif isinstance(block, ToolResultBlock):
+                        logger.info(f"--> tool_use_id: {block.tool_use_id=}, content: {block.content}")
+                        if chat.debug_mode == 'Enable':
+                            add_notification(containers, f"Tool result: {block.content}")
+                    else:
+                        logger.info(f"AssistantMessage: {block}")
+                    
+            elif isinstance(message, UserMessage):
+                for block in message.content:
+                    if isinstance(block, ToolResultBlock):
+                        logger.info(f"--> tool_use_id: {block.tool_use_id=}, content: {block.content}")
+                        if chat.debug_mode == 'Enable':
+                            add_notification(containers, f"Tool result: {block.content}")
+                        
+                        if isinstance(block.content, list):
+                            for item in block.content:
+                                if isinstance(item, dict) and "text" in item:
+                                    logger.info(f"--> ToolResult: {item['text']}")
+                                    if "path" in item['text']:
+                                        json_path = json.loads(item['text'])
+                                        path = json_path.get('path', "")
+                                        logger.info(f"path: {path}")
+                                        image_url.append(path)
+                    else:
+                        logger.info(f"UserMessage: {block}")
+            else:
+                logger.info(f"Message: {message}")
+    
+
+    # async for message in query(prompt=prompt, options=options):
+    #     logger.info(f"message: {message}")
+    #     if isinstance(message, SystemMessage):
+    #         logger.info(f"SystemMessage: {message}")
+    #         subtype = message.subtype
+    #         data = message.data
+    #         logger.info(f"SystemMessage: type={subtype}")
+
+    #         if subtype == "init":
+    #             session_id = message.data.get('session_id')
+    #             logger.info(f"Session started with ID: {session_id}")
+                
+    #         if "tools" in data:
+    #             tools = data["tools"]
+    #             logger.info(f"--> tools: {tools}")
+
+    #             if chat.debug_mode == 'Enable':
+    #                 add_notification(containers, f"Tools: {tools}")
+
+    #     elif isinstance(message, AssistantMessage):
+    #         for block in message.content:
+    #             if isinstance(block, TextBlock):
+    #                 logger.info(f"--> TextBlock: {block.text}")
+    #                 if chat.debug_mode == 'Enable':
+    #                     add_system_message(containers, f"{block.text}", "markdown")
+    #                 final_result = block.text
+    #             elif isinstance(block, ToolUseBlock):
+    #                 logger.info(f"--> tool_use_id: {block.id=}, name: {block.name}, input: {block.input}")
+    #                 if chat.debug_mode == 'Enable':
+    #                     add_notification(containers, f"Tool name: {block.name}, input: {block.input}")
+    #             elif isinstance(block, ToolResultBlock):
+    #                 logger.info(f"--> tool_use_id: {block.tool_use_id=}, content: {block.content}")
+    #                 if chat.debug_mode == 'Enable':
+    #                     add_notification(containers, f"Tool result: {block.content}")
+    #             else:
+    #                 logger.info(f"AssistantMessage: {block}")
+                
+    #     elif isinstance(message, UserMessage):
+    #         for block in message.content:
+    #             if isinstance(block, ToolResultBlock):
+    #                 logger.info(f"--> tool_use_id: {block.tool_use_id=}, content: {block.content}")
+    #                 if chat.debug_mode == 'Enable':
+    #                     add_notification(containers, f"Tool result: {block.content}")
+                    
+    #                 if isinstance(block.content, list):
+    #                     for item in block.content:
+    #                         if isinstance(item, dict) and "text" in item:
+    #                             logger.info(f"--> ToolResult: {item['text']}")
+    #                             if "path" in item['text']:
+    #                                 json_path = json.loads(item['text'])
+    #                                 path = json_path.get('path', "")
+    #                                 logger.info(f"path: {path}")
+    #                                 image_url.append(path)
+    #             else:
+    #                 logger.info(f"UserMessage: {block}")
+    #     else:
+    #         logger.info(f"Message: {message}")
     
     return final_result, image_url
