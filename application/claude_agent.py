@@ -203,7 +203,8 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
             model=get_model_id(),
             mcp_servers=server_params,
             resume=session_id,
-            can_use_tool=prompt_for_tool_approval
+            can_use_tool=prompt_for_tool_approval,
+            setting_sources=["project"]
         )
     else:
        options = ClaudeAgentOptions(
@@ -212,7 +213,8 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
             permission_mode="default", 
             model=get_model_id(),
             mcp_servers=server_params,
-            can_use_tool=prompt_for_tool_approval
+            can_use_tool=prompt_for_tool_approval,
+            setting_sources=["project"]
         ) 
     
     final_result = ""    
@@ -276,5 +278,5 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
                         logger.info(f"UserMessage: {block}")
             else:
                 logger.info(f"Message: {message}")
-
+    
     return final_result, image_url
