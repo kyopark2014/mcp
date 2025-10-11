@@ -53,7 +53,7 @@ def add_system_message(containers, message, type):
 
 # Claude Code environment variables
 os.environ["CLAUDE_CODE_USE_BEDROCK"] = "1"
-os.environ["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = "4096"
+os.environ["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = "16384"  # Claude 4 Sonnet max: 128000
 
 # WebSocket error prevention
 import tempfile
@@ -269,11 +269,14 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
                             for item in block.content:
                                 if isinstance(item, dict) and "text" in item:
                                     logger.info(f"--> ToolResult: {item['text']}")
-                                    if "path" in item['text']:
-                                        json_path = json.loads(item['text'])
-                                        path = json_path.get('path', "")
-                                        logger.info(f"path: {path}")
-                                        image_url.append(path)
+                                    if "path" in item['text'] and item['text'].strip():
+                                        try:
+                                            json_path = json.loads(item['text'])
+                                            path = json_path.get('path', "")
+                                            logger.info(f"path: {path}")
+                                            image_url.append(path)
+                                        except json.JSONDecodeError as e:
+                                            logger.warning(f"JSON 파싱 실패: {e}, text: {item['text']}")
                     else:
                         logger.info(f"UserMessage: {block}")
             else:

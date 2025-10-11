@@ -318,6 +318,7 @@ with st.sidebar:
             'Nova Pro', 
             'Nova Lite', 
             'Nova Micro', 
+            'Claude 4.5 Sonnet',
             'Claude 4 Opus', 
             'Claude 4 Sonnet', 
             'Claude 3.7 Sonnet', 
