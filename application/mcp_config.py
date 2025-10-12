@@ -135,6 +135,39 @@ def get_bearer_token_from_secret_manager(secret_name):
         logger.info(f"Error getting stored token: {e}")
         return None
 
+def get_secret_value(secret_name):
+    session = boto3.Session()
+    client = session.client('secretsmanager', region_name=region)
+    
+    try:
+        response = client.get_secret_value(SecretId=secret_name)
+        return response['SecretString']
+    except client.exceptions.ResourceNotFoundException:
+        logger.info(f"Secret not found, creating new secret: {secret_name}")
+        try:
+            # Create secret value with bearer_key 
+            secret_value = {
+                "key": "github_personal_access_token",
+                "value": "need to update"
+            }
+            
+            # Convert to JSON string
+            secret_string = json.dumps(secret_value)
+
+            client.create_secret(
+                Name=secret_name,
+                SecretString=secret_string,  
+                Description=f"secret key and token for {secret_name}"
+            )
+            logger.info(f"Secret created: {secret_name}. Please update it with the actual value.")
+            return None
+        except Exception as create_error:
+            logger.error(f"Failed to create secret: {create_error}")
+            return None
+    except Exception as e:
+        logger.error(f"Error getting secret value: {e}")
+        return None
+
 def retrieve_bearer_token(secret_name):
     secret_name = config['secret_name']
     bearer_token = get_bearer_token_from_secret_manager(secret_name)
@@ -444,6 +477,7 @@ def load_config(mcp_type):
                 }
             }
         }    
+    
     elif mcp_type == "airbnb":
         return {
             "mcpServers": {
@@ -457,6 +491,7 @@ def load_config(mcp_type):
                 }
             }
         }
+    
     elif mcp_type == "playwright":
         return {
             "mcpServers": {
@@ -468,6 +503,7 @@ def load_config(mcp_type):
                 }
             }
         }
+    
     elif mcp_type == "obsidian":
         return {
             "mcpServers": {
@@ -484,6 +520,7 @@ def load_config(mcp_type):
                 }
             }
         }
+    
     elif mcp_type == "aws_diagram":
         return {
             "mcpServers": {
@@ -521,6 +558,7 @@ def load_config(mcp_type):
                 }
             }
         }    
+    
     elif mcp_type == "aws_cloudwatch":
         return {
             "mcpServers": {
@@ -602,6 +640,7 @@ def load_config(mcp_type):
                 }
             }
         }    
+    
     elif mcp_type == "agentcore_coder":
         return {
             "mcpServers": {
@@ -638,6 +677,7 @@ def load_config(mcp_type):
                 }
             }
         }
+    
     elif mcp_type == "wikipedia":
         return {
             "mcpServers": {
@@ -649,6 +689,7 @@ def load_config(mcp_type):
                 }
             }
         }      
+    
     elif mcp_type == "terminal":
         return {
             "mcpServers": {
@@ -825,6 +866,7 @@ def load_config(mcp_type):
                 }
             }
         }
+    
     elif mcp_type == "agentcore-browser":
         return {
             "mcpServers": {
@@ -876,6 +918,7 @@ def load_config(mcp_type):
                 }
             }
         }    
+    
     elif mcp_type == "notion":
         token = utils.get_notion_key()
         return {
@@ -889,6 +932,31 @@ def load_config(mcp_type):
                 }
             }
         }    
+
+    elif mcp_type == "github":
+        secret_name = f"github-personal-access-token"
+        secret_value = json.loads(get_secret_value(secret_name))
+        GITHUB_PERSONAL_ACCESS_TOKEN = secret_value['value']
+
+        if not GITHUB_PERSONAL_ACCESS_TOKEN:
+            logger.info(f"No github personal access token found in secret manager")
+            return {}
+        else:
+            return {
+                "mcpServers": {
+                    "github": {
+                    "command": "docker",
+                    "args": [
+                        "run",
+                        "-i",
+                        "--rm",
+                        "-e",
+                        f"GITHUB_PERSONAL_ACCESS_TOKEN={GITHUB_PERSONAL_ACCESS_TOKEN}",
+                        "ghcr.io/github/github-mcp-server"
+                    ]
+                    }
+                }
+            }
     
     elif mcp_type == "사용자 설정":
         return mcp_user_config
