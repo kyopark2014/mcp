@@ -399,10 +399,11 @@ def display_chat_messages() -> None:
         with st.chat_message(message["role"]):
             if "images" in message:                
                 for url in message["images"]:
-                    logger.info(f"url: {url}")
+                    if url and url.strip():  # 빈 문자열이나 공백만 있는 경우 건너뛰기
+                        logger.info(f"url: {url}")
 
-                    file_name = url[url.rfind('/')+1:]
-                    st.image(url, caption=file_name, use_container_width=True)
+                        file_name = url[url.rfind('/')+1:]
+                        st.image(url, caption=file_name, use_container_width=True)
             st.markdown(message["content"])
 
 display_chat_messages()
@@ -563,10 +564,12 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                 "images": image_url if image_url else []
             })
 
-            for url in image_url:
-                logger.info(f"url: {url}")
-                file_name = url[url.rfind('/')+1:]
-                st.image(url, caption=file_name, use_container_width=True)
+            if image_url:
+                for url in image_url:
+                    if url and url.strip():  # 빈 문자열이나 공백만 있는 경우 건너뛰기
+                        logger.info(f"url: {url}")
+                        file_name = url[url.rfind('/')+1:]
+                        st.image(url, caption=file_name, use_container_width=True)
 
             if memoryMode == "Enable":
                 chat.save_to_memory(prompt, response)            
