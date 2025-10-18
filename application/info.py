@@ -70,6 +70,24 @@ nova_micro_models = [   # Nova Micro
     }
 ]
 
+claude_4_5_haiku_models = [   # Haiku 4.5
+    {
+        "bedrock_region": "us-west-2", # Oregon
+        "model_type": "claude",
+        "model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    },
+    {
+        "bedrock_region": "us-east-1", # N.Virginia
+        "model_type": "claude",
+        "model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    },
+    {
+        "bedrock_region": "us-east-2", # Ohio
+        "model_type": "claude",
+        "model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    }
+]
+
 claude_4_5_sonnet_models = [   # Sonnet 4.5
     {
         "bedrock_region": "us-west-2", # Oregon
@@ -248,6 +266,8 @@ def get_model_info(model_name):
         models = claude_4_sonnet_models
     elif model_name == "Claude 4.5 Sonnet":
         models = claude_4_5_sonnet_models
+    elif model_name == "Claude 4.5 Haiku":
+        models = claude_4_5_haiku_models
     elif model_name == "Nova Premier":
         models = nova_premier
     elif model_name == "OpenAI OSS 120B":

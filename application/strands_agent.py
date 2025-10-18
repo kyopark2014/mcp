@@ -114,7 +114,6 @@ def get_model():
             max_tokens=maxOutputTokens,
             stop_sequences = [STOP_SEQUENCE],
             temperature = 0.1,
-            top_p = 0.9,
             additional_request_fields={
                 "thinking": {
                     "type": "disabled"
@@ -123,9 +122,10 @@ def get_model():
         )
     elif chat.model_type == 'openai':
         model = BedrockModel(
-            model=chat.model_id,
-            region=aws_region,
-            streaming=True
+            client=bedrock_client,
+            model_id=chat.model_id,
+            max_tokens=maxOutputTokens,
+            temperature=0.1
         )
     return model
 

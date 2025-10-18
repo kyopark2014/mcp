@@ -374,15 +374,12 @@ def get_chat(extended_thinking):
             "max_tokens":maxOutputTokens,     
             "temperature":0.1,
             "top_k":250,
-            "top_p":0.9,
             "stop_sequences": [STOP_SEQUENCE]
         }
     elif profile['model_type'] == 'openai':
         parameters = {
             "max_tokens":maxOutputTokens,     
-            "temperature":0.1,
-            "top_p":0.9
-            # Note: stream parameter removed for invoke requests
+            "temperature":0.1
         }
 
     chat = ChatBedrock(   # new chat model
@@ -391,6 +388,10 @@ def get_chat(extended_thinking):
         model_kwargs=parameters,
         region_name=bedrock_region
     )
+    
+    # Disable streaming for OpenAI models
+    if profile['model_type'] == 'openai':
+        chat.streaming = False
     
     if multi_region=='Enable':
         selected_chat = selected_chat + 1
@@ -630,15 +631,12 @@ def get_parallel_processing_chat(models, selected):
             "max_tokens":maxOutputTokens,     
             "temperature":0.1,
             "top_k":250,
-            "top_p":0.9,
             "stop_sequences": [STOP_SEQUENCE]
         }
     else:
         parameters = {
             "max_tokens":maxOutputTokens,     
-            "temperature":0.1,
-            "top_p":0.9
-            # Note: stream parameter removed for invoke requests
+            "temperature":0.1
         }
 
     chat = ChatBedrock(   # new chat model
@@ -646,6 +644,10 @@ def get_parallel_processing_chat(models, selected):
         client=boto3_bedrock, 
         model_kwargs=parameters,
     )        
+    
+    # Disable streaming for OpenAI models
+    if profile['model_type'] == 'openai':
+        chat.streaming = False
     
     return chat
 
