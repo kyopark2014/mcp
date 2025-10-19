@@ -147,7 +147,7 @@ def get_secret_value(secret_name):
         try:
             # Create secret value with bearer_key 
             secret_value = {
-                "key": "github_personal_access_token",
+                "key": secret_name,
                 "value": "need to update"
             }
             
@@ -954,6 +954,27 @@ def load_config(mcp_type):
                         f"GITHUB_PERSONAL_ACCESS_TOKEN={GITHUB_PERSONAL_ACCESS_TOKEN}",
                         "ghcr.io/github/github-mcp-server"
                     ]
+                    }
+                }
+            }
+            
+    elif mcp_type == "outlook":
+        secret_name = f"outlook-mcp-user-email"
+        secret_value = json.loads(get_secret_value(secret_name))
+        OUTLOOK_MCP_USER_EMAIL = secret_value['value']
+        if not OUTLOOK_MCP_USER_EMAIL:
+            logger.info(f"No outlook user email found in secret manager")
+            return {}
+        else:
+            logger.info(f"outlook user email: {OUTLOOK_MCP_USER_EMAIL}")
+            return {
+                "mcpServers": {
+                    "outlook": {
+                        "command": f"{workingDir}/outlook-mac/outlook_mcp.py",
+                        "env":{
+                            "USER_EMAIL":OUTLOOK_MCP_USER_EMAIL,
+                            "OUTLOOK_MCP_LOG_LEVEL":"INFO"
+                        }
                     }
                 }
             }
