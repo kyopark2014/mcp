@@ -179,7 +179,7 @@ with st.sidebar:
     
     if mode=='Agent' or mode=='Agent (Chat)':
         agentType = st.radio(
-            label="Agent 타입을 선택하세요. ",options=["langgraph", "strands", "claude"], index=2
+            label="Agent 타입을 선택하세요. ",options=["langgraph", "strands", "claude"], index=0
             # label="Agent 타입을 선택하세요. ",options=["langgraph", "strands"], index=0
         )
 
@@ -191,7 +191,7 @@ with st.sidebar:
         # Change radio to checkbox
         if environment == "user":        
             mcp_options = [
-                "basic", "short-term memory", "long-term memory", 
+                "basic", "short-term memory", "long-term memory", "outlook",
                 "knowledge base", "kb-retriever (local)", "kb-retriever (runtime)", "agentcore gateway", 
                 "use-aws (local)", "use-aws (runtime)", 
                 "aws-knowledge", "aws-api", "aws document", "aws cost", "aws cli", "aws ccapi",
@@ -204,7 +204,7 @@ with st.sidebar:
             ]
         else:
             mcp_options = [ 
-                "basic", "short-term memory", "long-term memory",  
+                "basic", "short-term memory", "long-term memory",  "outlook",
                 "knowledge base", "kb-retriever (local)", "kb-retriever (runtime)", "agentcore gateway", 
                 "use-aws (local)", "use-aws (runtime)", 
                 "aws-knowledge", "aws-api", "aws document", "aws cost", "aws cli", "aws ccapi",
