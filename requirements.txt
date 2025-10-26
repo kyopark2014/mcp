@@ -10,6 +10,7 @@ langgraph
 langchain_experimental
 langgraph-supervisor
 langgraph-swarm
+langchain-text-splitters
 tavily-python==0.5.0
 yfinance==0.2.52
 rizaio==0.8.0
