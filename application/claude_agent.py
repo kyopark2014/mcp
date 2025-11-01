@@ -120,16 +120,13 @@ def load_multiple_mcp_server_parameters(mcp_json: dict):
     return server_info
 
 def isKorean(text):
-    # check korean
+    # Check if text contains Korean characters
     pattern_hangul = re.compile('[\u3131-\u3163\uac00-\ud7a3]+')
     word_kor = pattern_hangul.search(str(text))
-    # print('word_kor: ', word_kor)
 
     if word_kor and word_kor != 'None':
-        # logger.info(f"Korean: {word_kor}")
         return True
     else:
-        # logger.info(f"Not Korean:: {word_kor}")
         return False
 
 session_id = None
@@ -253,6 +250,12 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
                             add_notification(containers, f"Tool name: {block.name}, input: {block.input}")
                     elif isinstance(block, ToolResultBlock):
                         logger.info(f"--> tool_use_id: {block.tool_use_id=}, content: {block.content}")
+                        # Skip displaying image type ToolResults
+                        if isinstance(block.content, list):
+                            has_image = any(isinstance(item, dict) and item.get('type') == 'image' for item in block.content)
+                            if has_image:
+                                logger.info("Skipping image type ToolResult")
+                                continue
                         if chat.debug_mode == 'Enable':
                             add_notification(containers, f"Tool result: {block.content}")
                     else:
@@ -262,7 +265,15 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
                 for block in message.content:
                     if isinstance(block, ToolResultBlock):
                         logger.info(f"--> tool_use_id: {block.tool_use_id=}, content: {block.content}")
-                        if chat.debug_mode == 'Enable':
+                        # Skip displaying image type ToolResults
+                        skip_notification = False
+                        if isinstance(block.content, list):
+                            has_image = any(isinstance(item, dict) and item.get('type') == 'image' for item in block.content)
+                            if has_image:
+                                logger.info("Skipping image type ToolResult")
+                                skip_notification = True
+                        
+                        if not skip_notification and chat.debug_mode == 'Enable':
                             add_notification(containers, f"Tool result: {block.content}")
                         
                         if isinstance(block.content, list):
@@ -276,7 +287,26 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
                                             logger.info(f"path: {path}")
                                             image_url.append(path)
                                         except json.JSONDecodeError as e:
-                                            logger.warning(f"JSON 파싱 실패: {e}, text: {item['text']}")
+                                            logger.warning(f"JSON parsing failed: {e}, text: {item['text']}")
+                        elif isinstance(block.content, str):
+                            logger.info(f"--> ToolResult content is string: {block.content}")
+                            try:
+                                parsed_content = json.loads(block.content)
+                                logger.info(f"--> Parsed content: {parsed_content}")
+                                if isinstance(parsed_content, dict):
+                                    if "result" in parsed_content and isinstance(parsed_content["result"], dict):
+                                        if "path" in parsed_content["result"]:
+                                            paths = parsed_content["result"]["path"]
+                                            if isinstance(paths, list):
+                                                for path in paths:
+                                                    logger.info(f"path from parsed JSON: {path}")
+                                                    image_url.append(path)
+                                    elif "path" in parsed_content:
+                                        path = parsed_content.get('path', "")
+                                        logger.info(f"path from parsed JSON: {path}")
+                                        image_url.append(path)
+                            except json.JSONDecodeError as e:
+                                logger.warning(f"JSON parsing failed: {e}, content: {block.content}")
                     else:
                         logger.info(f"UserMessage: {block}")
             else:

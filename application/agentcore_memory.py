@@ -268,10 +268,23 @@ def save_conversation_to_memory(memory_id, actor_id, session_id, query, result):
         logger.warning(f"Result is empty or invalid, skipping memory save")
         return
 
+    # Truncate text to AWS Bedrock limit (9000 characters)
+    max_length = 9000
+    query_trimmed = query.strip()
+    result_trimmed = result.strip()
+    
+    if len(query_trimmed) > max_length:
+        logger.warning(f"Query text exceeds {max_length} characters, truncating")
+        query_trimmed = query_trimmed[:max_length] + "... [truncated]"
+    
+    if len(result_trimmed) > max_length:
+        logger.warning(f"Result text exceeds {max_length} characters, truncating")
+        result_trimmed = result_trimmed[:max_length] + "... [truncated]"
+
     event_timestamp = datetime.now(timezone.utc)
     conversation = [
-        (query.strip(), "USER"),
-        (result.strip(), "ASSISTANT")
+        (query_trimmed, "USER"),
+        (result_trimmed, "ASSISTANT")
     ]
 
     try:
