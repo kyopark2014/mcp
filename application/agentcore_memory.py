@@ -3,7 +3,6 @@ import json
 import logging
 import sys
 import uuid
-import chat
 import time
 
 from typing import Dict, Optional, Required
@@ -193,10 +192,13 @@ def load_memory_strategy(memory_id: str):
     logger.info(f"strategies: {strategies}")
     return strategies
 
-def add_strategy(memory_id: str, namespace: str):
+def add_strategy(memory_id: str, namespace: str, strategy_name: str):
+    if not strategy_name:
+        raise ValueError("strategy_name cannot be None or empty")
+    
     strategy = {
             "customMemoryStrategy": {
-                "name": chat.user_id,
+                "name": strategy_name,
                 "namespaces": [namespace],
                 "configuration" : {
                     "userPreferenceOverride" : {
@@ -224,10 +226,13 @@ def create_strategy_if_not_exists(memory_id: str, namespace: str, strategy_name:
             break
     if not has_strategy:
         logger.info(f"UserPreference strategy not found, adding...")
-        add_strategy(memory_id, namespace)
+        add_strategy(memory_id, namespace, strategy_name)
         logger.info(f"UserPreference strategy was added...")
 
-def create_memory(namespace: str):
+def create_memory(namespace: str, user_id: str):
+    if not user_id:
+        raise ValueError("user_id cannot be None or empty")
+    
     result = memory_client.create_memory_and_wait(
         name=projectName.replace("-", "_"),
         description=f"Memory for {projectName}",
@@ -236,7 +241,7 @@ def create_memory(namespace: str):
         strategies=[{
             #"userPreferenceMemoryStrategy": {
             "customMemoryStrategy": {
-                "name": chat.user_id,
+                "name": user_id,
                 "namespaces": [namespace],
                 "configuration" : {
                     "userPreferenceOverride" : {
@@ -270,16 +275,26 @@ def save_conversation_to_memory(memory_id, actor_id, session_id, query, result):
 
     # Truncate text to AWS Bedrock limit (9000 characters)
     max_length = 9000
+    truncate_suffix = "... [truncated]"
+    suffix_length = len(truncate_suffix)
+    max_content_length = max_length - suffix_length  # Reserve space for suffix
+    
     query_trimmed = query.strip()
     result_trimmed = result.strip()
     
     if len(query_trimmed) > max_length:
         logger.warning(f"Query text exceeds {max_length} characters, truncating")
-        query_trimmed = query_trimmed[:max_length] + "... [truncated]"
+        query_trimmed = query_trimmed[:max_content_length] + truncate_suffix
+        # Ensure final length doesn't exceed max_length
+        if len(query_trimmed) > max_length:
+            query_trimmed = query_trimmed[:max_length]
     
     if len(result_trimmed) > max_length:
         logger.warning(f"Result text exceeds {max_length} characters, truncating")
-        result_trimmed = result_trimmed[:max_length] + "... [truncated]"
+        result_trimmed = result_trimmed[:max_content_length] + truncate_suffix
+        # Ensure final length doesn't exceed max_length
+        if len(result_trimmed) > max_length:
+            result_trimmed = result_trimmed[:max_length]
 
     event_timestamp = datetime.now(timezone.utc)
     conversation = [

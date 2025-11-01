@@ -1993,8 +1993,14 @@ memory_id = actor_id = session_id = None
 def initiate_memory():
     global memory_id, actor_id, session_id
 
+    # Ensure user_id is valid
+    effective_user_id = user_id if user_id and user_id.strip() else agent_type
+    if not effective_user_id or not effective_user_id.strip():
+        effective_user_id = "default"  # Fallback to default if agent_type is also invalid
+    logger.info(f"Using user_id: {effective_user_id}")
+
     # initate memory variables    
-    memory_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables(user_id)
+    memory_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables(effective_user_id)
     logger.info(f"memory_id: {memory_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
 
     if memory_id is None:
@@ -2005,15 +2011,15 @@ def initiate_memory():
         # create memory if not exists
         if memory_id is None:
             logger.info(f"Memory will be created...")
-            memory_id = agentcore_memory.create_memory(namespace)
+            memory_id = agentcore_memory.create_memory(namespace, effective_user_id)
             logger.info(f"Memory was created... {memory_id}")
         
         # create strategy if not exists
-        agentcore_memory.create_strategy_if_not_exists(memory_id=memory_id, namespace=namespace, strategy_name=user_id)
+        agentcore_memory.create_strategy_if_not_exists(memory_id=memory_id, namespace=namespace, strategy_name=effective_user_id)
 
         # save memory variables
         agentcore_memory.update_memory_variables(
-            user_id=user_id, 
+            user_id=effective_user_id, 
             memory_id=memory_id, 
             actor_id=actor_id, 
             session_id=session_id, 
