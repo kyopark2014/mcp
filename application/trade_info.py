@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.font_manager as fm
 from datetime import datetime, timezone, timedelta
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Tuple
 from matplotlib.patches import Rectangle
 from typing import cast
 
@@ -32,14 +32,13 @@ SUBJECT_TO_TICKER: Dict[str, str] = {
     "NAVER": "035420.KS",  # NAVER Corp    
     "카카오": "035720.KS",  # Kakao Corp
     "KT": "030200.KS",  # KT Corp   
-    "SKT": "034220.KS",  # SK Telecom Corp
     "대한항공": "003490.KS",  # 대한항공 Corp
     "아시아나항공": "020560.KS",  # 아시아나항공 Corp
     "호텔신라": "008770.KS",  # 호텔신라 Corp
     "현대차": "005380.KS",  # 현대차 Corp
     "현대모비스": "012330.KS",  # 현대모비스 Corp
     "현대오토에버": "307950.KS",  # 현대오토에버 Corp
-    "SK이노베이션": "000660.KS",  # SK이노베이션 Corp
+    "SK이노베이션": "096770.KS",  # SK이노베이션 Corp
     "SK하이닉스": "000660.KS",  # SK하이닉스 Corp
     "SK Hynix": "000660.KS",  # SK Hynix Corp
     "LG전자": "066570.KS",  # LG 전자 Corp
@@ -60,6 +59,8 @@ SUBJECT_TO_TICKER: Dict[str, str] = {
     "한화시스템": "272210.KS",  # 한화시스템 Corp
     "농심": "004370.KS",  # 농심 Corp
 }
+
+stocks = {}
 
 def resolve_ticker(subject: str) -> str:
     """Resolve input into a yfinance-style ticker.
@@ -286,13 +287,103 @@ def get_stock_trend(company_name: str = "NAVER", period: int = 30) -> Dict[str, 
         "points": points,
         "fetched_at": datetime.now(timezone.utc).isoformat(),
     }
+    stocks[f"{company_name}_{period}"] = result
+
     return result
 
+def get_expected_high_low(company_name: str = "NAVER", period: int = 30) -> Tuple[str, str]:
+    """
+    Return last ~period days price trend with expected high and low as a dict. Uses FinanceDataReader only.
+    company_name: the company name to get stock trend
+    period: the period to get stock trend
+    return: the price trend of the given company as a dict
+    """
+
+    trend_dict = stocks.get(f"{company_name}_{period}")
+    if trend_dict is None:
+        trend_dict = get_stock_trend(company_name, period)
+        stocks[f"{company_name}_{period}"] = trend_dict
+    
+    points = trend_dict.get("points", [])
+    if not points:
+        raise ValueError("trend does not contain points data.")
+
+    # Prepare data similar to draw_stock_trend
+    df = pd.DataFrame(points)
+    df['time'] = pd.to_datetime(df['time'])
+    df = df.sort_values('time').reset_index(drop=True)  # Sort by time
+    
+    # Filter out None values for close price
+    df_clean = df[df['close'].notna()].copy()
+    
+    if len(df_clean) == 0:
+        raise ValueError("No valid close price data in points.")
+    
+    # Get closing prices as array
+    close_prices = df_clean['close'].values
+    
+    # Find and highlight maximum and minimum closing prices (highest and lowest)
+    max_idx = pd.Series(close_prices).idxmax()
+    min_idx = pd.Series(close_prices).idxmin()
+    
+    max_close = close_prices[max_idx]
+    min_close = close_prices[min_idx]
+    
+    # Get current (last) closing price for percentage calculation
+    current_close = close_prices[-1]
+    
+    # Calculate percentage from current closing price
+    max_percent = ((max_close - current_close) / current_close) * 100 if current_close != 0 else 0
+    min_percent = ((min_close - current_close) / current_close) * 100 if current_close != 0 else 0
+
+    expected_high = f"{max_percent:+.2f}%"
+    expected_low = f"{min_percent:+.2f}%"
+
+    return expected_high, expected_low
+
+def is_lower_than_ma20(company_name: str = "NAVER", period: int = 30) -> bool:
+    """
+    Return True if the current closing price is lower than the 20-day moving average, False otherwise. Uses FinanceDataReader only.
+    company_name: the company name to get stock trend
+    period: the period to get stock trend
+    return: True if the current closing price is lower than the 20-day moving average, False otherwise
+    """
+
+    trend_dict = stocks.get(f"{company_name}_{period}")
+    if trend_dict is None:
+        trend_dict = get_stock_trend(company_name, period)
+        stocks[f"{company_name}_{period}"] = trend_dict
+    
+    points = trend_dict.get("points", [])
+    if not points:
+        raise ValueError("trend does not contain points data.")
+
+    # Prepare data similar to draw_stock_trend
+    df = pd.DataFrame(points)
+    df['time'] = pd.to_datetime(df['time'])
+    df = df.sort_values('time').reset_index(drop=True)  # Sort by time
+
+    df['ma20'] = df['close'].rolling(window=20, min_periods=1).mean()  # 20-day moving average
+    
+    # Filter out None values for close price
+    df_clean = df[df['close'].notna()].copy()
+    
+    if len(df_clean) == 0:
+        raise ValueError("No valid close price data in points.")
+    
+    # Get closing prices as array
+    close_prices = df_clean['close'].values
+    
+    # Get current (last) closing price for percentage calculation
+    current_close = close_prices[-1]
+
+    return True if current_close < df['ma20'].values[-1] else False
+    
 def draw_stock_trend(trend: Dict[str, object]) -> Dict[str, List[str]]:
     """
-    Draw a graph of the given trend.
+    Draw graphs of the given trend.
     trend: the trend dictionary of the given company (containing points, company_name, ticker, etc.)
-    return: dictionary with 'path' key containing a list of image file paths
+    return: dictionary with 'path' key containing a list of image file paths for the graphs
     """
     logger.info(f"draw_stock_trend --> trend: {trend}")
 
@@ -495,7 +586,7 @@ def draw_stock_trend(trend: Dict[str, object]) -> Dict[str, List[str]]:
     plt.close(fig2)
     image_url.append(os.path.abspath(file_path))
 
-    # 종가기준으로 주식 trend를 나태내는 그래프를 그리세요.
+    # Draw stock trend graph based on closing price
     df = pd.DataFrame(points)
     df['time'] = pd.to_datetime(df['time'])
     df = df.sort_values('time').reset_index(drop=True)  # Sort by time
@@ -537,6 +628,8 @@ def draw_stock_trend(trend: Dict[str, object]) -> Dict[str, List[str]]:
         # Calculate percentage from current closing price
         max_percent = ((max_close - current_close) / current_close) * 100 if current_close != 0 else 0
         min_percent = ((min_close - current_close) / current_close) * 100 if current_close != 0 else 0
+        logger.info(f"max_percent: {max_percent}")
+        logger.info(f"min_percent: {min_percent}")
         
         # Highlight maximum closing price (highest price)
         ax3.plot(max_date, max_close, marker='^', markersize=12, color='darkred', 
