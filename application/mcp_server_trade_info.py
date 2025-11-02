@@ -4,8 +4,6 @@ import sys
 import trade_info
 from typing import Dict, Optional, List
 from mcp.server.fastmcp import FastMCP 
-import uuid
-import datetime
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -29,11 +27,13 @@ except Exception as e:
         err_msg = f"Error: {str(e)}"
         logger.info(f"{err_msg}")
 
+stocks = {}
+
 ######################################
 # Time
 ######################################
 @mcp.tool()
-def get_stock_trend(company_name: str = "네이버", period: int = 30) -> str:
+def retrieve_stock_trend(company_name: str = "네이버", period: int = 30) -> str:
     """
     Returns the last ~period days price trend of the given company name as a JSON string.
     company_name: the company name to get stock price trend
@@ -44,26 +44,25 @@ def get_stock_trend(company_name: str = "네이버", period: int = 30) -> str:
 
     result_dict = trade_info.get_stock_trend(company_name, period)
 
-    file_name = f"contents/{company_name}.json"
-    with open(file_name, "w") as f:
-        json.dump(result_dict, f, ensure_ascii=False)
-
-    logger.info(f"result_dict saved to {file_name}")
+    stocks[f"{company_name}_{period}"] = result_dict
 
     return json.dumps(result_dict, ensure_ascii=False)
 
 @mcp.tool()
-def draw_stock_trend(company_name: str) -> Dict[str, List[str]]:
+def draw_stock_trend(company_name: str = "네이버", period: int = 30) -> Dict[str, List[str]]:
     """
     Draw a graph of the given trend.
     trend: the trend of the given company name as a JSON string (the result from get_stock_trend)
     return: dictionary with 'path' key containing a list of image file paths
     """
-    logger.info(f"draw_stock_trend --> company_name: {company_name}")
+    logger.info(f"draw_stock_trend --> company_name: {company_name}, period: {period}")
 
-    file_name = f"contents/{company_name}.json"
-    with open(file_name, "r") as f:
-        trend_dict = json.load(f)
+    trend_dict = stocks.get(f"{company_name}_{period}")
+    if trend_dict is None:
+        logger.error(f"Trend not found for {company_name}_{period}")
+        trend_dict = trade_info.get_stock_trend(company_name, period)
+        stocks[f"{company_name}_{period}"] = trend_dict
+
     logger.info(f"trend_dict: {trend_dict}")
 
     return trade_info.draw_stock_trend(trend_dict)
