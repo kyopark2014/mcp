@@ -236,7 +236,11 @@ def agent_core_memory(
     """
     try:
         mcp_env = utils.load_mcp_env()
-        user_id = mcp_env['user_id']
+        user_id = mcp_env.get('user_id')
+        # Use default user_id if None or empty
+        if not user_id or (isinstance(user_id, str) and not user_id.strip()):
+            user_id = "default"
+            logger.info(f"user_id was None or empty, using default: {user_id}")
         memory_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables(user_id)
         logger.info(f"memory_id: {memory_id}, user_id: {user_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
         

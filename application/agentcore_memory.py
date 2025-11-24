@@ -72,6 +72,19 @@ def load_memory_variables(user_id: str):
     if namespace is None:
         namespace = f"/users/{actor_id}"
     
+    # If memory_id is None, try to retrieve existing memory or create a new one
+    if memory_id is None:
+        logger.info(f"memory_id is None, attempting to retrieve existing memory...")
+        memory_id = retrieve_memory_id()
+        if memory_id is None:
+            logger.info(f"No existing memory found, creating new memory...")
+            memory_id = create_memory(namespace, user_id)
+            # Save the memory_id to the user config file
+            update_memory_variables(user_id, memory_id=memory_id, actor_id=actor_id, session_id=session_id, namespace=namespace)
+        else:
+            # Save the retrieved memory_id to the user config file
+            update_memory_variables(user_id, memory_id=memory_id, actor_id=actor_id, session_id=session_id, namespace=namespace)
+    
     return memory_id, actor_id, session_id, namespace
 
 def update_memory_variables(

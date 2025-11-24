@@ -334,9 +334,9 @@ with st.sidebar:
     # debug checkbox
     select_debugMode = st.checkbox('Debug Mode', value=True)
     debugMode = 'Enable' if select_debugMode else 'Disable'
-    #print('debugMode: ', debugMode)
+    #logger.info('debugMode: ', debugMode)
 
-    # RAG grading
+    # Memory
     enable_memory = st.checkbox('Memory', value=True)
     memoryMode = 'Enable' if enable_memory else 'Disable'
     # logger.info(f"memory_mode: {memory_mode}")
@@ -344,7 +344,7 @@ with st.sidebar:
     # multi region check box
     select_multiRegion = st.checkbox('Multi Region', value=False)
     multiRegion = 'Enable' if select_multiRegion else 'Disable'
-    #print('multiRegion: ', multiRegion)
+    #logger.info('multiRegion: ', multiRegion)
 
     # extended thinking of claude 3.7 sonnet
     reasoningMode = "Disable"
@@ -393,7 +393,7 @@ if "messages" not in st.session_state:
 
 # Display chat messages from history on app rerun
 def display_chat_messages() -> None:
-    """Print message history
+    """logger.info message history
     @returns None
     """
     for message in st.session_state.messages:
