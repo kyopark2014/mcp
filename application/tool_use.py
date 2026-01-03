@@ -95,7 +95,7 @@ try:
         logger.info(f"No secret found for weather api")
 
 except Exception as e:
-    raise e
+    pass
 
 def get_basic_answer(query):
     logger.info(f"#### get_basic_answer ####")

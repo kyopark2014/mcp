@@ -90,7 +90,7 @@ try:
             logger.info(f"tavily_key is required.")
 except Exception as e: 
     logger.info(f"Tavily credential is required: {e}")
-    raise e
+    pass
 
 def retrieve_documents_from_tavily(query, top_k):
     logger.info(f"###### retrieve_documents_from_tavily ######")
