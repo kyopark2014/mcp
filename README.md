@@ -655,7 +655,7 @@ if isinstance(response, dict):
 
 <img width="719" height="721" alt="image" src="https://github.com/user-attachments/assets/da23b49e-5a4b-402f-b314-62211bb59b30" />
 
-### Tips
+### 리전별 사용할 수 있는 모델의 확인 방법
 
 사용할 수 있는 모델의 확인 방법은 아래와 같습니다.
 
