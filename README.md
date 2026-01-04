@@ -284,19 +284,23 @@ asyncio.run(mcp_agent(query, st))
 }
 ```
 
-### 실행하기
+### EC2에서 실행하기
 
-필요한 인프라를 python을 이용해 설치합니다. 인프라가 더이상 필요없을때에는 uninstaller.py를 이용해 제거합니다.
+필요한 인프라를 python을 이용해 설치합니다. Secret에 보관되는 API에 대한 Credential을 입력하여야 합니다. 없다면 엔터키를 눌러서 넘어갑니다.
 
 ```text
 python installer.py
 ```
 
+설치가 완료되면 CloudFront로 접속하여 동작을 확인합니다. 인프라가 더이상 필요없을때에는 uninstaller.py를 이용해 제거합니다.
+
+### Local에서 실행하기
+
 venv로 환경을 구성하면 편리합니다. 아래와 같이 환경을 설정합니다.
 
 ```text
-python -m venv venv
-source venv/bin/activate
+python -m venv .venv
+source .venv/bin/activate
 ```
 
 이후 다운로드 받은 github 폴더로 이동한 후에 아래와 같이 필요한 패키지를 추가로 설치 합니다.
@@ -309,37 +313,6 @@ pip install -r requirements.txt
 
 ```text
 streamlit run application/app.py
-```
-
-
-### EC2에 배포하기
-
-EC2가 private subnet에 있으므로 Session Manger로 접속합니다. 이때 설치는 ec2-user로 진행되었으므로 아래와 같이 code를 업데이트합니다.
-
-```text
-sudo runuser -l ec2-user -c 'cd /home/ec2-user/mcp && git pull'
-```
-
-이제 아래와 같이 docker를 빌드합니다.
-
-```text
-sudo runuser -l ec2-user -c "cd mcp && docker build -t streamlit-app ."
-```
-
-빌드가 완료되면 "sudo docker ps"로 docker id를 확인후에 "sudo docker kill" 명령어로 종료합니다.
-
-![noname](https://github.com/user-attachments/assets/4afb2af8-d092-4aaa-813a-65975375f7d4)
-
-이후 아래와 같이 다시 실행합니다.
-
-```text
-sudo runuser -l ec2-user -c 'docker run -d -p 8501:8501 streamlit-app'
-```
-
-만약 console에서 debugging할 경우에는 -d 옵션없이 아래와 같이 실행합니다.
-
-```text
-sudo runuser -l ec2-user -c 'docker run -p 8501:8501 streamlit-app'
 ```
 
 
