@@ -44,7 +44,6 @@ def knowledge_base_search(keyword: str) -> list:
     return result
 
 if __name__ =="__main__":
-    print(f"###### main ######")
     mcp.run(transport="stdio")
 
 

@@ -42,7 +42,6 @@ def rag_search(keyword: str) -> str:
     return rag.retrieve_knowledge_base(keyword)
 
 if __name__ =="__main__":
-    print(f"###### main ######")
     mcp.run(transport="stdio")
 
 

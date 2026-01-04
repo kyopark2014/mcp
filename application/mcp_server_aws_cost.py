@@ -99,7 +99,6 @@ def generate_cost_insights(question: str) -> str:
 ######################################
 
 if __name__ =="__main__":
-    print(f"###### main ######")
     mcp.run(transport="stdio")
 
 

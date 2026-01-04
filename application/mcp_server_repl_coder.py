@@ -58,7 +58,6 @@ def repl_drawer(code):
     return coder.repl_drawer(code)
     
 if __name__ =="__main__":
-    print(f"###### main ######")
     mcp.run(transport="stdio")
 
 

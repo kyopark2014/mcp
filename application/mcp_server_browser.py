@@ -42,7 +42,6 @@ def browser_search(keyword: str) -> str:
     return browser.live_view_with_nova_act(keyword)
 
 if __name__ =="__main__":
-    print(f"###### main ######")
     mcp.run(transport="stdio")
 
 

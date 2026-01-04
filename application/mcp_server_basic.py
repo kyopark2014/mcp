@@ -81,7 +81,6 @@ def stock_data_lookup(ticker, country, period="1mo"):
     return mcp_basic.stock_data_lookup(ticker, country, period)
 
 if __name__ =="__main__":
-    print(f"###### main ######")
     mcp.run(transport="stdio")
 
 

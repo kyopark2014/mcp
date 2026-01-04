@@ -90,7 +90,6 @@ def long_term_memory(
     return mcp_long_term_memory.agent_core_memory(action, content, query, memory_record_id, max_results, next_token)
 
 if __name__ =="__main__":
-    print(f"###### main ######")
     mcp.run(transport="stdio")
 
 

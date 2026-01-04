@@ -183,7 +183,6 @@ def check_aws_credentials() -> Dict:
 ######################################
 
 if __name__ =="__main__":
-    print(f"###### main ######")
     mcp.run(transport="stdio")
 
 

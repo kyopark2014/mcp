@@ -68,7 +68,6 @@ def draw_stock_trend(company_name: str = "네이버", period: int = 30) -> Dict[
     return trade_info.draw_stock_trend(trend_dict)
 
 if __name__ =="__main__":
-    print(f"###### main ######")
     mcp.run(transport="stdio")
 
 

@@ -41,7 +41,6 @@ def retrieve(keyword: str) -> str:
     return mcp_retrieve.retrieve(keyword)
 
 if __name__ =="__main__":
-    print(f"###### main ######")
     mcp.run(transport="stdio")
 
 
