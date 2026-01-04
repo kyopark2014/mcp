@@ -1796,7 +1796,12 @@ def get_tool_info(tool_name, tool_content):
     # aws document
     elif tool_name == "search_documentation":
         try:
-            json_data = json.loads(tool_content)
+            if isinstance(tool_content, dict):
+                json_data = tool_content
+            elif isinstance(tool_content, list):
+                json_data = tool_content
+            else:
+                json_data = json.loads(tool_content)
             for item in json_data:
                 logger.info(f"item: {item}")
                 
