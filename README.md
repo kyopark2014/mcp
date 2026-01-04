@@ -286,10 +286,10 @@ asyncio.run(mcp_agent(query, st))
 
 ### 실행하기
 
-Output의 environmentformcprag의 내용을 복사하여 application/config.json을 생성합니다. "aws configure"로 credential이 설정되어 있어야합니다. 만약 visual studio code 사용자라면 config.json 파일은 아래 명령어를 사용합니다.
+필요한 인프라를 python을 이용해 설치합니다. 인프라가 더이상 필요없을때에는 uninstaller.py를 이용해 제거합니다.
 
 ```text
-code application/config.json
+python installer.py
 ```
 
 venv로 환경을 구성하면 편리합니다. 아래와 같이 환경을 설정합니다.
