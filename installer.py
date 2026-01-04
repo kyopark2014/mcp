@@ -451,6 +451,37 @@ def create_ec2_role(knowledge_base_role_arn: str) -> str:
             }
         },
         {
+            "name": f"cognito-policy-for-{project_name}",
+            "document": {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "cognito-idp:ListUserPools",
+                            "cognito-idp:DescribeUserPool",
+                            "cognito-idp:ListUserPoolClients",
+                            "cognito-idp:DescribeUserPoolClient"
+                        ],
+                        "Resource": ["*"]
+                    }
+                ]
+            }
+        },
+        {
+            "name": f"bedrock-agentcore-policy-for-{project_name}",
+            "document": {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": ["bedrock-agentcore:*"],
+                        "Resource": ["*"]
+                    }
+                ]
+            }
+        },
+        {
             "name": f"pass-role-for-{project_name}",
             "document": {
                 "Version": "2012-10-17",
@@ -1663,7 +1694,7 @@ chown -R ssm-user:ssm-user /home/ssm-user/{git_name}
 # Build and run docker with volume mount for config.json
 cd /home/ssm-user/{git_name}
 docker build -f Dockerfile -t streamlit-app .
-docker run -d -p 8501:8501 -v $(pwd)/application/config.json:/app/application/config.json streamlit-app
+docker run -d --restart=always -p 8501:8501 -v $(pwd)/application/config.json:/app/application/config.json --name mcp-app streamlit-app
 
 echo "Setup completed successfully" >> /var/log/user-data.log
 """

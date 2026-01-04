@@ -1,0 +1,72 @@
+2026-01-04 20:13:13 - INFO - ============================================================
+2026-01-04 20:13:13 - INFO - Starting AWS Infrastructure Deployment
+2026-01-04 20:13:13 - INFO - ============================================================
+2026-01-04 20:13:13 - INFO - Project: mcp
+2026-01-04 20:13:13 - INFO - Region: us-west-2
+2026-01-04 20:13:13 - INFO - Account ID: 262976740991
+2026-01-04 20:13:13 - INFO - Bucket Name: storage-for-mcp--us-west-2
+2026-01-04 20:13:13 - INFO - ============================================================
+2026-01-04 20:13:13 - INFO - [1/9] Creating S3 bucket: storage-for-mcp--us-west-2
+2026-01-04 20:13:13 - WARNING - S3 bucket already exists: storage-for-mcp--us-west-2
+2026-01-04 20:13:13 - INFO - [2/9] Creating Knowledge Base IAM role
+2026-01-04 20:13:14 - WARNING - IAM role already exists: role-knowledge-base-for-mcp-us-west-2
+2026-01-04 20:13:16 - INFO - [2/9] Creating Agent IAM role
+2026-01-04 20:13:16 - WARNING - IAM role already exists: role-agent-for-mcp-us-west-2
+2026-01-04 20:13:18 - INFO - [2/9] Creating EC2 IAM role
+2026-01-04 20:13:18 - WARNING - IAM role already exists: role-ec2-for-mcp-us-west-2
+2026-01-04 20:13:22 - INFO - [2/9] Creating Lambda RAG IAM role
+2026-01-04 20:13:22 - WARNING - IAM role already exists: role-lambda-rag-for-mcp-us-west-2
+2026-01-04 20:13:24 - INFO - [2/9] Creating AgentCore Memory IAM role
+2026-01-04 20:13:24 - WARNING - IAM role already exists: role-agentcore-memory-for-mcp-us-west-2
+2026-01-04 20:13:25 - INFO - [3/9] Creating Secrets Manager secrets
+2026-01-04 20:13:25 - INFO - Please enter API keys when prompted (press Enter to skip and leave empty):
+2026-01-04 20:13:25 - WARNING -   Secret already exists: openweathermap-mcp
+2026-01-04 20:13:25 - WARNING -   Secret already exists: langsmithapikey-mcp
+2026-01-04 20:13:26 - WARNING -   Secret already exists: tavilyapikey-mcp
+2026-01-04 20:13:26 - WARNING -   Secret already exists: perplexityapikey-mcp
+2026-01-04 20:13:26 - WARNING -   Secret already exists: firecrawlapikey-mcp
+2026-01-04 20:13:26 - WARNING -   Secret already exists: code-interpreter-mcp
+2026-01-04 20:13:26 - WARNING -   Secret already exists: novaactapikey-mcp
+2026-01-04 20:13:26 - WARNING -   Secret already exists: notionapikey-mcp
+2026-01-04 20:13:26 - INFO - ✓ Created 8 secrets
+2026-01-04 20:13:26 - INFO - [4/9] Creating OpenSearch Serverless collection
+2026-01-04 20:13:27 - WARNING - Encryption policy already exists: encription-mcp-us-west-2
+2026-01-04 20:13:27 - WARNING - Network policy already exists: network-mcp-us-west-2
+2026-01-04 20:13:27 - WARNING - Data access policy already exists: data-mcp
+2026-01-04 20:13:32 - WARNING - OpenSearch collection already exists: mcp
+2026-01-04 20:13:33 - INFO - [5/9] Creating VPC and networking resources
+2026-01-04 20:13:33 - WARNING - VPC already exists: vpc-087696d226daffe1b
+2026-01-04 20:13:34 - WARNING -   No private subnets found, using public subnets for EC2
+2026-01-04 20:13:34 - INFO - [6/9] Creating Application Load Balancer
+2026-01-04 20:13:35 - WARNING - ALB already exists: alb-for-mcp-1321460562.us-west-2.elb.amazonaws.com
+2026-01-04 20:13:35 - INFO - [7/9] Creating CloudFront distribution
+2026-01-04 20:13:36 - WARNING - CloudFront distribution already exists: d2483g82obdfl3.cloudfront.net
+2026-01-04 20:13:36 - INFO - [8/9] Creating EC2 instance
+2026-01-04 20:13:41 - INFO - ✓ EC2 instance created: i-026ba188fb9cbb7ee
+2026-01-04 20:13:41 - INFO -   Instance type: m5.large
+2026-01-04 20:13:41 - INFO -   User data script configured for application deployment
+2026-01-04 20:13:41 - INFO - [9/9] Creating ALB target group and listener
+2026-01-04 20:13:58 - INFO - ✓ ALB target group and listener created
+2026-01-04 20:13:58 - INFO -   Target group: arn:aws:elasticloadbalancing:us-west-2:262976740991:targetgroup/TG-for-mcp/c3079a5505d32ab5
+2026-01-04 20:13:58 - INFO -   Listener: arn:aws:elasticloadbalancing:us-west-2:262976740991:listener/app/alb-for-mcp/f338d1b280164650/429f12d832bf0e85
+2026-01-04 20:13:58 - INFO - 
+2026-01-04 20:13:58 - INFO - ============================================================
+2026-01-04 20:13:58 - INFO - Infrastructure Deployment Completed Successfully!
+2026-01-04 20:13:58 - INFO - ============================================================
+2026-01-04 20:13:58 - INFO - Summary:
+2026-01-04 20:13:58 - INFO -   S3 Bucket: storage-for-mcp--us-west-2
+2026-01-04 20:13:58 - INFO -   VPC ID: vpc-087696d226daffe1b
+2026-01-04 20:13:58 - INFO -   ALB DNS: http://alb-for-mcp-1321460562.us-west-2.elb.amazonaws.com/
+2026-01-04 20:13:58 - INFO -   CloudFront Domain: https://d2483g82obdfl3.cloudfront.net
+2026-01-04 20:13:58 - INFO -   EC2 Instance ID: i-026ba188fb9cbb7ee
+2026-01-04 20:13:58 - INFO -   OpenSearch Endpoint: https://c8va8m8m3dy4uogpliig.us-west-2.aoss.amazonaws.com
+2026-01-04 20:13:58 - INFO -   Knowledge Base Role: arn:aws:iam::262976740991:role/role-knowledge-base-for-mcp-us-west-2
+2026-01-04 20:13:58 - INFO -   AgentCore Memory Role: arn:aws:iam::262976740991:role/role-agentcore-memory-for-mcp-us-west-2
+2026-01-04 20:13:58 - INFO - 
+2026-01-04 20:13:58 - INFO - Total deployment time: 0.75 minutes
+2026-01-04 20:13:58 - INFO - ============================================================
+2026-01-04 20:13:58 - INFO - Note: CloudFront distribution may take 15-20 minutes to fully deploy
+2026-01-04 20:13:58 - INFO - Note: EC2 instance user data script will install and start the application
+2026-01-04 20:13:58 - INFO - ============================================================
+2026-01-04 20:13:58 - INFO - ✓ Updated application/config.json
+2026-01-04 20:13:58 - INFO - ============================================================
