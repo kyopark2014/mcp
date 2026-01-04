@@ -4,11 +4,18 @@ import logging
 import sys
 import os
 import asyncio
-import threading
-import queue
 import info
 import chat
 import mcp_config
+
+# Apply nest_asyncio to allow nested event loops for Streamlit compatibility
+try:
+    import nest_asyncio
+    nest_asyncio.apply()
+except ImportError:
+    # Logger not yet defined, so just pass silently
+    # User should install nest-asyncio: pip install nest-asyncio
+    pass
 
 from claude_agent_sdk import (
     query,
@@ -35,55 +42,24 @@ logging.basicConfig(
 logger = logging.getLogger("claude_agent")
 
 index = 0
-_message_queue = None
-
-def set_message_queue(q):
-    """Set the message queue for cross-thread communication."""
-    global _message_queue
-    _message_queue = q
-
 def add_notification(containers, message):
     global index
 
     index += 1
 
-    # If we have a message queue, use it for cross-thread communication
-    if _message_queue is not None:
-        try:
-            _message_queue.put(("notification", index, message))
-        except Exception:
-            logger.info(f"Notification: {message}")
-    # Only update Streamlit containers from main thread
-    elif containers is not None and threading.current_thread() == threading.main_thread():
-        try:
-            containers['notification'][index].info(message)
-        except Exception:
-            logger.info(f"Notification: {message}")
-    else:
-        logger.info(f"Notification: {message}")
+    if containers is not None:
+        containers['notification'][index].info(message)
     index += 1
 
 def add_system_message(containers, message, type):
     global index
     index += 1
 
-    # If we have a message queue, use it for cross-thread communication
-    if _message_queue is not None:
-        try:
-            _message_queue.put(("system", index, message, type))
-        except Exception:
-            logger.info(f"System message ({type}): {message}")
-    # Only update Streamlit containers from main thread
-    elif containers is not None and threading.current_thread() == threading.main_thread():
-        try:
-            if type == "markdown":
-                containers['notification'][index].markdown(message)
-            elif type == "info":
-                containers['notification'][index].info(message)
-        except Exception:
-            logger.info(f"System message ({type}): {message}")
-    else:
-        logger.info(f"System message ({type}): {message}")
+    if containers is not None:
+        if type == "markdown":
+            containers['notification'][index].markdown(message)
+        elif type == "info":
+            containers['notification'][index].info(message)
 
 # Claude Code environment variables
 os.environ["CLAUDE_CODE_USE_BEDROCK"] = "1"
@@ -94,39 +70,19 @@ import tempfile
 
 # WebSocket mocking script generation
 websocket_mock_script = '''
-// Mock WebSocket for Bun/Node.js environments
-(function() {
-    var mockWebSocket = function() {
-        return {
-            readyState: 1,
-            close: function() {},
-            send: function() {},
-            addEventListener: function() {},
-            removeEventListener: function() {},
-            onopen: null,
-            onclose: null,
-            onerror: null,
-            onmessage: null
-        };
+if (typeof window === 'undefined') {
+    global.window = {
+        WebSocket: function() {
+            return {
+                readyState: 1,
+                close: function() {},
+                send: function() {},
+                addEventListener: function() {},
+                removeEventListener: function() {}
+            };
+        }
     };
-    
-    // Set on global if window is undefined
-    if (typeof window === 'undefined') {
-        if (typeof global !== 'undefined') {
-            global.window = { WebSocket: mockWebSocket };
-            global.WebSocket = mockWebSocket;
-        }
-    } else {
-        if (typeof window.WebSocket === 'undefined') {
-            window.WebSocket = mockWebSocket;
-        }
-    }
-    
-    // Also set on global for Bun compatibility
-    if (typeof global !== 'undefined' && typeof global.WebSocket === 'undefined') {
-        global.WebSocket = mockWebSocket;
-    }
-})();
+}
 '''
 
 # Save WebSocket mocking script to temporary file
@@ -269,12 +225,11 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
         ) 
     
     final_result = ""    
-    try:
-        async with ClaudeSDKClient(options=options) as client:
-            await client.query(prompt)
+    async with ClaudeSDKClient(options=options) as client:
+        await client.query(prompt)
 
-            async for message in client.receive_response():
-                logger.info(f"message: {message}")
+        async for message in client.receive_response():
+            logger.info(f"message: {message}")
             if isinstance(message, SystemMessage):
                 logger.info(f"SystemMessage: {message}")
                 subtype = message.subtype
@@ -366,114 +321,12 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
                         logger.info(f"UserMessage: {block}")
             else:
                 logger.info(f"Message: {message}")
-    except Exception as e:
-        logger.error(f"Error in run_claude_agent: {type(e).__name__}: {e}")
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        # Re-raise to be caught by the thread handler
-        raise
     
     return final_result, image_url
 
 def run_claude_agent_sync(prompt, mcp_servers, history_mode, containers):
     """
-    Synchronous wrapper for run_claude_agent to work in Streamlit environment.
-    Always runs the async function in a separate thread with a new event loop
-    to avoid conflicts with Streamlit's event loop.
-    Uses a queue to update Streamlit containers from the main thread.
+    Synchronous wrapper for run_claude_agent using nest_asyncio.
+    This allows running async code in Streamlit's event loop environment.
     """
-    result = [None]
-    exception = [None]
-    message_queue = queue.Queue()
-    
-    def run_in_thread():
-        # Ensure environment variables are set in this thread
-        # These are needed for Claude Code and WebSocket mocking
-        os.environ["CLAUDE_CODE_USE_BEDROCK"] = "1"
-        os.environ["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = "16384"
-        
-        # Ensure NODE_OPTIONS is set for WebSocket mocking
-        # Copy from parent process if not already set
-        if "NODE_OPTIONS" not in os.environ:
-            # Get from module-level variable if available
-            if 'websocket_mock_file' in globals() and websocket_mock_file and os.path.exists(websocket_mock_file):
-                os.environ["NODE_OPTIONS"] = f"--require {websocket_mock_file}"
-        
-        # Set the message queue for this execution
-        set_message_queue(message_queue)
-        # Create a new event loop for this thread
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            return loop.run_until_complete(run_claude_agent(prompt, mcp_servers, history_mode, containers))
-        finally:
-            loop.close()
-            set_message_queue(None)
-    
-    def target():
-        try:
-            result[0] = run_in_thread()
-        except Exception as e:
-            logger.error(f"Error in run_in_thread: {type(e).__name__}: {e}")
-            import traceback
-            logger.error(f"Traceback: {traceback.format_exc()}")
-            exception[0] = e
-    
-    # Always use a separate thread to avoid event loop conflicts
-    thread = threading.Thread(target=target)
-    thread.start()
-    
-    # Process messages from the queue while the thread is running
-    while thread.is_alive():
-        try:
-            # Check for messages with a timeout
-            msg = message_queue.get(timeout=0.1)
-            if msg[0] == "notification":
-                _, idx, msg_text = msg
-                if containers is not None:
-                    try:
-                        containers['notification'][idx].info(msg_text)
-                    except Exception:
-                        logger.info(f"Notification: {msg_text}")
-            elif msg[0] == "system":
-                _, idx, msg_text, msg_type = msg
-                if containers is not None:
-                    try:
-                        if msg_type == "markdown":
-                            containers['notification'][idx].markdown(msg_text)
-                        elif msg_type == "info":
-                            containers['notification'][idx].info(msg_text)
-                    except Exception:
-                        logger.info(f"System message ({msg_type}): {msg_text}")
-        except queue.Empty:
-            continue
-    
-    thread.join()
-    
-    # Process any remaining messages
-    while not message_queue.empty():
-        try:
-            msg = message_queue.get_nowait()
-            if msg[0] == "notification":
-                _, idx, msg_text = msg
-                if containers is not None:
-                    try:
-                        containers['notification'][idx].info(msg_text)
-                    except Exception:
-                        logger.info(f"Notification: {msg_text}")
-            elif msg[0] == "system":
-                _, idx, msg_text, msg_type = msg
-                if containers is not None:
-                    try:
-                        if msg_type == "markdown":
-                            containers['notification'][idx].markdown(msg_text)
-                        elif msg_type == "info":
-                            containers['notification'][idx].info(msg_text)
-                    except Exception:
-                        logger.info(f"System message ({msg_type}): {msg_text}")
-        except queue.Empty:
-            break
-    
-    if exception[0]:
-        raise exception[0]
-    return result[0]
+    return asyncio.run(run_claude_agent(prompt, mcp_servers, history_mode, containers))

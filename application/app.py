@@ -47,6 +47,19 @@ logger.info(f"environment: {environment}")
 
 os.environ["DEV"] = "true"  # Skip user confirmation of get_user_input
 
+def run_async(coro):
+    """Run async function safely in Streamlit environment."""
+    try:
+        # Check if there's a running event loop
+        loop = asyncio.get_running_loop()
+        # If we're in a running event loop, use nest_asyncio to allow nested loops
+        import nest_asyncio
+        nest_asyncio.apply()
+        return asyncio.run(coro)
+    except RuntimeError:
+        # No running event loop, use asyncio.run()
+        return asyncio.run(coro)
+
 # title
 st.set_page_config(page_title='MCP', page_icon=None, layout="centered", initial_sidebar_state="auto", menu_items=None)
 
@@ -551,7 +564,7 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                         mcp_servers=mcp_servers, 
                         history_mode=history_mode, 
                         containers=containers))
-                else:
+                elif agentType == "claude":
                     response, image_url = claude_agent.run_claude_agent_sync(
                         prompt=prompt, 
                         mcp_servers=mcp_servers, 

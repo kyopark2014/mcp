@@ -42,3 +42,4 @@ colorama
 rich==13.9.0
 bedrock-agentcore
 claude-agent-sdk
+nest-asyncio
