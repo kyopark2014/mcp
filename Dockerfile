@@ -2,8 +2,22 @@ FROM --platform=linux/amd64 python:3.13-slim
 
 WORKDIR /app
 
-# Install npm and Playwright
+# Install npm 
+RUN apt-get update && apt-get install -y \
+    curl \
+    gnupg \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get update \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN npm install -g npm@latest 
+
+# Install Playwright
 RUN npm install -g @playwright/mcp@0.0.27
 
 # Install Chrome
