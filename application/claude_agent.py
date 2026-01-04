@@ -386,27 +386,63 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
             else:
                 logger.info(f"Message: {message}")
     except Exception as e:
-        logger.error(f"Error in run_claude_agent: {type(e).__name__}: {e}")
+        logger.error("=" * 80)
+        logger.error(f"ERROR CAUGHT in run_claude_agent")
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.error(f"Error message: {e}")
+        logger.error(f"Error repr: {repr(e)}")
+        
         # Log all attributes of the exception for ProcessError
         if hasattr(e, '__dict__'):
-            logger.error(f"Exception attributes: {e.__dict__}")
+            logger.error(f"Exception __dict__: {e.__dict__}")
+        
         # Log all attributes using dir() to see everything
-        logger.error(f"Exception dir(): {[attr for attr in dir(e) if not attr.startswith('_')]}")
+        all_attrs = [attr for attr in dir(e) if not attr.startswith('_')]
+        logger.error(f"Exception attributes (dir): {all_attrs}")
+        
+        # Try to access each attribute
+        for attr in all_attrs:
+            try:
+                value = getattr(e, attr)
+                if not callable(value):
+                    logger.error(f"  {attr} = {value}")
+            except Exception as attr_error:
+                logger.error(f"  {attr} = <error: {attr_error}>")
+        
         # Log additional details if available
         if hasattr(e, '__cause__') and e.__cause__:
             logger.error(f"Caused by: {type(e.__cause__).__name__}: {e.__cause__}")
         if hasattr(e, '__context__') and e.__context__:
             logger.error(f"Context: {type(e.__context__).__name__}: {e.__context__}")
-        # Log common ProcessError attributes
-        for attr in ['exit_code', 'returncode', 'stderr', 'stdout', 'cmd', 'args', 'message', 'msg']:
+        
+        # Log common ProcessError attributes specifically
+        logger.error("Checking ProcessError-specific attributes:")
+        for attr in ['exit_code', 'returncode', 'stderr', 'stdout', 'cmd', 'args', 'message', 'msg', 'process', 'subprocess']:
             if hasattr(e, attr):
                 try:
                     value = getattr(e, attr)
-                    logger.error(f"ProcessError.{attr}: {value}")
+                    logger.error(f"  ProcessError.{attr} = {value}")
+                    if attr == 'process' and value is not None:
+                        # If process object exists, try to get its stderr/stdout
+                        if hasattr(value, 'stderr'):
+                            try:
+                                stderr_content = value.stderr.read() if hasattr(value.stderr, 'read') else str(value.stderr)
+                                logger.error(f"    process.stderr = {stderr_content}")
+                            except:
+                                logger.error(f"    process.stderr = <cannot read>")
+                        if hasattr(value, 'stdout'):
+                            try:
+                                stdout_content = value.stdout.read() if hasattr(value.stdout, 'read') else str(value.stdout)
+                                logger.error(f"    process.stdout = {stdout_content}")
+                            except:
+                                logger.error(f"    process.stdout = <cannot read>")
                 except Exception as attr_error:
-                    logger.error(f"ProcessError.{attr}: <error accessing: {attr_error}>")
+                    logger.error(f"  ProcessError.{attr} = <error accessing: {attr_error}>")
+        
         import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
+        logger.error("Full traceback:")
+        logger.error(traceback.format_exc())
+        logger.error("=" * 80)
         raise
     
     return final_result, image_url
