@@ -9,6 +9,8 @@ import json
 import os
 import time
 import logging
+import argparse
+import base64
 from datetime import datetime
 from typing import Dict, List, Optional
 from botocore.exceptions import ClientError
@@ -32,6 +34,7 @@ elbv2_client = boto3.client("elbv2", region_name=region)
 cloudfront_client = boto3.client("cloudfront", region_name=region)
 lambda_client = boto3.client("lambda", region_name=region)
 sts_client = boto3.client("sts", region_name=region)
+ssm_client = boto3.client("ssm", region_name=region)
 
 # Get account ID if not set
 if not account_id:
@@ -348,7 +351,10 @@ def create_ec2_role(knowledge_base_role_arn: str) -> str:
         ]
     }
     
-    managed_policies = ["arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"]
+    managed_policies = [
+        "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
+        "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+    ]
     role_arn = create_iam_role(role_name, assume_role_policy, managed_policies)
     
     # Attach inline policies
@@ -615,49 +621,55 @@ def create_secrets() -> Dict[str, str]:
     secret_arns = {}
     
     for key, secret_config in secrets.items():
-        # Prompt for API key before creating each secret
-        if key == "weather":
-            api_key = input(f"Creating {secret_config['name']} - Weather API Key (OpenWeatherMap): ").strip()
-            secret_config["secret_value"]["weather_api_key"] = api_key
-        elif key == "langsmith":
-            api_key = input(f"Creating {secret_config['name']} - LangSmith API Key: ").strip()
-            secret_config["secret_value"]["langsmith_api_key"] = api_key
-        elif key == "tavily":
-            api_key = input(f"Creating {secret_config['name']} - Tavily API Key: ").strip()
-            secret_config["secret_value"]["tavily_api_key"] = api_key
-        elif key == "perplexity":
-            api_key = input(f"Creating {secret_config['name']} - Perplexity API Key: ").strip()
-            secret_config["secret_value"]["perplexity_api_key"] = api_key
-        elif key == "firecrawl":
-            api_key = input(f"Creating {secret_config['name']} - Firecrawl API Key: ").strip()
-            secret_config["secret_value"]["firecrawl_api_key"] = api_key
-        elif key == "code_interpreter":
-            api_key = input(f"Creating {secret_config['name']} - Code Interpreter API Key: ").strip()
-            code_id = input(f"Creating {secret_config['name']} - Code Interpreter ID: ").strip()
-            secret_config["secret_value"]["code_interpreter_api_key"] = api_key
-            secret_config["secret_value"]["code_interpreter_id"] = code_id
-        elif key == "nova_act":
-            api_key = input(f"Creating {secret_config['name']} - Nova Act API Key: ").strip()
-            secret_config["secret_value"]["nova_act_api_key"] = api_key
-        elif key == "notion":
-            api_key = input(f"Creating {secret_config['name']} - Notion API Key: ").strip()
-            secret_config["secret_value"]["notion_api_key"] = api_key
-        
+        # Check if secret already exists before prompting for input
         try:
-            response = secrets_client.create_secret(
-                Name=secret_config["name"],
-                Description=secret_config["description"],
-                SecretString=json.dumps(secret_config["secret_value"])
-            )
+            response = secrets_client.describe_secret(SecretId=secret_config["name"])
             secret_arns[key] = response["ARN"]
-            logger.info(f"  ✓ Created secret: {secret_config['name']}")
+            logger.warning(f"  Secret already exists: {secret_config['name']}")
         except ClientError as e:
-            if e.response["Error"]["Code"] == "ResourceExistsException":
-                response = secrets_client.describe_secret(SecretId=secret_config["name"])
-                secret_arns[key] = response["ARN"]
-                logger.warning(f"  Secret already exists: {secret_config['name']}")
+            if e.response["Error"]["Code"] == "ResourceNotFoundException":
+                # Secret doesn't exist, prompt for API key and create it
+                if key == "weather":
+                    api_key = input(f"Creating {secret_config['name']} - Weather API Key (OpenWeatherMap): ").strip()
+                    secret_config["secret_value"]["weather_api_key"] = api_key
+                elif key == "langsmith":
+                    api_key = input(f"Creating {secret_config['name']} - LangSmith API Key: ").strip()
+                    secret_config["secret_value"]["langsmith_api_key"] = api_key
+                elif key == "tavily":
+                    api_key = input(f"Creating {secret_config['name']} - Tavily API Key: ").strip()
+                    secret_config["secret_value"]["tavily_api_key"] = api_key
+                elif key == "perplexity":
+                    api_key = input(f"Creating {secret_config['name']} - Perplexity API Key: ").strip()
+                    secret_config["secret_value"]["perplexity_api_key"] = api_key
+                elif key == "firecrawl":
+                    api_key = input(f"Creating {secret_config['name']} - Firecrawl API Key: ").strip()
+                    secret_config["secret_value"]["firecrawl_api_key"] = api_key
+                elif key == "code_interpreter":
+                    api_key = input(f"Creating {secret_config['name']} - Code Interpreter API Key: ").strip()
+                    code_id = input(f"Creating {secret_config['name']} - Code Interpreter ID: ").strip()
+                    secret_config["secret_value"]["code_interpreter_api_key"] = api_key
+                    secret_config["secret_value"]["code_interpreter_id"] = code_id
+                elif key == "nova_act":
+                    api_key = input(f"Creating {secret_config['name']} - Nova Act API Key: ").strip()
+                    secret_config["secret_value"]["nova_act_api_key"] = api_key
+                elif key == "notion":
+                    api_key = input(f"Creating {secret_config['name']} - Notion API Key: ").strip()
+                    secret_config["secret_value"]["notion_api_key"] = api_key
+                
+                # Create the secret
+                try:
+                    response = secrets_client.create_secret(
+                        Name=secret_config["name"],
+                        Description=secret_config["description"],
+                        SecretString=json.dumps(secret_config["secret_value"])
+                    )
+                    secret_arns[key] = response["ARN"]
+                    logger.info(f"  ✓ Created secret: {secret_config['name']}")
+                except ClientError as create_error:
+                    logger.error(f"  Failed to create secret {secret_config['name']}: {create_error}")
+                    raise
             else:
-                logger.error(f"  Failed to create secret {secret_config['name']}: {e}")
+                logger.error(f"  Failed to check secret {secret_config['name']}: {e}")
                 raise
     
     logger.info(f"✓ Created {len(secret_arns)} secrets")
@@ -918,6 +930,19 @@ def create_vpc() -> Dict[str, str]:
                         ]
                     )
                     alb_sg_id = alb_sg_response["GroupId"]
+                    
+                    # Allow HTTP traffic to ALB
+                    ec2_client.authorize_security_group_ingress(
+                        GroupId=alb_sg_id,
+                        IpPermissions=[
+                            {
+                                "IpProtocol": "tcp",
+                                "FromPort": 80,
+                                "ToPort": 80,
+                                "IpRanges": [{"CidrIp": "0.0.0.0/0"}]
+                            }
+                        ]
+                    )
                 
                 if not ec2_sg_id:
                     ec2_sg_response = ec2_client.create_security_group(
@@ -951,6 +976,46 @@ def create_vpc() -> Dict[str, str]:
                 Filters=[{"Name": "vpc-id", "Values": [vpc_id]}]
             )
             vpc_endpoint_id = endpoints["VpcEndpoints"][0]["VpcEndpointId"] if endpoints["VpcEndpoints"] else None
+            
+            # Check and fix routing table for internet access
+            logger.debug("Checking routing table for internet access")
+            route_tables = ec2_client.describe_route_tables(
+                Filters=[{"Name": "vpc-id", "Values": [vpc_id]}]
+            )
+            
+            # Find main route table and check for internet gateway route
+            main_rt_id = None
+            has_igw_route = False
+            
+            for rt in route_tables["RouteTables"]:
+                for assoc in rt.get("Associations", []):
+                    if assoc.get("Main", False):
+                        main_rt_id = rt["RouteTableId"]
+                        # Check if IGW route exists
+                        for route in rt["Routes"]:
+                            if route.get("DestinationCidrBlock") == "0.0.0.0/0" and route.get("GatewayId", "").startswith("igw-"):
+                                has_igw_route = True
+                                break
+                        break
+            
+            # Add IGW route if missing
+            if main_rt_id and not has_igw_route:
+                # Get Internet Gateway
+                igws = ec2_client.describe_internet_gateways(
+                    Filters=[{"Name": "attachment.vpc-id", "Values": [vpc_id]}]
+                )
+                if igws["InternetGateways"]:
+                    igw_id = igws["InternetGateways"][0]["InternetGatewayId"]
+                    try:
+                        ec2_client.create_route(
+                            RouteTableId=main_rt_id,
+                            DestinationCidrBlock="0.0.0.0/0",
+                            GatewayId=igw_id
+                        )
+                        logger.info(f"  Added internet gateway route to main route table: {main_rt_id}")
+                    except ClientError as e:
+                        if e.response["Error"]["Code"] != "RouteAlreadyExists":
+                            logger.warning(f"Failed to add IGW route: {e}")
             
             return {
                 "vpc_id": vpc_id,
@@ -1124,8 +1189,10 @@ def create_vpc() -> Dict[str, str]:
             SubnetId=subnet_id
         )
     
-    # Create VPC endpoint for Bedrock
-    logger.debug("Creating VPC endpoint for Bedrock")
+    # Create VPC endpoints for Bedrock and SSM
+    logger.debug("Creating VPC endpoints")
+    
+    # Bedrock endpoint
     vpc_endpoint_response = ec2_client.create_vpc_endpoint(
         VpcId=vpc_id,
         ServiceName=f"com.amazonaws.{region}.bedrock-runtime",
@@ -1140,7 +1207,30 @@ def create_vpc() -> Dict[str, str]:
         ]
     )
     vpc_endpoint_id = vpc_endpoint_response["VpcEndpoint"]["VpcEndpointId"]
-    logger.debug(f"VPC endpoint created: {vpc_endpoint_id}")
+    
+    # SSM endpoints for Session Manager
+    ssm_endpoints = [
+        f"com.amazonaws.{region}.ssm",
+        f"com.amazonaws.{region}.ssmmessages", 
+        f"com.amazonaws.{region}.ec2messages"
+    ]
+    
+    for service in ssm_endpoints:
+        try:
+            ec2_client.create_vpc_endpoint(
+                VpcId=vpc_id,
+                ServiceName=service,
+                VpcEndpointType="Interface",
+                SubnetIds=private_subnets,
+                SecurityGroupIds=[ec2_sg_id],
+                PrivateDnsEnabled=True
+            )
+            logger.debug(f"Created VPC endpoint for {service}")
+        except ClientError as e:
+            if e.response["Error"]["Code"] != "RouteAlreadyExists":
+                logger.warning(f"Failed to create endpoint for {service}: {e}")
+    
+    logger.debug(f"VPC endpoints created")
     
     # Create security groups
     logger.debug("Creating security groups")
@@ -1156,6 +1246,19 @@ def create_vpc() -> Dict[str, str]:
         ]
     )
     alb_sg_id = alb_sg_response["GroupId"]
+    
+    # Allow HTTP traffic to ALB
+    ec2_client.authorize_security_group_ingress(
+        GroupId=alb_sg_id,
+        IpPermissions=[
+            {
+                "IpProtocol": "tcp",
+                "FromPort": 80,
+                "ToPort": 80,
+                "IpRanges": [{"CidrIp": "0.0.0.0/0"}]
+            }
+        ]
+    )
     logger.debug(f"ALB security group created: {alb_sg_id}")
     
     ec2_sg_response = ec2_client.create_security_group(
@@ -1183,6 +1286,23 @@ def create_vpc() -> Dict[str, str]:
             }
         ]
     )
+    
+    # Allow HTTPS traffic for VPC endpoints
+    try:
+        ec2_client.authorize_security_group_ingress(
+            GroupId=ec2_sg_id,
+            IpPermissions=[
+                {
+                    "IpProtocol": "tcp",
+                    "FromPort": 443,
+                    "ToPort": 443,
+                    "IpRanges": [{"CidrIp": cidr_block}]
+                }
+            ]
+        )
+    except ClientError as e:
+        if e.response["Error"]["Code"] != "InvalidPermission.Duplicate":
+            logger.warning(f"Failed to add HTTPS rule: {e}")
     
     # Allow all outbound traffic for EC2 SG
     logger.debug(f"EC2 security group created: {ec2_sg_id}")
@@ -1464,6 +1584,7 @@ def create_cloudfront_distribution(alb_info: Dict[str, str], s3_bucket_name: str
                     }
                 },
                 "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b5a84be39ad",
+                "OriginRequestPolicyId": "216adef6-5c7f-47e4-b989-5492eafa07d3",
                 "Compress": True
             },
             "Origins": {
@@ -1498,6 +1619,136 @@ def create_cloudfront_distribution(alb_info: Dict[str, str], s3_bucket_name: str
         }
     except ClientError as e:
         logger.error(f"Error creating CloudFront distribution: {e}")
+        raise
+
+
+def get_setup_script(environment: Dict[str, str], git_name: str = "mcp") -> str:
+    """Generate setup script for EC2 instance."""
+    return f"""#!/bin/bash
+exec > >(tee /var/log/user-data.log) 2>&1
+set -x
+
+# Update system
+yum update -y
+
+# Install packages
+yum install -y git docker
+
+# Start docker
+systemctl start docker
+systemctl enable docker
+usermod -aG docker ssm-user
+
+# Restart docker to ensure clean state
+systemctl restart docker
+sleep 10
+
+# Create ssm-user home if not exists
+mkdir -p /home/ssm-user
+chown ssm-user:ssm-user /home/ssm-user
+
+# Clone repository
+cd /home/ssm-user
+rm -rf {git_name}
+git clone https://github.com/kyopark2014/{git_name}
+chown -R ssm-user:ssm-user {git_name}
+
+# Create config.json
+mkdir -p /home/ssm-user/{git_name}/application
+cat > /home/ssm-user/{git_name}/application/config.json << 'EOF'
+{json.dumps(environment)}
+EOF
+chown -R ssm-user:ssm-user /home/ssm-user/{git_name}
+
+# Build and run docker with volume mount for config.json
+cd /home/ssm-user/{git_name}
+docker build -f Dockerfile -t streamlit-app .
+docker run -d -p 8501:8501 -v $(pwd)/application/config.json:/app/application/config.json streamlit-app
+
+echo "Setup completed successfully" >> /var/log/user-data.log
+"""
+
+
+def run_setup_script_via_ssm(instance_id: str, environment: Dict[str, str], git_name: str = "mcp") -> Dict[str, str]:
+    """Run setup script on existing EC2 instance using SSM Run Command."""
+    logger.info(f"Running setup script on EC2 instance {instance_id} via SSM")
+    
+    # Wait for SSM agent to be ready
+    logger.debug("Waiting for SSM agent to be ready...")
+    max_attempts = 30
+    for attempt in range(max_attempts):
+        try:
+            response = ssm_client.describe_instance_information(
+                Filters=[
+                    {
+                        "Key": "InstanceIds",
+                        "Values": [instance_id]
+                    }
+                ]
+            )
+            if response.get("InstanceInformationList"):
+                logger.debug("SSM agent is ready")
+                break
+        except Exception as e:
+            logger.debug(f"SSM agent not ready yet (attempt {attempt + 1}/{max_attempts}): {e}")
+        
+        if attempt < max_attempts - 1:
+            time.sleep(10)
+        else:
+            raise Exception(f"SSM agent not ready after {max_attempts * 10} seconds")
+    
+    # Get setup script
+    script = get_setup_script(environment, git_name)
+    
+    # Run command via SSM
+    try:
+        logger.debug("Sending command via SSM Run Command...")
+        response = ssm_client.send_command(
+            InstanceIds=[instance_id],
+            DocumentName="AWS-RunShellScript",
+            Parameters={
+                "commands": [script],
+                "workingDirectory": ["/"]
+            },
+            TimeoutSeconds=3600,
+            Comment=f"Setup script for {project_name}"
+        )
+        
+        command_id = response["Command"]["CommandId"]
+        logger.info(f"✓ Command sent via SSM: {command_id}")
+        
+        # Wait for command to complete
+        logger.info("Waiting for command to complete (this may take several minutes)...")
+        while True:
+            time.sleep(10)
+            result = ssm_client.get_command_invocation(
+                CommandId=command_id,
+                InstanceId=instance_id
+            )
+            status = result["Status"]
+            
+            if status in ["Success", "Failed", "Cancelled", "TimedOut"]:
+                if status == "Success":
+                    logger.info(f"✓ Setup script completed successfully")
+                    logger.debug(f"Output: {result.get('StandardOutputContent', '')}")
+                else:
+                    error_output = result.get("StandardErrorContent", "")
+                    logger.error(f"Setup script failed with status: {status}")
+                    logger.error(f"Error output: {error_output}")
+                    raise Exception(f"Setup script failed: {status}\n{error_output}")
+                break
+            
+            logger.debug(f"Command status: {status} (waiting...)")
+        
+        return {
+            "command_id": command_id,
+            "status": status,
+            "output": result.get("StandardOutputContent", ""),
+            "error": result.get("StandardErrorContent", "")
+        }
+    
+    except ClientError as e:
+        logger.error(f"Failed to run setup script via SSM: {e}")
         raise
 
 
@@ -1553,26 +1804,7 @@ def create_ec2_instance(vpc_info: Dict[str, str], ec2_role_arn: str,
     }
     
     git_name = "mcp"
-    user_data_script = f"""#!/bin/bash
-yum install git python-pip docker -y
-pip install pip --upgrade
-systemctl start docker
-systemctl enable docker
-usermod -aG docker ec2-user
-runuser -l ec2-user -c 'cd && git clone https://github.com/kyopark2014/{git_name}'
-json='{json.dumps(environment)}' && echo "$json">/home/ec2-user/{git_name}/application/config.json
-runuser -l ec2-user -c 'cd {git_name} && docker build -t streamlit-app .'
-yum install -y amazon-cloudwatch-agent
-mkdir -p /opt/aws/amazon-cloudwatch-agent/etc/
-cp /home/ec2-user/{git_name}/amazon-cloudwatch-agent.json /opt/aws/amazon-cloudwatch-agent/etc/
-chmod 644 /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
-systemctl enable amazon-cloudwatch-agent
-systemctl start amazon-cloudwatch-agent
-mkdir -p /etc/docker
-cp /home/ec2-user/{git_name}/daemon.json /etc/docker/
-systemctl restart docker
-runuser -l ec2-user -c 'docker run -d -p 8501:8501 streamlit-app'
-"""
+    user_data_script = get_setup_script(environment, git_name)
     
     # Get instance profile name
     instance_profile_name = f"instance-profile-{project_name}-{region}"
@@ -1584,10 +1816,17 @@ runuser -l ec2-user -c 'docker run -d -p 8501:8501 streamlit-app'
         InstanceType="m5.large",
         MinCount=1,
         MaxCount=1,
-        SecurityGroupIds=[vpc_info["ec2_sg_id"]],
-        SubnetId=vpc_info["private_subnets"][0],
         IamInstanceProfile={"Name": instance_profile_name},
-        UserData=user_data_script,
+        UserData=base64.b64encode(user_data_script.encode('utf-8')).decode('utf-8'),
+        NetworkInterfaces=[
+            {
+                "DeviceIndex": 0,
+                "SubnetId": vpc_info["public_subnets"][0],
+                "Groups": [vpc_info["ec2_sg_id"]],
+                "AssociatePublicIpAddress": True,
+                "DeleteOnTermination": True
+            }
+        ],
         BlockDeviceMappings=[
             {
                 "DeviceName": "/dev/xvda",
@@ -1702,8 +1941,104 @@ def create_alb_target_group_and_listener(alb_info: Dict[str, str], instance_id: 
     }
 
 
+def run_setup_on_existing_instance(instance_id: Optional[str] = None):
+    """Run setup script on existing EC2 instance via SSM."""
+    instance_name = f"app-for-{project_name}"
+    
+    # Find instance if not provided
+    if not instance_id:
+        logger.info(f"Finding EC2 instance with name: {instance_name}")
+        instances = ec2_client.describe_instances(
+            Filters=[
+                {"Name": "tag:Name", "Values": [instance_name]},
+                {"Name": "instance-state-name", "Values": ["running"]}
+            ]
+        )
+        
+        found_instance = None
+        for reservation in instances["Reservations"]:
+            for instance in reservation["Instances"]:
+                found_instance = instance["InstanceId"]
+                break
+        
+        if not found_instance:
+            raise Exception(f"No running EC2 instance found with name: {instance_name}")
+        
+        instance_id = found_instance
+        logger.info(f"Found instance: {instance_id}")
+    
+    # Get infrastructure info from config or describe resources
+    logger.info("Gathering infrastructure information...")
+    
+    # Try to read from config.json first
+    config_path = "application/config.json"
+    try:
+        with open(config_path, 'r') as f:
+            config_data = json.load(f)
+            environment = {
+                "projectName": config_data.get("projectName", project_name),
+                "accountId": config_data.get("accountId", account_id),
+                "region": config_data.get("region", region),
+                "knowledge_base_role": config_data.get("knowledge_base_role", ""),
+                "collectionArn": config_data.get("collectionArn", ""),
+                "opensearch_url": config_data.get("opensearch_url", ""),
+                "s3_bucket": config_data.get("s3_bucket", ""),
+                "s3_arn": config_data.get("s3_arn", ""),
+                "sharing_url": config_data.get("sharing_url", ""),
+                "agentcore_memory_role": config_data.get("agentcore_memory_role", "")
+            }
+            logger.info("Using configuration from config.json")
+    except Exception as e:
+        logger.warning(f"Could not read config.json: {e}")
+        logger.info("Using default configuration")
+        environment = {
+            "projectName": project_name,
+            "accountId": account_id,
+            "region": region,
+            "knowledge_base_role": "",
+            "collectionArn": "",
+            "opensearch_url": "",
+            "s3_bucket": "",
+            "s3_arn": "",
+            "sharing_url": "",
+            "agentcore_memory_role": ""
+        }
+    
+    # Run setup script via SSM
+    result = run_setup_script_via_ssm(instance_id, environment)
+    
+    logger.info("="*60)
+    logger.info("Setup Script Execution Completed")
+    logger.info("="*60)
+    logger.info(f"Instance ID: {instance_id}")
+    logger.info(f"Command ID: {result['command_id']}")
+    logger.info(f"Status: {result['status']}")
+    if result.get('output'):
+        logger.info(f"Output: {result['output'][:500]}...")  # First 500 chars
+    logger.info("="*60)
+    
+    return result
+
+
 def main():
     """Main function to create all infrastructure."""
+    parser = argparse.ArgumentParser(description="AWS Infrastructure Installer")
+    parser.add_argument(
+        "--run-setup",
+        metavar="INSTANCE_ID",
+        nargs="?",
+        const="",
+        help="Run setup script on existing EC2 instance via SSM. If INSTANCE_ID is not provided, will find instance by name."
+    )
+    
+    args = parser.parse_args()
+    
+    # If --run-setup flag is provided, run setup script via SSM
+    if args.run_setup is not None:
+        instance_id = args.run_setup if args.run_setup else None
+        run_setup_on_existing_instance(instance_id)
+        return
+    
     logger.info("="*60)
     logger.info("Starting AWS Infrastructure Deployment")
     logger.info("="*60)

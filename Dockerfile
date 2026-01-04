@@ -76,26 +76,12 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Chrome
-RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
+RUN wget -q -O /tmp/google-chrome-key.pub https://dl-ssl.google.com/linux/linux_signing_key.pub \
+    && gpg --dearmor < /tmp/google-chrome-key.pub > /etc/apt/trusted.gpg.d/google-chrome.gpg \
     && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list \
     && apt-get update \
     && apt-get install -y google-chrome-stable \
-    && rm -rf /var/lib/apt/lists/*
-
-# COPY requirements.txt .
-# RUN pip install --no-cache-dir -r requirements.txt
-
-RUN pip install streamlit==1.41.0 streamlit-chat pandas numpy boto3 
-RUN pip install langchain_aws langchain langchain_community langgraph langchain_experimental
-RUN pip install langgraph-supervisor langgraph-swarm
-RUN pip install mcp langchain-mcp-adapters==0.0.9 
-RUN pip install strands-agents strands-agents-tools
-RUN pip install aioboto3 opensearch-py colorama
-RUN pip install tavily-python==0.5.0 yfinance==0.2.52 rizaio==0.8.0 pytz==2024.2 beautifulsoup4==4.12.3
-RUN pip install plotly_express==0.4.1 matplotlib==3.10.0 arxiv chembl-webresource-client pytrials 
-RUN pip install PyPDF2==3.0.1 wikipedia requests uv kaleido diagrams reportlab graphviz sarif-om==1.0.4
-RUN pip install arize-phoenix
-RUN pip install bedrock-agentcore
+    && rm -rf /var/lib/apt/lists/* /tmp/google-chrome-key.pub
 
 RUN mkdir -p /root/.streamlit
 COPY config.toml /root/.streamlit/
@@ -121,4 +107,13 @@ RUN mkdir -p /tmp/playwright && chmod -R 777 /tmp/playwright
 
 HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health
 
-ENTRYPOINT ["python", "-m", "streamlit", "run", "application/app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+# Create entrypoint script that installs requirements.txt at runtime
+RUN echo '#!/bin/bash' > /entrypoint.sh && \
+    echo 'set -e' >> /entrypoint.sh && \
+    echo 'echo "Installing Python packages from requirements.txt..."' >> /entrypoint.sh && \
+    echo 'pip install --no-cache-dir -r requirements.txt' >> /entrypoint.sh && \
+    echo 'echo "Starting Streamlit application..."' >> /entrypoint.sh && \
+    echo 'exec python -m streamlit run application/app.py --server.port=8501 --server.address=0.0.0.0 "$@"' >> /entrypoint.sh && \
+    chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
