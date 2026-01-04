@@ -1696,6 +1696,9 @@ cd /home/ssm-user/{git_name}
 docker build -f Dockerfile -t streamlit-app .
 docker run -d --restart=always -p 8501:8501 -v $(pwd)/application/config.json:/app/application/config.json --name mcp-app streamlit-app
 
+# Make update.sh executable for manual execution via SSM
+chmod a+rx update.sh
+
 echo "Setup completed successfully" >> /var/log/user-data.log
 """
 

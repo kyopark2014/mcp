@@ -16,7 +16,17 @@ fi
 
 echo "✅ Git pull completed successfully"
 
-# Step 2: Build Docker image
+# Step 2: Stop and remove all running Docker containers
+echo ""
+echo "🛑 Stopping all running Docker containers..."
+sudo docker stop $(sudo docker ps -q) 2>/dev/null || true
+
+echo "🧹 Removing stopped containers..."
+sudo docker rm $(sudo docker ps -aq) 2>/dev/null || true
+
+echo "✅ Docker cleanup completed"
+
+# Step 3: Build Docker image
 echo ""
 echo "🔨 Building Docker image..."
 ./build-docker-with-args.sh
@@ -26,7 +36,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Step 3: Run Docker container
+# Step 4: Run Docker container
 echo ""
 echo "🚀 Running Docker container..."
 ./run-docker.sh
