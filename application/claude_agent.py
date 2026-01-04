@@ -256,6 +256,15 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
         )
 
     logger.info(f"session_id: {session_id}")
+    
+    # Log environment variables before creating client
+    logger.info(f"CLAUDE_CODE_USE_BEDROCK: {os.environ.get('CLAUDE_CODE_USE_BEDROCK')}")
+    logger.info(f"CLAUDE_CODE_MAX_OUTPUT_TOKENS: {os.environ.get('CLAUDE_CODE_MAX_OUTPUT_TOKENS')}")
+    logger.info(f"NODE_OPTIONS: {os.environ.get('NODE_OPTIONS')}")
+    logger.info(f"BUN_PRELOAD: {os.environ.get('BUN_PRELOAD')}")
+    logger.info(f"DISABLE_WEBSOCKET: {os.environ.get('DISABLE_WEBSOCKET')}")
+    logger.info(f"NO_WEBSOCKET: {os.environ.get('NO_WEBSOCKET')}")
+    
     if session_id is not None and history_mode == "Enable":
         options = ClaudeAgentOptions(
             system_prompt=system,
@@ -381,15 +390,21 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
         # Log all attributes of the exception for ProcessError
         if hasattr(e, '__dict__'):
             logger.error(f"Exception attributes: {e.__dict__}")
+        # Log all attributes using dir() to see everything
+        logger.error(f"Exception dir(): {[attr for attr in dir(e) if not attr.startswith('_')]}")
         # Log additional details if available
         if hasattr(e, '__cause__') and e.__cause__:
             logger.error(f"Caused by: {type(e.__cause__).__name__}: {e.__cause__}")
         if hasattr(e, '__context__') and e.__context__:
             logger.error(f"Context: {type(e.__context__).__name__}: {e.__context__}")
         # Log common ProcessError attributes
-        for attr in ['exit_code', 'returncode', 'stderr', 'stdout', 'cmd', 'args']:
+        for attr in ['exit_code', 'returncode', 'stderr', 'stdout', 'cmd', 'args', 'message', 'msg']:
             if hasattr(e, attr):
-                logger.error(f"ProcessError.{attr}: {getattr(e, attr)}")
+                try:
+                    value = getattr(e, attr)
+                    logger.error(f"ProcessError.{attr}: {value}")
+                except Exception as attr_error:
+                    logger.error(f"ProcessError.{attr}: <error accessing: {attr_error}>")
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
         raise
