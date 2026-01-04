@@ -94,19 +94,39 @@ import tempfile
 
 # WebSocket mocking script generation
 websocket_mock_script = '''
-if (typeof window === 'undefined') {
-    global.window = {
-        WebSocket: function() {
-            return {
-                readyState: 1,
-                close: function() {},
-                send: function() {},
-                addEventListener: function() {},
-                removeEventListener: function() {}
-            };
-        }
+// Mock WebSocket for Bun/Node.js environments
+(function() {
+    var mockWebSocket = function() {
+        return {
+            readyState: 1,
+            close: function() {},
+            send: function() {},
+            addEventListener: function() {},
+            removeEventListener: function() {},
+            onopen: null,
+            onclose: null,
+            onerror: null,
+            onmessage: null
+        };
     };
-}
+    
+    // Set on global if window is undefined
+    if (typeof window === 'undefined') {
+        if (typeof global !== 'undefined') {
+            global.window = { WebSocket: mockWebSocket };
+            global.WebSocket = mockWebSocket;
+        }
+    } else {
+        if (typeof window.WebSocket === 'undefined') {
+            window.WebSocket = mockWebSocket;
+        }
+    }
+    
+    // Also set on global for Bun compatibility
+    if (typeof global !== 'undefined' && typeof global.WebSocket === 'undefined') {
+        global.WebSocket = mockWebSocket;
+    }
+})();
 '''
 
 # Save WebSocket mocking script to temporary file
@@ -360,6 +380,18 @@ def run_claude_agent_sync(prompt, mcp_servers, history_mode, containers):
     message_queue = queue.Queue()
     
     def run_in_thread():
+        # Ensure environment variables are set in this thread
+        # These are needed for Claude Code and WebSocket mocking
+        os.environ["CLAUDE_CODE_USE_BEDROCK"] = "1"
+        os.environ["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = "16384"
+        
+        # Ensure NODE_OPTIONS is set for WebSocket mocking
+        # Copy from parent process if not already set
+        if "NODE_OPTIONS" not in os.environ:
+            # Get from module-level variable if available
+            if 'websocket_mock_file' in globals() and websocket_mock_file and os.path.exists(websocket_mock_file):
+                os.environ["NODE_OPTIONS"] = f"--require {websocket_mock_file}"
+        
         # Set the message queue for this execution
         set_message_queue(message_queue)
         # Create a new event loop for this thread
