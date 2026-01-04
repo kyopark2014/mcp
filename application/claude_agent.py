@@ -269,11 +269,12 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
         ) 
     
     final_result = ""    
-    async with ClaudeSDKClient(options=options) as client:
-        await client.query(prompt)
+    try:
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(prompt)
 
-        async for message in client.receive_response():
-            logger.info(f"message: {message}")
+            async for message in client.receive_response():
+                logger.info(f"message: {message}")
             if isinstance(message, SystemMessage):
                 logger.info(f"SystemMessage: {message}")
                 subtype = message.subtype
@@ -365,6 +366,12 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
                         logger.info(f"UserMessage: {block}")
             else:
                 logger.info(f"Message: {message}")
+    except Exception as e:
+        logger.error(f"Error in run_claude_agent: {type(e).__name__}: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        # Re-raise to be caught by the thread handler
+        raise
     
     return final_result, image_url
 
@@ -407,6 +414,9 @@ def run_claude_agent_sync(prompt, mcp_servers, history_mode, containers):
         try:
             result[0] = run_in_thread()
         except Exception as e:
+            logger.error(f"Error in run_in_thread: {type(e).__name__}: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             exception[0] = e
     
     # Always use a separate thread to avoid event loop conflicts
