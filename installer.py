@@ -661,29 +661,37 @@ def create_secrets() -> Dict[str, str]:
             if e.response["Error"]["Code"] == "ResourceNotFoundException":
                 # Secret doesn't exist, prompt for API key and create it
                 if key == "weather":
+                    logger.info(f"  Creating secret: {secret_config['name']} (Weather API Key - OpenWeatherMap)")
                     api_key = input(f"Creating {secret_config['name']} - Weather API Key (OpenWeatherMap): ").strip()
                     secret_config["secret_value"]["weather_api_key"] = api_key
                 elif key == "langsmith":
+                    logger.info(f"  Creating secret: {secret_config['name']} (LangSmith API Key)")
                     api_key = input(f"Creating {secret_config['name']} - LangSmith API Key: ").strip()
                     secret_config["secret_value"]["langsmith_api_key"] = api_key
                 elif key == "tavily":
+                    logger.info(f"  Creating secret: {secret_config['name']} (Tavily API Key)")
                     api_key = input(f"Creating {secret_config['name']} - Tavily API Key: ").strip()
                     secret_config["secret_value"]["tavily_api_key"] = api_key
                 elif key == "perplexity":
+                    logger.info(f"  Creating secret: {secret_config['name']} (Perplexity API Key)")
                     api_key = input(f"Creating {secret_config['name']} - Perplexity API Key: ").strip()
                     secret_config["secret_value"]["perplexity_api_key"] = api_key
                 elif key == "firecrawl":
+                    logger.info(f"  Creating secret: {secret_config['name']} (Firecrawl API Key)")
                     api_key = input(f"Creating {secret_config['name']} - Firecrawl API Key: ").strip()
                     secret_config["secret_value"]["firecrawl_api_key"] = api_key
                 elif key == "code_interpreter":
+                    logger.info(f"  Creating secret: {secret_config['name']} (Code Interpreter API Key and ID)")
                     api_key = input(f"Creating {secret_config['name']} - Code Interpreter API Key: ").strip()
                     code_id = input(f"Creating {secret_config['name']} - Code Interpreter ID: ").strip()
                     secret_config["secret_value"]["code_interpreter_api_key"] = api_key
                     secret_config["secret_value"]["code_interpreter_id"] = code_id
                 elif key == "nova_act":
+                    logger.info(f"  Creating secret: {secret_config['name']} (Nova Act API Key)")
                     api_key = input(f"Creating {secret_config['name']} - Nova Act API Key: ").strip()
                     secret_config["secret_value"]["nova_act_api_key"] = api_key
                 elif key == "notion":
+                    logger.info(f"  Creating secret: {secret_config['name']} (Notion API Key)")
                     api_key = input(f"Creating {secret_config['name']} - Notion API Key: ").strip()
                     secret_config["secret_value"]["notion_api_key"] = api_key
                 
@@ -835,24 +843,47 @@ def create_opensearch_collection() -> Dict[str, str]:
         collection_detail = response["createCollectionDetail"]
         collection_arn = collection_detail["arn"]
         
-        # Get collection endpoint after creation
-        logger.debug("Getting collection details to retrieve endpoint...")
-        collection_response = opensearch_client.batch_get_collection(names=[collection_name])
-        collection_endpoint = collection_response["collectionDetails"][0]["collectionEndpoint"]
-        
-        # Wait for collection to be active
+        # Wait for collection to be active and get endpoint
         logger.info("  Waiting for collection to be active (this may take a few minutes)...")
+        collection_endpoint = None
         wait_count = 0
         while True:
             response = opensearch_client.batch_get_collection(
                 names=[collection_name]
             )
-            status = response["collectionDetails"][0]["status"]
+            collection_detail = response["collectionDetails"][0]
+            status = collection_detail["status"]
             wait_count += 1
             if wait_count % 6 == 0:  # Log every minute
-                logger.debug(f"  Collection status: {status['status']} (waited {wait_count * 10} seconds)")
-            if status["status"] == "ACTIVE":
-                break
+                logger.debug(f"  Collection status: {status} (waited {wait_count * 10} seconds)")
+            
+            # Check if endpoint is available
+            if "collectionEndpoint" in collection_detail:
+                collection_endpoint = collection_detail["collectionEndpoint"]
+                if status == "ACTIVE":
+                    break
+            time.sleep(10)
+        
+        
+        # Wait for collection to be active
+        logger.info("  Waiting for collection to be active (this may take a few minutes)...")
+        collection_endpoint = None
+        wait_count = 0
+        while True:
+            response = opensearch_client.batch_get_collection(
+                names=[collection_name]
+            )
+            collection_detail = response["collectionDetails"][0]
+            status = collection_detail["status"]
+            wait_count += 1
+            if wait_count % 6 == 0:  # Log every minute
+                logger.debug(f"  Collection status: {status} (waited {wait_count * 10} seconds)")
+            
+            # Check if endpoint is available
+            if "collectionEndpoint" in collection_detail:
+                collection_endpoint = collection_detail["collectionEndpoint"]
+                if status == "ACTIVE":
+                    break
             time.sleep(10)
         
         logger.info(f"✓ OpenSearch collection created: {collection_name}")
@@ -1220,50 +1251,7 @@ def create_vpc() -> Dict[str, str]:
             SubnetId=subnet_id
         )
     
-    # Create VPC endpoints for Bedrock and SSM
-    logger.debug("Creating VPC endpoints")
-    
-    # Bedrock endpoint
-    vpc_endpoint_response = ec2_client.create_vpc_endpoint(
-        VpcId=vpc_id,
-        ServiceName=f"com.amazonaws.{region}.bedrock-runtime",
-        VpcEndpointType="Interface",
-        SubnetIds=private_subnets,
-        PrivateDnsEnabled=True,
-        TagSpecifications=[
-            {
-                "ResourceType": "vpc-endpoint",
-                "Tags": [{"Key": "Name", "Value": f"bedrock-endpoint-{project_name}"}]
-            }
-        ]
-    )
-    vpc_endpoint_id = vpc_endpoint_response["VpcEndpoint"]["VpcEndpointId"]
-    
-    # SSM endpoints for Session Manager
-    ssm_endpoints = [
-        f"com.amazonaws.{region}.ssm",
-        f"com.amazonaws.{region}.ssmmessages", 
-        f"com.amazonaws.{region}.ec2messages"
-    ]
-    
-    for service in ssm_endpoints:
-        try:
-            ec2_client.create_vpc_endpoint(
-                VpcId=vpc_id,
-                ServiceName=service,
-                VpcEndpointType="Interface",
-                SubnetIds=private_subnets,
-                SecurityGroupIds=[ec2_sg_id],
-                PrivateDnsEnabled=True
-            )
-            logger.debug(f"Created VPC endpoint for {service}")
-        except ClientError as e:
-            if e.response["Error"]["Code"] != "RouteAlreadyExists":
-                logger.warning(f"Failed to create endpoint for {service}: {e}")
-    
-    logger.debug(f"VPC endpoints created")
-    
-    # Create security groups
+    # Create security groups first (needed for VPC endpoints)
     logger.debug("Creating security groups")
     alb_sg_response = ec2_client.create_security_group(
         GroupName=f"alb-sg-for-{project_name}",
@@ -1335,8 +1323,51 @@ def create_vpc() -> Dict[str, str]:
         if e.response["Error"]["Code"] != "InvalidPermission.Duplicate":
             logger.warning(f"Failed to add HTTPS rule: {e}")
     
-    # Allow all outbound traffic for EC2 SG
     logger.debug(f"EC2 security group created: {ec2_sg_id}")
+    
+    # Create VPC endpoints for Bedrock and SSM
+    logger.debug("Creating VPC endpoints")
+    
+    # Bedrock endpoint
+    vpc_endpoint_response = ec2_client.create_vpc_endpoint(
+        VpcId=vpc_id,
+        ServiceName=f"com.amazonaws.{region}.bedrock-runtime",
+        VpcEndpointType="Interface",
+        SubnetIds=private_subnets,
+        SecurityGroupIds=[ec2_sg_id],
+        PrivateDnsEnabled=True,
+        TagSpecifications=[
+            {
+                "ResourceType": "vpc-endpoint",
+                "Tags": [{"Key": "Name", "Value": f"bedrock-endpoint-{project_name}"}]
+            }
+        ]
+    )
+    vpc_endpoint_id = vpc_endpoint_response["VpcEndpoint"]["VpcEndpointId"]
+    
+    # SSM endpoints for Session Manager
+    ssm_endpoints = [
+        f"com.amazonaws.{region}.ssm",
+        f"com.amazonaws.{region}.ssmmessages", 
+        f"com.amazonaws.{region}.ec2messages"
+    ]
+    
+    for service in ssm_endpoints:
+        try:
+            ec2_client.create_vpc_endpoint(
+                VpcId=vpc_id,
+                ServiceName=service,
+                VpcEndpointType="Interface",
+                SubnetIds=private_subnets,
+                SecurityGroupIds=[ec2_sg_id],
+                PrivateDnsEnabled=True
+            )
+            logger.debug(f"Created VPC endpoint for {service}")
+        except ClientError as e:
+            if e.response["Error"]["Code"] != "RouteAlreadyExists":
+                logger.warning(f"Failed to create endpoint for {service}: {e}")
+    
+    logger.debug(f"VPC endpoints created")
     
     logger.info(f"✓ VPC created: {vpc_id}")
     
@@ -1933,12 +1964,8 @@ def create_alb_target_group_and_listener(alb_info: Dict[str, str], instance_id: 
         Port=80,
         DefaultActions=[
             {
-                "Type": "fixed-response",
-                "FixedResponseConfig": {
-                    "StatusCode": "403",
-                    "ContentType": "text/plain",
-                    "MessageBody": "Access denied"
-                }
+                "Type": "forward",
+                "TargetGroupArn": tg_arn
             }
         ]
     )
@@ -2177,6 +2204,16 @@ def main():
             logger.warning(f"Could not update {config_path}: {e}")
         
         logger.info("="*60)
+        logger.info("")
+        logger.info("="*60)
+        logger.info("⚠️  IMPORTANT: CloudFront Domain Address")
+        logger.info("="*60)
+        logger.info(f"🌐 CloudFront URL: https://{cloudfront_info['domain']}")
+        logger.info("")
+        logger.info("Note: CloudFront distribution may take 15-20 minutes to fully deploy")
+        logger.info("      Once deployed, you can access your application at the URL above")
+        logger.info("="*60)
+        logger.info("")
         
     except Exception as e:
         elapsed_time = time.time() - start_time
