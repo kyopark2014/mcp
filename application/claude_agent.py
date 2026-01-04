@@ -3,19 +3,9 @@ import re
 import logging
 import sys
 import os
-import asyncio
 import info
 import chat
 import mcp_config
-
-# Apply nest_asyncio to allow nested event loops for Streamlit compatibility
-try:
-    import nest_asyncio
-    nest_asyncio.apply()
-except ImportError:
-    # Logger not yet defined, so just pass silently
-    # User should install nest-asyncio: pip install nest-asyncio
-    pass
 
 from claude_agent_sdk import (
     query,
@@ -65,64 +55,24 @@ def add_system_message(containers, message, type):
 os.environ["CLAUDE_CODE_USE_BEDROCK"] = "1"
 os.environ["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = "16384"  # Claude 4 Sonnet max: 128000
 
-# Try to disable WebSocket usage in Bun/Claude Code
-# This might help if Claude Code tries to use WebSocket unnecessarily
-os.environ["DISABLE_WEBSOCKET"] = "1"
-os.environ["NO_WEBSOCKET"] = "1"
-
 # WebSocket error prevention
 import tempfile
 
 # WebSocket mocking script generation
-# This script needs to work with both Node.js and Bun
 websocket_mock_script = '''
-// Mock WebSocket for Bun/Node.js environments
-(function() {
-    function MockWebSocket() {
-        return {
-            readyState: 1,
-            CONNECTING: 0,
-            OPEN: 1,
-            CLOSING: 2,
-            CLOSED: 3,
-            close: function() {},
-            send: function() {},
-            addEventListener: function() {},
-            removeEventListener: function() {},
-            dispatchEvent: function() { return true; },
-            onopen: null,
-            onclose: null,
-            onerror: null,
-            onmessage: null,
-            url: '',
-            protocol: '',
-            extensions: '',
-            readyState: 1,
-            binaryType: 'blob'
-        };
-    }
-    
-    // Set on global scope for Bun compatibility
-    if (typeof global !== 'undefined') {
-        if (typeof global.window === 'undefined') {
-            global.window = {};
+if (typeof window === 'undefined') {
+    global.window = {
+        WebSocket: function() {
+            return {
+                readyState: 1,
+                close: function() {},
+                send: function() {},
+                addEventListener: function() {},
+                removeEventListener: function() {}
+            };
         }
-        global.window.WebSocket = MockWebSocket;
-        global.WebSocket = MockWebSocket;
-        
-        // Also set on globalThis for broader compatibility
-        if (typeof globalThis !== 'undefined') {
-            globalThis.window = globalThis.window || {};
-            globalThis.window.WebSocket = MockWebSocket;
-            globalThis.WebSocket = MockWebSocket;
-        }
-    }
-    
-    // Set on window if it exists
-    if (typeof window !== 'undefined') {
-        window.WebSocket = MockWebSocket;
-    }
-})();
+    };
+}
 '''
 
 # Save WebSocket mocking script to temporary file
@@ -131,25 +81,7 @@ with tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False) as f:
     websocket_mock_file = f.name
 
 # Add WebSocket mocking file to Node.js options
-# Note: Bun doesn't support --require, but we set it anyway for Node.js compatibility
 os.environ["NODE_OPTIONS"] = f"--require {websocket_mock_file}"
-
-# For Bun, we need a different approach since Bun doesn't support --require
-# Try multiple Bun-specific environment variables that might work
-# Note: These are experimental and may not be officially supported by Bun
-os.environ["BUN_PRELOAD"] = websocket_mock_file
-os.environ["BUN_INSTALL_SCRIPT"] = websocket_mock_file
-
-# Also try setting it as a Bun runtime flag via environment
-# Bun might read this from the environment when starting
-os.environ["BUN_RUNTIME_FLAGS"] = f"--preload {websocket_mock_file}"
-
-# Log the WebSocket mock file location for debugging
-logger.info(f"WebSocket mock file created at: {websocket_mock_file}")
-logger.info(f"NODE_OPTIONS set to: {os.environ.get('NODE_OPTIONS')}")
-logger.info(f"BUN_PRELOAD set to: {os.environ.get('BUN_PRELOAD')}")
-logger.info(f"BUN_INSTALL_SCRIPT set to: {os.environ.get('BUN_INSTALL_SCRIPT')}")
-logger.info(f"BUN_RUNTIME_FLAGS set to: {os.environ.get('BUN_RUNTIME_FLAGS')}")
 
 def get_model_id():
     models = []
@@ -260,21 +192,6 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
         )
 
     logger.info(f"session_id: {session_id}")
-    
-    # Log environment variables before creating client
-    logger.info("=" * 80)
-    logger.info("Environment variables before creating ClaudeSDKClient:")
-    logger.info(f"  CLAUDE_CODE_USE_BEDROCK: {os.environ.get('CLAUDE_CODE_USE_BEDROCK')}")
-    logger.info(f"  CLAUDE_CODE_MAX_OUTPUT_TOKENS: {os.environ.get('CLAUDE_CODE_MAX_OUTPUT_TOKENS')}")
-    logger.info(f"  NODE_OPTIONS: {os.environ.get('NODE_OPTIONS')}")
-    logger.info(f"  BUN_PRELOAD: {os.environ.get('BUN_PRELOAD')}")
-    logger.info(f"  BUN_INSTALL_SCRIPT: {os.environ.get('BUN_INSTALL_SCRIPT')}")
-    logger.info(f"  BUN_RUNTIME_FLAGS: {os.environ.get('BUN_RUNTIME_FLAGS')}")
-    logger.info(f"  DISABLE_WEBSOCKET: {os.environ.get('DISABLE_WEBSOCKET')}")
-    logger.info(f"  NO_WEBSOCKET: {os.environ.get('NO_WEBSOCKET')}")
-    logger.info(f"  WebSocket mock file: {websocket_mock_file if 'websocket_mock_file' in globals() else 'not set'}")
-    logger.info("=" * 80)
-    
     if session_id is not None and history_mode == "Enable":
         options = ClaudeAgentOptions(
             system_prompt=system,
@@ -298,12 +215,11 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
         ) 
     
     final_result = ""    
-    try:
-        async with ClaudeSDKClient(options=options) as client:
-            await client.query(prompt)
+    async with ClaudeSDKClient(options=options) as client:
+        await client.query(prompt)
 
-            async for message in client.receive_response():
-                logger.info(f"message: {message}")
+        async for message in client.receive_response():
+            logger.info(f"message: {message}")
             if isinstance(message, SystemMessage):
                 logger.info(f"SystemMessage: {message}")
                 subtype = message.subtype
@@ -395,77 +311,5 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
                         logger.info(f"UserMessage: {block}")
             else:
                 logger.info(f"Message: {message}")
-    except Exception as e:
-        logger.error("=" * 80)
-        logger.error(f"ERROR CAUGHT in run_claude_agent")
-        logger.error(f"Error type: {type(e).__name__}")
-        logger.error(f"Error message: {e}")
-        logger.error(f"Error repr: {repr(e)}")
-        
-        # Log all attributes of the exception for ProcessError
-        if hasattr(e, '__dict__'):
-            logger.error(f"Exception __dict__: {e.__dict__}")
-        
-        # Log all attributes using dir() to see everything
-        all_attrs = [attr for attr in dir(e) if not attr.startswith('_')]
-        logger.error(f"Exception attributes (dir): {all_attrs}")
-        
-        # Try to access each attribute
-        for attr in all_attrs:
-            try:
-                value = getattr(e, attr)
-                if not callable(value):
-                    logger.error(f"  {attr} = {value}")
-            except Exception as attr_error:
-                logger.error(f"  {attr} = <error: {attr_error}>")
-        
-        # Log additional details if available
-        if hasattr(e, '__cause__') and e.__cause__:
-            logger.error(f"Caused by: {type(e.__cause__).__name__}: {e.__cause__}")
-        if hasattr(e, '__context__') and e.__context__:
-            logger.error(f"Context: {type(e.__context__).__name__}: {e.__context__}")
-        
-        # Log common ProcessError attributes specifically
-        logger.error("Checking ProcessError-specific attributes:")
-        for attr in ['exit_code', 'returncode', 'stderr', 'stdout', 'cmd', 'args', 'message', 'msg', 'process', 'subprocess']:
-            if hasattr(e, attr):
-                try:
-                    value = getattr(e, attr)
-                    logger.error(f"  ProcessError.{attr} = {value}")
-                    if attr == 'process' and value is not None:
-                        # If process object exists, try to get its stderr/stdout
-                        if hasattr(value, 'stderr'):
-                            try:
-                                stderr_content = value.stderr.read() if hasattr(value.stderr, 'read') else str(value.stderr)
-                                logger.error(f"    process.stderr = {stderr_content}")
-                            except:
-                                logger.error(f"    process.stderr = <cannot read>")
-                        if hasattr(value, 'stdout'):
-                            try:
-                                stdout_content = value.stdout.read() if hasattr(value.stdout, 'read') else str(value.stdout)
-                                logger.error(f"    process.stdout = {stdout_content}")
-                            except:
-                                logger.error(f"    process.stdout = <cannot read>")
-                except Exception as attr_error:
-                    logger.error(f"  ProcessError.{attr} = <error accessing: {attr_error}>")
-        
-        import traceback
-        logger.error("Full traceback:")
-        logger.error(traceback.format_exc())
-        logger.error("=" * 80)
-        raise
     
     return final_result, image_url
-
-def run_claude_agent_sync(prompt, mcp_servers, history_mode, containers):
-    """
-    Synchronous wrapper for run_claude_agent using nest_asyncio.
-    This allows running async code in Streamlit's event loop environment.
-    """
-    try:
-        return asyncio.run(run_claude_agent(prompt, mcp_servers, history_mode, containers))
-    except Exception as e:
-        logger.error(f"Error in run_claude_agent_sync: {type(e).__name__}: {e}")
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        raise
