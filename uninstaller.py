@@ -340,16 +340,28 @@ def delete_opensearch_collection():
     try:
         collection_name = project_name
         
-        # Delete collection
+        # Get collection ID first
         try:
-            opensearch_client.delete_collection(id=collection_name)
-            logger.info(f"  ✓ Deleted collection: {collection_name}")
+            collections = opensearch_client.list_collections()
+            collection_id = None
+            for collection in collections.get("collectionSummaries", []):
+                if collection["name"] == collection_name:
+                    collection_id = collection["id"]
+                    break
             
-            # Wait for deletion
-            time.sleep(30)
+            if collection_id:
+                # Delete collection using ID
+                opensearch_client.delete_collection(id=collection_id)
+                logger.info(f"  ✓ Deleted collection: {collection_name} (ID: {collection_id})")
+                
+                # Wait for deletion
+                time.sleep(30)
+            else:
+                logger.info(f"  Collection {collection_name} not found")
+                
         except ClientError as e:
             if e.response["Error"]["Code"] != "ResourceNotFoundException":
-                raise
+                logger.warning(f"  Could not delete collection: {e}")
         
         # Delete data access policy (different API)
         try:
@@ -469,57 +481,65 @@ def delete_iam_roles():
     
     logger.info("✓ IAM roles deleted")
 
-def delete_s3_bucket():
-    """Delete S3 bucket and all objects."""
-    logger.info("[8/9] Deleting S3 bucket")
+def delete_s3_buckets():
+    """Delete S3 buckets and all objects."""
+    logger.info("[8/9] Deleting S3 buckets")
     
-    try:
-        # Delete all objects and versions
+    # List of possible bucket names
+    bucket_names = [
+        bucket_name,  # storage-for-mcp-{account_id}-{region}
+        f"storage-for-{project_name}--{region}"  # storage-for-mcp--us-west-2 (when account_id is empty)
+    ]
+    
+    for bucket in bucket_names:
         try:
-            # List and delete all object versions
-            versions = s3_client.list_object_versions(Bucket=bucket_name)
-            delete_keys = []
+            # Delete all objects and versions
+            try:
+                # List and delete all object versions
+                versions = s3_client.list_object_versions(Bucket=bucket)
+                delete_keys = []
+                
+                # Add current versions
+                if "Versions" in versions:
+                    for version in versions["Versions"]:
+                        delete_keys.append({
+                            "Key": version["Key"],
+                            "VersionId": version["VersionId"]
+                        })
+                
+                # Add delete markers
+                if "DeleteMarkers" in versions:
+                    for marker in versions["DeleteMarkers"]:
+                        delete_keys.append({
+                            "Key": marker["Key"],
+                            "VersionId": marker["VersionId"]
+                        })
+                
+                # Delete in batches of 1000
+                if delete_keys:
+                    for i in range(0, len(delete_keys), 1000):
+                        batch = delete_keys[i:i+1000]
+                        s3_client.delete_objects(
+                            Bucket=bucket,
+                            Delete={"Objects": batch}
+                        )
+                    logger.info(f"  ✓ Deleted {len(delete_keys)} objects/versions from {bucket}")
+                
+            except ClientError as e:
+                if e.response["Error"]["Code"] != "NoSuchBucket":
+                    logger.warning(f"  Could not delete objects from {bucket}: {e}")
             
-            # Add current versions
-            if "Versions" in versions:
-                for version in versions["Versions"]:
-                    delete_keys.append({
-                        "Key": version["Key"],
-                        "VersionId": version["VersionId"]
-                    })
-            
-            # Add delete markers
-            if "DeleteMarkers" in versions:
-                for marker in versions["DeleteMarkers"]:
-                    delete_keys.append({
-                        "Key": marker["Key"],
-                        "VersionId": marker["VersionId"]
-                    })
-            
-            # Delete in batches of 1000
-            if delete_keys:
-                for i in range(0, len(delete_keys), 1000):
-                    batch = delete_keys[i:i+1000]
-                    s3_client.delete_objects(
-                        Bucket=bucket_name,
-                        Delete={"Objects": batch}
-                    )
-                logger.info(f"  ✓ Deleted {len(delete_keys)} objects/versions")
+            # Delete bucket
+            s3_client.delete_bucket(Bucket=bucket)
+            logger.info(f"  ✓ Deleted bucket: {bucket}")
             
         except ClientError as e:
-            if e.response["Error"]["Code"] != "NoSuchBucket":
-                logger.warning(f"  Could not delete objects: {e}")
-        
-        # Delete bucket
-        s3_client.delete_bucket(Bucket=bucket_name)
-        logger.info(f"  ✓ Deleted bucket: {bucket_name}")
-        
-        logger.info("✓ S3 bucket deleted")
-    except ClientError as e:
-        if e.response["Error"]["Code"] == "NoSuchBucket":
-            logger.info("  S3 bucket does not exist")
-        else:
-            logger.error(f"Error deleting S3 bucket: {e}")
+            if e.response["Error"]["Code"] == "NoSuchBucket":
+                logger.info(f"  Bucket {bucket} does not exist")
+            else:
+                logger.warning(f"  Could not delete bucket {bucket}: {e}")
+    
+    logger.info("✓ S3 buckets deleted")
 
 def main():
     """Main function to delete all infrastructure."""
@@ -541,7 +561,7 @@ def main():
         delete_opensearch_collection()
         delete_secrets()
         delete_iam_roles()
-        delete_s3_bucket()
+        delete_s3_buckets()
         
         elapsed_time = time.time() - start_time
         logger.info("")

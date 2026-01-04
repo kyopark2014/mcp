@@ -19,7 +19,6 @@ from botocore.exceptions import ClientError
 project_name = "mcp"
 region = os.environ.get("CDK_DEFAULT_REGION", "us-west-2")
 account_id = os.environ.get("CDK_DEFAULT_ACCOUNT", "")
-bucket_name = f"storage-for-{project_name}-{account_id}-{region}"
 vector_index_name = project_name
 custom_header_name = "X-Custom-Header"
 custom_header_value = f"{project_name}_12dab15e4s31"
@@ -39,6 +38,8 @@ ssm_client = boto3.client("ssm", region_name=region)
 # Get account ID if not set
 if not account_id:
     account_id = sts_client.get_caller_identity()["Account"]
+
+bucket_name = f"storage-for-{project_name}-{account_id}-{region}"
 
 
 # Configure logging
@@ -407,12 +408,21 @@ def create_ec2_role(knowledge_base_role_arn: str) -> str:
                 "Statement": [
                     {
                         "Effect": "Allow",
-                        "Action": [
-                            "bedrock:*",
-                            "bedrock-agent-runtime:Retrieve",
-                            "bedrock-agent-runtime:RetrieveAndGenerate"
-                        ],
+                        "Action": ["bedrock:*"],
                         "Resource": ["*"]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "bedrock:InvokeModel",
+                            "bedrock:InvokeModelWithResponseStream"
+                        ],
+                        "Resource": [
+                            "arn:aws:bedrock:*:*:inference-profile/*",
+                            "arn:aws:bedrock:us-west-2:*:foundation-model/*",
+                            "arn:aws:bedrock:us-east-1:*:foundation-model/*",
+                            "arn:aws:bedrock:us-east-2:*:foundation-model/*"
+                        ]
                     }
                 ]
             }
@@ -680,37 +690,37 @@ def create_secrets() -> Dict[str, str]:
             if e.response["Error"]["Code"] == "ResourceNotFoundException":
                 # Secret doesn't exist, prompt for API key and create it
                 if key == "weather":
-                    logger.info(f"  Creating secret: {secret_config['name']} (Weather API Key - OpenWeatherMap)")
+                    logger.info(f"Enter credential of {secret_config['name']} (Weather API Key - OpenWeatherMap):")
                     api_key = input(f"Creating {secret_config['name']} - Weather API Key (OpenWeatherMap): ").strip()
                     secret_config["secret_value"]["weather_api_key"] = api_key
                 elif key == "langsmith":
-                    logger.info(f"  Creating secret: {secret_config['name']} (LangSmith API Key)")
+                    logger.info(f"Enter credential of {secret_config['name']} (LangSmith API Key):")
                     api_key = input(f"Creating {secret_config['name']} - LangSmith API Key: ").strip()
                     secret_config["secret_value"]["langsmith_api_key"] = api_key
                 elif key == "tavily":
-                    logger.info(f"  Creating secret: {secret_config['name']} (Tavily API Key)")
+                    logger.info(f"Enter credential of {secret_config['name']} (Tavily API Key):")
                     api_key = input(f"Creating {secret_config['name']} - Tavily API Key: ").strip()
                     secret_config["secret_value"]["tavily_api_key"] = api_key
                 elif key == "perplexity":
-                    logger.info(f"  Creating secret: {secret_config['name']} (Perplexity API Key)")
+                    logger.info(f"Enter credential of {secret_config['name']} (Perplexity API Key):")
                     api_key = input(f"Creating {secret_config['name']} - Perplexity API Key: ").strip()
                     secret_config["secret_value"]["perplexity_api_key"] = api_key
                 elif key == "firecrawl":
-                    logger.info(f"  Creating secret: {secret_config['name']} (Firecrawl API Key)")
+                    logger.info(f"Enter credential of {secret_config['name']} (Firecrawl API Key):")
                     api_key = input(f"Creating {secret_config['name']} - Firecrawl API Key: ").strip()
                     secret_config["secret_value"]["firecrawl_api_key"] = api_key
                 elif key == "code_interpreter":
-                    logger.info(f"  Creating secret: {secret_config['name']} (Code Interpreter API Key and ID)")
+                    logger.info(f"Enter credential of {secret_config['name']} (Code Interpreter API Key and ID):")
                     api_key = input(f"Creating {secret_config['name']} - Code Interpreter API Key: ").strip()
                     code_id = input(f"Creating {secret_config['name']} - Code Interpreter ID: ").strip()
                     secret_config["secret_value"]["code_interpreter_api_key"] = api_key
                     secret_config["secret_value"]["code_interpreter_id"] = code_id
                 elif key == "nova_act":
-                    logger.info(f"  Creating secret: {secret_config['name']} (Nova Act API Key)")
+                    logger.info(f"Enter credential of {secret_config['name']} (Nova Act API Key):")
                     api_key = input(f"Creating {secret_config['name']} - Nova Act API Key: ").strip()
                     secret_config["secret_value"]["nova_act_api_key"] = api_key
                 elif key == "notion":
-                    logger.info(f"  Creating secret: {secret_config['name']} (Notion API Key)")
+                    logger.info(f"Enter credential of {secret_config['name']} (Notion API Key):")
                     api_key = input(f"Creating {secret_config['name']} - Notion API Key: ").strip()
                     secret_config["secret_value"]["notion_api_key"] = api_key
                 
@@ -1965,9 +1975,9 @@ def create_ec2_instance(vpc_info: Dict[str, str], ec2_role_arn: str,
         NetworkInterfaces=[
             {
                 "DeviceIndex": 0,
-                "SubnetId": vpc_info["public_subnets"][0],
+                "SubnetId": vpc_info["private_subnets"][0],
                 "Groups": [vpc_info["ec2_sg_id"]],
-                "AssociatePublicIpAddress": True,
+                "AssociatePublicIpAddress": False,
                 "DeleteOnTermination": True
             }
         ],
