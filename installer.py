@@ -651,15 +651,6 @@ def create_secrets() -> Dict[str, str]:
                 "firecrawl_api_key": ""
             }
         },
-        "code_interpreter": {
-            "name": f"code-interpreter-{project_name}",
-            "description": "secret for code interpreter api key",
-            "secret_value": {
-                "project_name": project_name,
-                "code_interpreter_api_key": "",
-                "code_interpreter_id": ""
-            }
-        },
         "nova_act": {
             "name": f"novaactapikey-{project_name}",
             "description": "secret for nova act api key",
@@ -709,12 +700,6 @@ def create_secrets() -> Dict[str, str]:
                     logger.info(f"Enter credential of {secret_config['name']} (Firecrawl API Key):")
                     api_key = input(f"Creating {secret_config['name']} - Firecrawl API Key: ").strip()
                     secret_config["secret_value"]["firecrawl_api_key"] = api_key
-                elif key == "code_interpreter":
-                    logger.info(f"Enter credential of {secret_config['name']} (Code Interpreter API Key and ID):")
-                    api_key = input(f"Creating {secret_config['name']} - Code Interpreter API Key: ").strip()
-                    code_id = input(f"Creating {secret_config['name']} - Code Interpreter ID: ").strip()
-                    secret_config["secret_value"]["code_interpreter_api_key"] = api_key
-                    secret_config["secret_value"]["code_interpreter_id"] = code_id
                 elif key == "nova_act":
                     logger.info(f"Enter credential of {secret_config['name']} (Nova Act API Key):")
                     api_key = input(f"Creating {secret_config['name']} - Nova Act API Key: ").strip()
