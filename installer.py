@@ -1,0 +1,1828 @@
+#!/usr/bin/env python3
+"""
+AWS Infrastructure Installer using boto3
+This script creates AWS infrastructure resources equivalent to the CDK stack.
+"""
+
+import boto3
+import json
+import os
+import time
+import logging
+from datetime import datetime
+from typing import Dict, List, Optional
+from botocore.exceptions import ClientError
+
+# Configuration
+project_name = "mcp"
+region = os.environ.get("CDK_DEFAULT_REGION", "us-west-2")
+account_id = os.environ.get("CDK_DEFAULT_ACCOUNT", "")
+bucket_name = f"storage-for-{project_name}-{account_id}-{region}"
+vector_index_name = project_name
+custom_header_name = "X-Custom-Header"
+custom_header_value = f"{project_name}_12dab15e4s31"
+
+# Initialize boto3 clients
+s3_client = boto3.client("s3", region_name=region)
+iam_client = boto3.client("iam", region_name=region)
+secrets_client = boto3.client("secretsmanager", region_name=region)
+opensearch_client = boto3.client("opensearchserverless", region_name=region)
+ec2_client = boto3.client("ec2", region_name=region)
+elbv2_client = boto3.client("elbv2", region_name=region)
+cloudfront_client = boto3.client("cloudfront", region_name=region)
+lambda_client = boto3.client("lambda", region_name=region)
+sts_client = boto3.client("sts", region_name=region)
+
+# Get account ID if not set
+if not account_id:
+    account_id = sts_client.get_caller_identity()["Account"]
+
+
+# Configure logging
+def setup_logging(log_level=logging.INFO):
+    """Setup logging configuration."""
+    log_format = "%(asctime)s - %(levelname)s - %(message)s"
+    date_format = "%Y-%m-%d %H:%M:%S"
+    
+    logging.basicConfig(
+        level=log_level,
+        format=log_format,
+        datefmt=date_format,
+        handlers=[
+            logging.StreamHandler(),
+            logging.FileHandler(f"installer_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+        ]
+    )
+    
+    return logging.getLogger(__name__)
+
+
+logger = setup_logging()
+
+
+def create_s3_bucket() -> str:
+    """Create S3 bucket with CORS configuration."""
+    logger.info(f"[1/9] Creating S3 bucket: {bucket_name}")
+    
+    try:
+        # Create bucket
+        logger.debug(f"Creating bucket in region: {region}")
+        if region == "us-east-1":
+            s3_client.create_bucket(Bucket=bucket_name)
+        else:
+            s3_client.create_bucket(
+                Bucket=bucket_name,
+                CreateBucketConfiguration={"LocationConstraint": region}
+            )
+        logger.debug("Bucket created successfully")
+        
+        # Configure bucket
+        logger.debug("Configuring public access block")
+        s3_client.put_public_access_block(
+            Bucket=bucket_name,
+            PublicAccessBlockConfiguration={
+                "BlockPublicAcls": True,
+                "IgnorePublicAcls": True,
+                "BlockPublicPolicy": True,
+                "RestrictPublicBuckets": True
+            }
+        )
+        
+        # Set CORS configuration
+        logger.debug("Setting CORS configuration")
+        cors_configuration = {
+            "CORSRules": [
+                {
+                    "AllowedHeaders": ["*"],
+                    "AllowedMethods": ["GET", "POST", "PUT"],
+                    "AllowedOrigins": ["*"]
+                }
+            ]
+        }
+        s3_client.put_bucket_cors(
+            Bucket=bucket_name,
+            CORSConfiguration=cors_configuration
+        )
+        
+        # Enable versioning (set to false means suspend)
+        logger.debug("Configuring versioning")
+        s3_client.put_bucket_versioning(
+            Bucket=bucket_name,
+            VersioningConfiguration={"Status": "Suspended"}
+        )
+        
+        logger.info(f"✓ S3 bucket created successfully: {bucket_name}")
+        return bucket_name
+    
+    except ClientError as e:
+        if e.response["Error"]["Code"] in ["BucketAlreadyExists", "BucketAlreadyOwnedByYou"]:
+            logger.warning(f"S3 bucket already exists: {bucket_name}")
+            return bucket_name
+        logger.error(f"Failed to create S3 bucket: {e}")
+        raise
+
+
+def create_iam_role(role_name: str, assume_role_policy: Dict, managed_policies: Optional[List[str]] = None) -> str:
+    """Create IAM role."""
+    logger.debug(f"Creating IAM role: {role_name}")
+    
+    try:
+        response = iam_client.create_role(
+            RoleName=role_name,
+            AssumeRolePolicyDocument=json.dumps(assume_role_policy),
+            Description=f"Role for {role_name}"
+        )
+        role_arn = response["Role"]["Arn"]
+        logger.debug(f"Role created: {role_arn}")
+        
+        if managed_policies:
+            logger.debug(f"Attaching {len(managed_policies)} managed policies")
+            for policy_arn in managed_policies:
+                iam_client.attach_role_policy(
+                    RoleName=role_name,
+                    PolicyArn=policy_arn
+                )
+                logger.debug(f"Attached policy: {policy_arn}")
+        
+        logger.info(f"✓ IAM role created: {role_name}")
+        return role_arn
+    
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "EntityAlreadyExists":
+            logger.warning(f"IAM role already exists: {role_name}")
+            response = iam_client.get_role(RoleName=role_name)
+            return response["Role"]["Arn"]
+        logger.error(f"Failed to create IAM role {role_name}: {e}")
+        raise
+
+
+def attach_inline_policy(role_name: str, policy_name: str, policy_document: Dict):
+    """Attach inline policy to IAM role."""
+    logger.debug(f"Attaching inline policy {policy_name} to {role_name}")
+    
+    try:
+        iam_client.put_role_policy(
+            RoleName=role_name,
+            PolicyName=policy_name,
+            PolicyDocument=json.dumps(policy_document)
+        )
+        logger.debug(f"Policy {policy_name} attached successfully")
+    except ClientError as e:
+        logger.error(f"Error attaching policy {policy_name}: {e}")
+        raise
+
+
+def create_knowledge_base_role() -> str:
+    """Create Knowledge Base IAM role."""
+    logger.info("[2/9] Creating Knowledge Base IAM role")
+    role_name = f"role-knowledge-base-for-{project_name}-{region}"
+    
+    assume_role_policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Principal": {
+                    "Service": "bedrock.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole"
+            }
+        ]
+    }
+    
+    role_arn = create_iam_role(role_name, assume_role_policy)
+    
+    # Attach inline policies
+    bedrock_invoke_policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Action": ["bedrock:*"],
+                "Resource": ["*"]
+            }
+        ]
+    }
+    attach_inline_policy(role_name, f"bedrock-invoke-policy-for-{project_name}", bedrock_invoke_policy)
+    
+    s3_policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Action": ["s3:*"],
+                "Resource": ["*"]
+            }
+        ]
+    }
+    attach_inline_policy(role_name, f"knowledge-base-s3-policy-for-{project_name}", s3_policy)
+    
+    opensearch_policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Action": ["aoss:APIAccessAll"],
+                "Resource": ["*"]
+            }
+        ]
+    }
+    attach_inline_policy(role_name, f"bedrock-agent-opensearch-policy-for-{project_name}", opensearch_policy)
+    
+    bedrock_policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Action": ["bedrock:*"],
+                "Resource": ["*"]
+            }
+        ]
+    }
+    attach_inline_policy(role_name, f"bedrock-agent-bedrock-policy-for-{project_name}", bedrock_policy)
+    
+    return role_arn
+
+
+def create_agent_role() -> str:
+    """Create Agent IAM role."""
+    logger.info("[2/9] Creating Agent IAM role")
+    role_name = f"role-agent-for-{project_name}-{region}"
+    
+    assume_role_policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Principal": {
+                    "Service": "bedrock.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole"
+            }
+        ]
+    }
+    
+    role_arn = create_iam_role(role_name, assume_role_policy)
+    
+    # Attach managed policy
+    iam_client.attach_role_policy(
+        RoleName=role_name,
+        PolicyArn="arn:aws:iam::aws:policy/AWSLambdaExecute"
+    )
+    
+    # Attach inline policies
+    bedrock_retrieve_policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Action": ["bedrock:Retrieve"],
+                "Resource": [f"arn:aws:bedrock:{region}:{account_id}:knowledge-base/*"]
+            }
+        ]
+    }
+    attach_inline_policy(role_name, f"bedrock-retrieve-policy-for-{project_name}", bedrock_retrieve_policy)
+    
+    inference_policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Action": [
+                    "bedrock:InvokeModel",
+                    "bedrock:InvokeModelWithResponseStream",
+                    "bedrock:GetInferenceProfile",
+                    "bedrock:GetFoundationModel"
+                ],
+                "Resource": [
+                    f"arn:aws:bedrock:{region}:{account_id}:inference-profile/*",
+                    "arn:aws:bedrock:*::foundation-model/*"
+                ]
+            }
+        ]
+    }
+    attach_inline_policy(role_name, f"agent-inference-policy-for-{project_name}", inference_policy)
+    
+    lambda_policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Action": ["lambda:InvokeFunction", "cloudwatch:*"],
+                "Resource": ["*"]
+            }
+        ]
+    }
+    attach_inline_policy(role_name, f"lambda-invoke-policy-for-{project_name}", lambda_policy)
+    
+    bedrock_policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Action": ["bedrock:*"],
+                "Resource": ["*"]
+            }
+        ]
+    }
+    attach_inline_policy(role_name, f"bedrock-policy-agent-for-{project_name}", bedrock_policy)
+    
+    return role_arn
+
+
+def create_ec2_role(knowledge_base_role_arn: str) -> str:
+    """Create EC2 IAM role."""
+    logger.info("[2/9] Creating EC2 IAM role")
+    role_name = f"role-ec2-for-{project_name}-{region}"
+    
+    assume_role_policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Principal": {
+                    "Service": ["ec2.amazonaws.com", "bedrock.amazonaws.com"]
+                },
+                "Action": "sts:AssumeRole"
+            }
+        ]
+    }
+    
+    managed_policies = ["arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"]
+    role_arn = create_iam_role(role_name, assume_role_policy, managed_policies)
+    
+    # Attach inline policies
+    policies = [
+        {
+            "name": f"secret-manager-policy-ec2-for-{project_name}",
+            "document": {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": ["secretsmanager:GetSecretValue"],
+                        "Resource": ["*"]
+                    }
+                ]
+            }
+        },
+        {
+            "name": f"pvre-policy-ec2-for-{project_name}",
+            "document": {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": ["ssm:*", "ssmmessages:*", "ec2messages:*", "tag:*"],
+                        "Resource": ["*"]
+                    }
+                ]
+            }
+        },
+        {
+            "name": f"bedrock-policy-ec2-for-{project_name}",
+            "document": {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": ["bedrock:*"],
+                        "Resource": ["*"]
+                    }
+                ]
+            }
+        },
+        {
+            "name": f"cost-explorer-policy-for-{project_name}",
+            "document": {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": ["ce:GetCostAndUsage"],
+                        "Resource": ["*"]
+                    }
+                ]
+            }
+        },
+        {
+            "name": f"ec2-policy-for-{project_name}",
+            "document": {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": ["ec2:*"],
+                        "Resource": ["*"]
+                    }
+                ]
+            }
+        },
+        {
+            "name": f"lambda-invoke-policy-for-{project_name}",
+            "document": {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": ["lambda:InvokeFunction"],
+                        "Resource": ["*"]
+                    }
+                ]
+            }
+        },
+        {
+            "name": f"efs-policy-for-{project_name}",
+            "document": {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": ["ec2:DescribeFileSystems", "elasticfilesystem:DescribeFileSystems"],
+                        "Resource": ["*"]
+                    }
+                ]
+            }
+        },
+        {
+            "name": f"pass-role-for-{project_name}",
+            "document": {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": ["iam:PassRole"],
+                        "Resource": [knowledge_base_role_arn]
+                    }
+                ]
+            }
+        },
+        {
+            "name": f"aoss-policy-for-{project_name}",
+            "document": {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": ["aoss:*"],
+                        "Resource": ["*"]
+                    }
+                ]
+            }
+        },
+        {
+            "name": f"getRole-policy-for-{project_name}",
+            "document": {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": ["iam:GetRole"],
+                        "Resource": ["*"]
+                    }
+                ]
+            }
+        },
+        {
+            "name": f"s3-bucket-access-policy-for-{project_name}",
+            "document": {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": ["s3:*"],
+                        "Resource": ["*"]
+                    }
+                ]
+            }
+        },
+        {
+            "name": f"cloudwatch-logs-policy-for-{project_name}",
+            "document": {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "logs:DescribeLogGroups",
+                            "logs:DescribeLogStreams",
+                            "logs:GetLogEvents",
+                            "logs:FilterLogEvents",
+                            "logs:GetLogGroupFields",
+                            "logs:GetLogRecord",
+                            "logs:GetQueryResults",
+                            "logs:StartQuery",
+                            "logs:StopQuery"
+                        ],
+                        "Resource": ["*"]
+                    }
+                ]
+            }
+        }
+    ]
+    
+    for policy in policies:
+        attach_inline_policy(role_name, policy["name"], policy["document"])
+    
+    # Create instance profile
+    instance_profile_name = f"instance-profile-{project_name}-{region}"
+    try:
+        iam_client.create_instance_profile(InstanceProfileName=instance_profile_name)
+        iam_client.add_role_to_instance_profile(
+            InstanceProfileName=instance_profile_name,
+            RoleName=role_name
+        )
+    except ClientError as e:
+        if e.response["Error"]["Code"] != "EntityAlreadyExists":
+            raise
+    
+    return role_arn
+
+
+def create_secrets() -> Dict[str, str]:
+    """Create Secrets Manager secrets."""
+    logger.info("[3/9] Creating Secrets Manager secrets")
+    logger.info("Please enter API keys when prompted (press Enter to skip and leave empty):")
+    
+    secrets = {
+        "weather": {
+            "name": f"openweathermap-{project_name}",
+            "description": "secret for weather api key",
+            "secret_value": {
+                "project_name": project_name,
+                "weather_api_key": ""
+            }
+        },
+        "langsmith": {
+            "name": f"langsmithapikey-{project_name}",
+            "description": "secret for lamgsmith api key",
+            "secret_value": {
+                "langchain_project": project_name,
+                "langsmith_api_key": ""
+            }
+        },
+        "tavily": {
+            "name": f"tavilyapikey-{project_name}",
+            "description": "secret for tavily api key",
+            "secret_value": {
+                "project_name": project_name,
+                "tavily_api_key": ""
+            }
+        },
+        "perplexity": {
+            "name": f"perplexityapikey-{project_name}",
+            "description": "secret for perflexity api key",
+            "secret_value": {
+                "project_name": project_name,
+                "perplexity_api_key": ""
+            }
+        },
+        "firecrawl": {
+            "name": f"firecrawlapikey-{project_name}",
+            "description": "secret for firecrawl api key",
+            "secret_value": {
+                "project_name": project_name,
+                "firecrawl_api_key": ""
+            }
+        },
+        "code_interpreter": {
+            "name": f"code-interpreter-{project_name}",
+            "description": "secret for code interpreter api key",
+            "secret_value": {
+                "project_name": project_name,
+                "code_interpreter_api_key": "",
+                "code_interpreter_id": ""
+            }
+        },
+        "nova_act": {
+            "name": f"novaactapikey-{project_name}",
+            "description": "secret for nova act api key",
+            "secret_value": {
+                "project_name": project_name,
+                "nova_act_api_key": ""
+            }
+        },
+        "notion": {
+            "name": f"notionapikey-{project_name}",
+            "description": "secret for notion api key",
+            "secret_value": {
+                "project_name": project_name,
+                "notion_api_key": ""
+            }
+        }
+    }
+    
+    secret_arns = {}
+    
+    for key, secret_config in secrets.items():
+        # Prompt for API key before creating each secret
+        if key == "weather":
+            api_key = input(f"Creating {secret_config['name']} - Weather API Key (OpenWeatherMap): ").strip()
+            secret_config["secret_value"]["weather_api_key"] = api_key
+        elif key == "langsmith":
+            api_key = input(f"Creating {secret_config['name']} - LangSmith API Key: ").strip()
+            secret_config["secret_value"]["langsmith_api_key"] = api_key
+        elif key == "tavily":
+            api_key = input(f"Creating {secret_config['name']} - Tavily API Key: ").strip()
+            secret_config["secret_value"]["tavily_api_key"] = api_key
+        elif key == "perplexity":
+            api_key = input(f"Creating {secret_config['name']} - Perplexity API Key: ").strip()
+            secret_config["secret_value"]["perplexity_api_key"] = api_key
+        elif key == "firecrawl":
+            api_key = input(f"Creating {secret_config['name']} - Firecrawl API Key: ").strip()
+            secret_config["secret_value"]["firecrawl_api_key"] = api_key
+        elif key == "code_interpreter":
+            api_key = input(f"Creating {secret_config['name']} - Code Interpreter API Key: ").strip()
+            code_id = input(f"Creating {secret_config['name']} - Code Interpreter ID: ").strip()
+            secret_config["secret_value"]["code_interpreter_api_key"] = api_key
+            secret_config["secret_value"]["code_interpreter_id"] = code_id
+        elif key == "nova_act":
+            api_key = input(f"Creating {secret_config['name']} - Nova Act API Key: ").strip()
+            secret_config["secret_value"]["nova_act_api_key"] = api_key
+        elif key == "notion":
+            api_key = input(f"Creating {secret_config['name']} - Notion API Key: ").strip()
+            secret_config["secret_value"]["notion_api_key"] = api_key
+        
+        try:
+            response = secrets_client.create_secret(
+                Name=secret_config["name"],
+                Description=secret_config["description"],
+                SecretString=json.dumps(secret_config["secret_value"])
+            )
+            secret_arns[key] = response["ARN"]
+            logger.info(f"  ✓ Created secret: {secret_config['name']}")
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "ResourceExistsException":
+                response = secrets_client.describe_secret(SecretId=secret_config["name"])
+                secret_arns[key] = response["ARN"]
+                logger.warning(f"  Secret already exists: {secret_config['name']}")
+            else:
+                logger.error(f"  Failed to create secret {secret_config['name']}: {e}")
+                raise
+    
+    logger.info(f"✓ Created {len(secret_arns)} secrets")
+    
+    return secret_arns
+
+
+def create_opensearch_collection() -> Dict[str, str]:
+    """Create OpenSearch Serverless collection and policies."""
+    logger.info("[4/9] Creating OpenSearch Serverless collection")
+    
+    collection_name = vector_index_name
+    enc_policy_name = f"encription-{project_name}-{region}"
+    net_policy_name = f"network-{project_name}-{region}"
+    data_policy_name = f"data-{project_name}"
+    
+    # Create encryption policy
+    enc_policy = {
+        "Rules": [
+            {
+                "ResourceType": "collection",
+                "Resource": [f"collection/{collection_name}"]
+            }
+        ],
+        "AWSOwnedKey": True
+    }
+    
+    try:
+        opensearch_client.create_security_policy(
+            name=enc_policy_name,
+            type="encryption",
+            description=f"opensearch encryption policy for {project_name}",
+            policy=json.dumps(enc_policy)
+        )
+        logger.debug(f"Created encryption policy: {enc_policy_name}")
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "ConflictException":
+            logger.warning(f"Encryption policy already exists: {enc_policy_name}")
+        else:
+            logger.error(f"Failed to create encryption policy: {e}")
+            raise
+    
+    # Create network policy
+    net_policy = [
+        {
+            "Rules": [
+                {
+                    "ResourceType": "dashboard",
+                    "Resource": [f"collection/{collection_name}"]
+                },
+                {
+                    "ResourceType": "collection",
+                    "Resource": [f"collection/{collection_name}"]
+                }
+            ],
+            "AllowFromPublic": True
+        }
+    ]
+    
+    try:
+        opensearch_client.create_security_policy(
+            name=net_policy_name,
+            type="network",
+            description=f"opensearch network policy for {project_name}",
+            policy=json.dumps(net_policy)
+        )
+        logger.debug(f"Created network policy: {net_policy_name}")
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "ConflictException":
+            logger.warning(f"Network policy already exists: {net_policy_name}")
+        else:
+            logger.error(f"Failed to create network policy: {e}")
+            raise
+    
+    # Create data access policy
+    account_arn = f"arn:aws:iam::{account_id}:root"
+    data_policy = [
+        {
+            "Rules": [
+                {
+                    "Resource": [f"collection/{collection_name}"],
+                    "Permission": [
+                        "aoss:CreateCollectionItems",
+                        "aoss:DeleteCollectionItems",
+                        "aoss:UpdateCollectionItems",
+                        "aoss:DescribeCollectionItems"
+                    ],
+                    "ResourceType": "collection"
+                },
+                {
+                    "Resource": [f"index/{collection_name}/*"],
+                    "Permission": [
+                        "aoss:CreateIndex",
+                        "aoss:DeleteIndex",
+                        "aoss:UpdateIndex",
+                        "aoss:DescribeIndex",
+                        "aoss:ReadDocument",
+                        "aoss:WriteDocument"
+                    ],
+                    "ResourceType": "index"
+                }
+            ],
+            "Principal": [account_arn]
+        }
+    ]
+    
+    try:
+        opensearch_client.create_access_policy(
+            name=data_policy_name,
+            type="data",
+            policy=json.dumps(data_policy)
+        )
+        logger.debug(f"Created data access policy: {data_policy_name}")
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "ConflictException":
+            logger.warning(f"Data access policy already exists: {data_policy_name}")
+        else:
+            logger.error(f"Failed to create data access policy: {e}")
+            raise
+    
+    # Wait for policies to be ready
+    logger.debug("Waiting for policies to be ready...")
+    time.sleep(5)
+    
+    # Create collection
+    try:
+        response = opensearch_client.create_collection(
+            name=collection_name,
+            description=f"opensearch correction for {project_name}",
+            type="VECTORSEARCH"
+        )
+        collection_detail = response["createCollectionDetail"]
+        collection_arn = collection_detail["arn"]
+        
+        # Get collection endpoint after creation
+        logger.debug("Getting collection details to retrieve endpoint...")
+        collection_response = opensearch_client.batch_get_collection(names=[collection_name])
+        collection_endpoint = collection_response["collectionDetails"][0]["collectionEndpoint"]
+        
+        # Wait for collection to be active
+        logger.info("  Waiting for collection to be active (this may take a few minutes)...")
+        wait_count = 0
+        while True:
+            response = opensearch_client.batch_get_collection(
+                names=[collection_name]
+            )
+            status = response["collectionDetails"][0]["status"]
+            wait_count += 1
+            if wait_count % 6 == 0:  # Log every minute
+                logger.debug(f"  Collection status: {status['status']} (waited {wait_count * 10} seconds)")
+            if status["status"] == "ACTIVE":
+                break
+            time.sleep(10)
+        
+        logger.info(f"✓ OpenSearch collection created: {collection_name}")
+        logger.info(f"  Endpoint: {collection_endpoint}")
+        return {
+            "arn": collection_arn,
+            "endpoint": collection_endpoint
+        }
+    
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "ConflictException":
+            logger.warning(f"OpenSearch collection already exists: {collection_name}")
+            response = opensearch_client.batch_get_collection(names=[collection_name])
+            collection_detail = response["collectionDetails"][0]
+            return {
+                "arn": collection_detail["arn"],
+                "endpoint": collection_detail.get("collectionEndpoint", "")
+            }
+        logger.error(f"Failed to create OpenSearch collection: {e}")
+        raise
+
+
+def create_vpc() -> Dict[str, str]:
+    """Create VPC with subnets and security groups."""
+    logger.info("[5/9] Creating VPC and networking resources")
+    
+    vpc_name = f"vpc-for-{project_name}"
+    cidr_block = "10.20.0.0/16"
+    
+    # Check if VPC already exists
+    try:
+        vpcs = ec2_client.describe_vpcs(
+            Filters=[{"Name": "tag:Name", "Values": [vpc_name]}]
+        )
+        if vpcs["Vpcs"]:
+            vpc_id = vpcs["Vpcs"][0]["VpcId"]
+            logger.warning(f"VPC already exists: {vpc_id}")
+            
+            # Get existing resources
+            subnets = ec2_client.describe_subnets(
+                Filters=[{"Name": "vpc-id", "Values": [vpc_id]}]
+            )
+            public_subnets = []
+            private_subnets = []
+            for subnet in subnets["Subnets"]:
+                subnet_name = ""
+                for tag in subnet.get("Tags", []):
+                    if tag["Key"] == "Name":
+                        subnet_name = tag["Value"]
+                        break
+                
+                if "public" in subnet_name.lower():
+                    public_subnets.append(subnet["SubnetId"])
+                elif "private" in subnet_name.lower():
+                    private_subnets.append(subnet["SubnetId"])
+                else:
+                    # If no clear naming, use route table to determine
+                    route_tables = ec2_client.describe_route_tables(
+                        Filters=[{"Name": "association.subnet-id", "Values": [subnet["SubnetId"]]}]
+                    )
+                    is_public = False
+                    for rt in route_tables["RouteTables"]:
+                        for route in rt["Routes"]:
+                            if route.get("GatewayId", "").startswith("igw-"):
+                                is_public = True
+                                break
+                    
+                    if is_public:
+                        public_subnets.append(subnet["SubnetId"])
+                    else:
+                        private_subnets.append(subnet["SubnetId"])
+            
+            # If no private subnets found, use public subnets
+            if not private_subnets and public_subnets:
+                private_subnets = public_subnets.copy()
+                logger.warning("  No private subnets found, using public subnets for EC2")
+            
+            # Get security groups
+            sgs = ec2_client.describe_security_groups(
+                Filters=[{"Name": "vpc-id", "Values": [vpc_id]}]
+            )
+            alb_sg_id = None
+            ec2_sg_id = None
+            for sg in sgs["SecurityGroups"]:
+                if sg["GroupName"] != "default":
+                    for tag in sg.get("Tags", []):
+                        if tag["Key"] == "Name":
+                            if f"alb-sg-for-{project_name}" in tag["Value"]:
+                                alb_sg_id = sg["GroupId"]
+                            elif f"ec2-sg-for-{project_name}" in tag["Value"]:
+                                ec2_sg_id = sg["GroupId"]
+            
+            # If security groups not found, create them
+            if not alb_sg_id or not ec2_sg_id:
+                logger.info("  Creating missing security groups...")
+                if not alb_sg_id:
+                    alb_sg_response = ec2_client.create_security_group(
+                        GroupName=f"alb-sg-for-{project_name}",
+                        Description="security group for alb",
+                        VpcId=vpc_id,
+                        TagSpecifications=[
+                            {
+                                "ResourceType": "security-group",
+                                "Tags": [{"Key": "Name", "Value": f"alb-sg-for-{project_name}"}]
+                            }
+                        ]
+                    )
+                    alb_sg_id = alb_sg_response["GroupId"]
+                
+                if not ec2_sg_id:
+                    ec2_sg_response = ec2_client.create_security_group(
+                        GroupName=f"ec2-sg-for-{project_name}",
+                        Description="Security group for ec2",
+                        VpcId=vpc_id,
+                        TagSpecifications=[
+                            {
+                                "ResourceType": "security-group",
+                                "Tags": [{"Key": "Name", "Value": f"ec2-sg-for-{project_name}"}]
+                            }
+                        ]
+                    )
+                    ec2_sg_id = ec2_sg_response["GroupId"]
+                    
+                    # Allow traffic from ALB to EC2 (port 8501)
+                    ec2_client.authorize_security_group_ingress(
+                        GroupId=ec2_sg_id,
+                        IpPermissions=[
+                            {
+                                "IpProtocol": "tcp",
+                                "FromPort": 8501,
+                                "ToPort": 8501,
+                                "UserIdGroupPairs": [{"GroupId": alb_sg_id}]
+                            }
+                        ]
+                    )
+            
+            # Get VPC endpoint
+            endpoints = ec2_client.describe_vpc_endpoints(
+                Filters=[{"Name": "vpc-id", "Values": [vpc_id]}]
+            )
+            vpc_endpoint_id = endpoints["VpcEndpoints"][0]["VpcEndpointId"] if endpoints["VpcEndpoints"] else None
+            
+            return {
+                "vpc_id": vpc_id,
+                "public_subnets": public_subnets,
+                "private_subnets": private_subnets,
+                "alb_sg_id": alb_sg_id,
+                "ec2_sg_id": ec2_sg_id,
+                "vpc_endpoint_id": vpc_endpoint_id
+            }
+    except Exception as e:
+        logger.debug(f"No existing VPC found, creating new one: {e}")
+    
+    # Create VPC
+    logger.debug(f"Creating VPC: {vpc_name} with CIDR {cidr_block}")
+    response = ec2_client.create_vpc(
+        CidrBlock=cidr_block,
+        TagSpecifications=[
+            {
+                "ResourceType": "vpc",
+                "Tags": [{"Key": "Name", "Value": vpc_name}]
+            }
+        ]
+    )
+    vpc_id = response["Vpc"]["VpcId"]
+    logger.debug(f"VPC created: {vpc_id}")
+    
+    # Enable DNS hostnames and DNS resolution
+    logger.debug("Enabling DNS hostnames and DNS support")
+    ec2_client.modify_vpc_attribute(VpcId=vpc_id, EnableDnsHostnames={"Value": True})
+    ec2_client.modify_vpc_attribute(VpcId=vpc_id, EnableDnsSupport={"Value": True})
+    
+    # Get availability zones
+    logger.debug("Getting availability zones")
+    azs = ec2_client.describe_availability_zones()["AvailabilityZones"][:2]
+    az_names = [az["ZoneName"] for az in azs]
+    logger.debug(f"Using availability zones: {az_names}")
+    
+    # Create Internet Gateway
+    logger.debug("Creating Internet Gateway")
+    igw_response = ec2_client.create_internet_gateway(
+        TagSpecifications=[
+            {
+                "ResourceType": "internet-gateway",
+                "Tags": [{"Key": "Name", "Value": f"igw-{project_name}"}]
+            }
+        ]
+    )
+    igw_id = igw_response["InternetGateway"]["InternetGatewayId"]
+    ec2_client.attach_internet_gateway(InternetGatewayId=igw_id, VpcId=vpc_id)
+    logger.debug(f"Internet Gateway created and attached: {igw_id}")
+    
+    # Create public subnets
+    logger.debug("Creating public subnets")
+    public_subnets = []
+    for i, az in enumerate(az_names):
+        subnet_cidr = f"10.20.{i}.0/24"
+        subnet_response = ec2_client.create_subnet(
+            VpcId=vpc_id,
+            CidrBlock=subnet_cidr,
+            AvailabilityZone=az,
+            TagSpecifications=[
+                {
+                    "ResourceType": "subnet",
+                    "Tags": [{"Key": "Name", "Value": f"public-subnet-for-{project_name}-{i+1}"}]
+                }
+            ]
+        )
+        public_subnets.append(subnet_response["Subnet"]["SubnetId"])
+        logger.debug(f"Created public subnet: {subnet_response['Subnet']['SubnetId']} in {az}")
+    
+    # Create NAT Gateway in first public subnet
+    logger.debug("Allocating Elastic IP for NAT Gateway")
+    eip_response = ec2_client.allocate_address(Domain="vpc")
+    eip_allocation_id = eip_response["AllocationId"]
+    
+    logger.debug("Creating NAT Gateway (this may take a few minutes)...")
+    nat_response = ec2_client.create_nat_gateway(
+        SubnetId=public_subnets[0],
+        AllocationId=eip_allocation_id
+    )
+    nat_gateway_id = nat_response["NatGateway"]["NatGatewayId"]
+    
+    # Tag NAT Gateway after creation
+    ec2_client.create_tags(
+        Resources=[nat_gateway_id],
+        Tags=[{"Key": "Name", "Value": f"nat-{project_name}"}]
+    )
+    
+    # Wait for NAT Gateway to be available
+    logger.info("  Waiting for NAT Gateway to be available (this may take a few minutes)...")
+    wait_count = 0
+    while True:
+        response = ec2_client.describe_nat_gateways(NatGatewayIds=[nat_gateway_id])
+        state = response["NatGateways"][0]["State"]
+        wait_count += 1
+        if wait_count % 6 == 0:  # Log every minute
+            logger.debug(f"  NAT Gateway status: {state} (waited {wait_count * 10} seconds)")
+        if state == "available":
+            break
+        time.sleep(10)
+    logger.debug(f"NAT Gateway is available: {nat_gateway_id}")
+    
+    # Create private subnets
+    logger.debug("Creating private subnets")
+    private_subnets = []
+    for i, az in enumerate(az_names):
+        subnet_cidr = f"10.20.{i+10}.0/24"
+        subnet_response = ec2_client.create_subnet(
+            VpcId=vpc_id,
+            CidrBlock=subnet_cidr,
+            AvailabilityZone=az,
+            TagSpecifications=[
+                {
+                    "ResourceType": "subnet",
+                    "Tags": [{"Key": "Name", "Value": f"private-subnet-for-{project_name}-{i+1}"}]
+                }
+            ]
+        )
+        private_subnets.append(subnet_response["Subnet"]["SubnetId"])
+        logger.debug(f"Created private subnet: {subnet_response['Subnet']['SubnetId']} in {az}")
+    
+    # Create route tables
+    logger.debug("Creating route tables")
+    public_rt_response = ec2_client.create_route_table(
+        VpcId=vpc_id,
+        TagSpecifications=[
+            {
+                "ResourceType": "route-table",
+                "Tags": [{"Key": "Name", "Value": f"public-rt-{project_name}"}]
+            }
+        ]
+    )
+    public_rt_id = public_rt_response["RouteTable"]["RouteTableId"]
+    
+    # Add route to Internet Gateway
+    ec2_client.create_route(
+        RouteTableId=public_rt_id,
+        DestinationCidrBlock="0.0.0.0/0",
+        GatewayId=igw_id
+    )
+    
+    # Associate public subnets with public route table
+    for subnet_id in public_subnets:
+        ec2_client.associate_route_table(
+            RouteTableId=public_rt_id,
+            SubnetId=subnet_id
+        )
+    
+    private_rt_response = ec2_client.create_route_table(
+        VpcId=vpc_id,
+        TagSpecifications=[
+            {
+                "ResourceType": "route-table",
+                "Tags": [{"Key": "Name", "Value": f"private-rt-{project_name}"}]
+            }
+        ]
+    )
+    private_rt_id = private_rt_response["RouteTable"]["RouteTableId"]
+    
+    # Add route to NAT Gateway
+    ec2_client.create_route(
+        RouteTableId=private_rt_id,
+        DestinationCidrBlock="0.0.0.0/0",
+        NatGatewayId=nat_gateway_id
+    )
+    
+    # Associate private subnets with private route table
+    for subnet_id in private_subnets:
+        ec2_client.associate_route_table(
+            RouteTableId=private_rt_id,
+            SubnetId=subnet_id
+        )
+    
+    # Create VPC endpoint for Bedrock
+    logger.debug("Creating VPC endpoint for Bedrock")
+    vpc_endpoint_response = ec2_client.create_vpc_endpoint(
+        VpcId=vpc_id,
+        ServiceName=f"com.amazonaws.{region}.bedrock-runtime",
+        VpcEndpointType="Interface",
+        SubnetIds=private_subnets,
+        PrivateDnsEnabled=True,
+        TagSpecifications=[
+            {
+                "ResourceType": "vpc-endpoint",
+                "Tags": [{"Key": "Name", "Value": f"bedrock-endpoint-{project_name}"}]
+            }
+        ]
+    )
+    vpc_endpoint_id = vpc_endpoint_response["VpcEndpoint"]["VpcEndpointId"]
+    logger.debug(f"VPC endpoint created: {vpc_endpoint_id}")
+    
+    # Create security groups
+    logger.debug("Creating security groups")
+    alb_sg_response = ec2_client.create_security_group(
+        GroupName=f"alb-sg-for-{project_name}",
+        Description="security group for alb",
+        VpcId=vpc_id,
+        TagSpecifications=[
+            {
+                "ResourceType": "security-group",
+                "Tags": [{"Key": "Name", "Value": f"alb-sg-for-{project_name}"}]
+            }
+        ]
+    )
+    alb_sg_id = alb_sg_response["GroupId"]
+    logger.debug(f"ALB security group created: {alb_sg_id}")
+    
+    ec2_sg_response = ec2_client.create_security_group(
+        GroupName=f"ec2-sg-for-{project_name}",
+        Description="Security group for ec2",
+        VpcId=vpc_id,
+        TagSpecifications=[
+            {
+                "ResourceType": "security-group",
+                "Tags": [{"Key": "Name", "Value": f"ec2-sg-for-{project_name}"}]
+            }
+        ]
+    )
+    ec2_sg_id = ec2_sg_response["GroupId"]
+    
+    # Allow traffic from ALB to EC2 (port 8501)
+    ec2_client.authorize_security_group_ingress(
+        GroupId=ec2_sg_id,
+        IpPermissions=[
+            {
+                "IpProtocol": "tcp",
+                "FromPort": 8501,
+                "ToPort": 8501,
+                "UserIdGroupPairs": [{"GroupId": alb_sg_id}]
+            }
+        ]
+    )
+    
+    # Allow all outbound traffic for EC2 SG
+    logger.debug(f"EC2 security group created: {ec2_sg_id}")
+    
+    logger.info(f"✓ VPC created: {vpc_id}")
+    
+    return {
+        "vpc_id": vpc_id,
+        "public_subnets": public_subnets,
+        "private_subnets": private_subnets,
+        "alb_sg_id": alb_sg_id,
+        "ec2_sg_id": ec2_sg_id,
+        "vpc_endpoint_id": vpc_endpoint_id
+    }
+
+
+def create_alb(vpc_info: Dict[str, str]) -> Dict[str, str]:
+    """Create Application Load Balancer."""
+    logger.info("[6/9] Creating Application Load Balancer")
+    alb_name = f"alb-for-{project_name}"
+    
+    # Check if ALB already exists
+    try:
+        albs = elbv2_client.describe_load_balancers(Names=[alb_name])
+        if albs["LoadBalancers"]:
+            alb = albs["LoadBalancers"][0]
+            logger.warning(f"ALB already exists: {alb['DNSName']}")
+            return {
+                "arn": alb["LoadBalancerArn"],
+                "dns": alb["DNSName"]
+            }
+    except ClientError as e:
+        if e.response["Error"]["Code"] != "LoadBalancerNotFound":
+            raise
+    
+    logger.debug(f"Creating ALB: {alb_name}")
+    response = elbv2_client.create_load_balancer(
+        Name=alb_name,
+        Subnets=vpc_info["public_subnets"],
+        SecurityGroups=[vpc_info["alb_sg_id"]],
+        Scheme="internet-facing",
+        Type="application",
+        Tags=[
+            {"Key": "Name", "Value": alb_name}
+        ]
+    )
+    
+    alb_arn = response["LoadBalancers"][0]["LoadBalancerArn"]
+    alb_dns = response["LoadBalancers"][0]["DNSName"]
+    
+    logger.info(f"✓ ALB created: {alb_dns}")
+    
+    return {
+        "arn": alb_arn,
+        "dns": alb_dns
+    }
+
+
+def create_lambda_role() -> str:
+    """Create Lambda RAG IAM role."""
+    logger.info("[2/9] Creating Lambda RAG IAM role")
+    role_name = f"role-lambda-rag-for-{project_name}-{region}"
+    
+    assume_role_policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Principal": {
+                    "Service": ["lambda.amazonaws.com", "bedrock.amazonaws.com"]
+                },
+                "Action": "sts:AssumeRole"
+            }
+        ]
+    }
+    
+    role_arn = create_iam_role(role_name, assume_role_policy)
+    
+    # Attach inline policies
+    create_log_policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Action": ["logs:CreateLogGroup"],
+                "Resource": [f"arn:aws:logs:{region}:{account_id}:*"]
+            }
+        ]
+    }
+    attach_inline_policy(role_name, f"create-log-policy-lambda-rag-for-{project_name}", create_log_policy)
+    
+    create_log_stream_policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Action": ["logs:CreateLogStream", "logs:PutLogEvents"],
+                "Resource": [f"arn:aws:logs:{region}:{account_id}:log-group:/aws/lambda/*"]
+            }
+        ]
+    }
+    attach_inline_policy(role_name, f"create-stream-log-policy-lambda-rag-for-{project_name}", create_log_stream_policy)
+    
+    bedrock_invoke_policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Action": ["bedrock:*"],
+                "Resource": ["*"]
+            }
+        ]
+    }
+    attach_inline_policy(role_name, f"tool-bedrock-invoke-policy-for-{project_name}", bedrock_invoke_policy)
+    
+    opensearch_policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Action": ["aoss:APIAccessAll"],
+                "Resource": ["*"]
+            }
+        ]
+    }
+    attach_inline_policy(role_name, f"tool-bedrock-agent-opensearch-policy-for-{project_name}", opensearch_policy)
+    
+    bedrock_policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Action": ["bedrock:*"],
+                "Resource": ["*"]
+            }
+        ]
+    }
+    attach_inline_policy(role_name, f"tool-bedrock-agent-bedrock-policy-for-{project_name}", bedrock_policy)
+    
+    return role_arn
+
+
+def create_agentcore_memory_role() -> str:
+    """Create AgentCore Memory IAM role."""
+    logger.info("[2/9] Creating AgentCore Memory IAM role")
+    role_name = f"role-agentcore-memory-for-{project_name}-{region}"
+    
+    assume_role_policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Principal": {
+                    "Service": "bedrock-agentcore.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole"
+            }
+        ]
+    }
+    
+    role_arn = create_iam_role(role_name, assume_role_policy)
+    
+    memory_policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Action": [
+                    "bedrock:InvokeModel",
+                    "bedrock:InvokeModelWithResponseStream",
+                    "bedrock:ListMemories",
+                    "bedrock:CreateMemory",
+                    "bedrock:DeleteMemory",
+                    "bedrock:DescribeMemory",
+                    "bedrock:UpdateMemory",
+                    "bedrock:ListMemoryRecords",
+                    "bedrock:CreateMemoryRecord",
+                    "bedrock:DeleteMemoryRecord",
+                    "bedrock:DescribeMemoryRecord",
+                    "bedrock:UpdateMemoryRecord"
+                ],
+                "Resource": [
+                    "arn:aws:bedrock:*::foundation-model/*",
+                    "arn:aws:bedrock:*:*:inference-profile/*"
+                ]
+            }
+        ]
+    }
+    attach_inline_policy(role_name, f"agentcore-memory-policy-for-{project_name}", memory_policy)
+    
+    return role_arn
+
+
+def create_cloudfront_distribution(alb_info: Dict[str, str], s3_bucket_name: str) -> Dict[str, str]:
+    """Create CloudFront distribution."""
+    logger.info("[7/9] Creating CloudFront distribution")
+    
+    # Check if CloudFront distribution already exists
+    try:
+        distributions = cloudfront_client.list_distributions()
+        for dist in distributions.get("DistributionList", {}).get("Items", []):
+            if (f"CloudFront-for-{project_name}" in dist.get("Comment", "") and 
+                dist.get("Enabled", False)):
+                logger.warning(f"CloudFront distribution already exists: {dist['DomainName']}")
+                return {
+                    "id": dist["Id"],
+                    "domain": dist["DomainName"]
+                }
+    except Exception as e:
+        logger.debug(f"Error checking existing distributions: {e}")
+    
+    # Get existing CloudFront distribution configuration
+    reference_distribution_id = "E13W1RC3R4P3U2"
+    try:
+        reference_config = cloudfront_client.get_distribution_config(Id=reference_distribution_id)
+        existing_config = reference_config["DistributionConfig"]
+        
+        # Create new distribution config based on existing one
+        distribution_config = {
+            "CallerReference": f"{project_name}-{int(time.time())}",
+            "Comment": f"CloudFront-for-{project_name}",
+            "DefaultCacheBehavior": existing_config["DefaultCacheBehavior"].copy(),
+            "Origins": {
+                "Quantity": 2,
+                "Items": [
+                    {
+                        "Id": f"alb-{project_name}",
+                        "DomainName": alb_info["dns"],
+                        "CustomOriginConfig": {
+                            "HTTPPort": 80,
+                            "HTTPSPort": 443,
+                            "OriginProtocolPolicy": "http-only",
+                            "OriginSslProtocols": {
+                                "Quantity": 1,
+                                "Items": ["TLSv1.2"]
+                            }
+                        },
+                        "CustomHeaders": {
+                            "Quantity": 1,
+                            "Items": [
+                                {
+                                    "HeaderName": custom_header_name,
+                                    "HeaderValue": custom_header_value
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "Id": f"s3-{project_name}",
+                        "DomainName": f"{s3_bucket_name}.s3.{region}.amazonaws.com",
+                        "S3OriginConfig": {
+                            "OriginAccessIdentity": ""
+                        }
+                    }
+                ]
+            },
+            "Enabled": True,
+            "PriceClass": existing_config.get("PriceClass", "PriceClass_200")
+        }
+        
+        # Update target origin ID
+        distribution_config["DefaultCacheBehavior"]["TargetOriginId"] = f"alb-{project_name}"
+        
+    except Exception as e:
+        logger.warning(f"Could not get reference distribution config: {e}")
+        # Fallback to simple configuration
+        distribution_config = {
+            "CallerReference": f"{project_name}-{int(time.time())}",
+            "Comment": f"CloudFront-for-{project_name}",
+            "DefaultCacheBehavior": {
+                "TargetOriginId": f"alb-{project_name}",
+                "ViewerProtocolPolicy": "redirect-to-https",
+                "AllowedMethods": {
+                    "Quantity": 7,
+                    "Items": ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"],
+                    "CachedMethods": {
+                        "Quantity": 2,
+                        "Items": ["GET", "HEAD"]
+                    }
+                },
+                "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b5a84be39ad",
+                "Compress": True
+            },
+            "Origins": {
+                "Quantity": 1,
+                "Items": [
+                    {
+                        "Id": f"alb-{project_name}",
+                        "DomainName": alb_info["dns"],
+                        "CustomOriginConfig": {
+                            "HTTPPort": 80,
+                            "HTTPSPort": 443,
+                            "OriginProtocolPolicy": "http-only"
+                        }
+                    }
+                ]
+            },
+            "Enabled": True,
+            "PriceClass": "PriceClass_200"
+        }
+    
+    try:
+        response = cloudfront_client.create_distribution(DistributionConfig=distribution_config)
+        distribution_id = response["Distribution"]["Id"]
+        distribution_domain = response["Distribution"]["DomainName"]
+        
+        logger.info(f"✓ CloudFront distribution created: {distribution_domain}")
+        logger.info(f"  Distribution ID: {distribution_id}")
+        logger.warning("  Note: CloudFront distribution may take 15-20 minutes to deploy")
+        return {
+            "id": distribution_id,
+            "domain": distribution_domain
+        }
+    except ClientError as e:
+        logger.error(f"Error creating CloudFront distribution: {e}")
+        raise
+
+
+def create_ec2_instance(vpc_info: Dict[str, str], ec2_role_arn: str, 
+                       knowledge_base_role_arn: str, opensearch_info: Dict[str, str],
+                       s3_bucket_name: str, cloudfront_domain: str,
+                       agentcore_memory_role_arn: str) -> str:
+    """Create EC2 instance."""
+    logger.info("[8/9] Creating EC2 instance")
+    
+    instance_name = f"app-for-{project_name}"
+    
+    # Check if EC2 instance already exists
+    try:
+        instances = ec2_client.describe_instances(
+            Filters=[
+                {"Name": "tag:Name", "Values": [instance_name]},
+                {"Name": "instance-state-name", "Values": ["running", "pending", "stopping", "stopped"]}
+            ]
+        )
+        for reservation in instances["Reservations"]:
+            for instance in reservation["Instances"]:
+                logger.warning(f"EC2 instance already exists: {instance['InstanceId']}")
+                return instance["InstanceId"]
+    except Exception as e:
+        logger.debug(f"No existing EC2 instance found: {e}")
+    
+    # Get latest Amazon Linux 2023 AMI
+    logger.debug("Finding latest Amazon Linux 2023 AMI")
+    amis = ec2_client.describe_images(
+        Owners=["amazon"],
+        Filters=[
+            {"Name": "name", "Values": ["al2023-ami-*-x86_64"]},
+            {"Name": "state", "Values": ["available"]}
+        ]
+    )
+    latest_ami = sorted(amis["Images"], key=lambda x: x["CreationDate"], reverse=True)[0]
+    ami_id = latest_ami["ImageId"]
+    logger.debug(f"Using AMI: {ami_id}")
+    
+    # Prepare user data
+    environment = {
+        "projectName": project_name,
+        "accountId": account_id,
+        "region": region,
+        "knowledge_base_role": knowledge_base_role_arn,
+        "collectionArn": opensearch_info["arn"],
+        "opensearch_url": opensearch_info["endpoint"],
+        "s3_bucket": s3_bucket_name,
+        "s3_arn": f"arn:aws:s3:::{s3_bucket_name}",
+        "sharing_url": f"https://{cloudfront_domain}",
+        "agentcore_memory_role": agentcore_memory_role_arn
+    }
+    
+    git_name = "mcp"
+    user_data_script = f"""#!/bin/bash
+yum install git python-pip docker -y
+pip install pip --upgrade
+systemctl start docker
+systemctl enable docker
+usermod -aG docker ec2-user
+runuser -l ec2-user -c 'cd && git clone https://github.com/kyopark2014/{git_name}'
+json='{json.dumps(environment)}' && echo "$json">/home/ec2-user/{git_name}/application/config.json
+runuser -l ec2-user -c 'cd {git_name} && docker build -t streamlit-app .'
+yum install -y amazon-cloudwatch-agent
+mkdir -p /opt/aws/amazon-cloudwatch-agent/etc/
+cp /home/ec2-user/{git_name}/amazon-cloudwatch-agent.json /opt/aws/amazon-cloudwatch-agent/etc/
+chmod 644 /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+systemctl enable amazon-cloudwatch-agent
+systemctl start amazon-cloudwatch-agent
+mkdir -p /etc/docker
+cp /home/ec2-user/{git_name}/daemon.json /etc/docker/
+systemctl restart docker
+runuser -l ec2-user -c 'docker run -d -p 8501:8501 streamlit-app'
+"""
+    
+    # Get instance profile name
+    instance_profile_name = f"instance-profile-{project_name}-{region}"
+    
+    # Create EC2 instance
+    logger.debug(f"Launching EC2 instance: m5.large in subnet {vpc_info['private_subnets'][0]}")
+    response = ec2_client.run_instances(
+        ImageId=ami_id,
+        InstanceType="m5.large",
+        MinCount=1,
+        MaxCount=1,
+        SecurityGroupIds=[vpc_info["ec2_sg_id"]],
+        SubnetId=vpc_info["private_subnets"][0],
+        IamInstanceProfile={"Name": instance_profile_name},
+        UserData=user_data_script,
+        BlockDeviceMappings=[
+            {
+                "DeviceName": "/dev/xvda",
+                "Ebs": {
+                    "VolumeSize": 80,
+                    "DeleteOnTermination": True,
+                    "Encrypted": True,
+                    "VolumeType": "gp3"
+                }
+            }
+        ],
+        Monitoring={"Enabled": True},
+        InstanceInitiatedShutdownBehavior="terminate",
+        TagSpecifications=[
+            {
+                "ResourceType": "instance",
+                "Tags": [{"Key": "Name", "Value": instance_name}]
+            }
+        ]
+    )
+    
+    instance_id = response["Instances"][0]["InstanceId"]
+    logger.info(f"✓ EC2 instance created: {instance_id}")
+    logger.info(f"  Instance type: m5.large")
+    logger.info(f"  User data script configured for application deployment")
+    
+    return instance_id
+
+
+def create_alb_target_group_and_listener(alb_info: Dict[str, str], instance_id: str, vpc_info: Dict[str, str]) -> Dict[str, str]:
+    """Create ALB target group and listener."""
+    logger.info("[9/9] Creating ALB target group and listener")
+    
+    target_port = 8501
+    
+    # Create target group
+    logger.debug(f"Creating target group on port {target_port}")
+    tg_response = elbv2_client.create_target_group(
+        Name=f"TG-for-{project_name}",
+        Protocol="HTTP",
+        Port=target_port,
+        VpcId=vpc_info["vpc_id"],
+        HealthCheckProtocol="HTTP",
+        HealthCheckPath="/",
+        HealthCheckIntervalSeconds=30,
+        HealthCheckTimeoutSeconds=5,
+        HealthyThresholdCount=2,
+        UnhealthyThresholdCount=3,
+        TargetType="instance"
+    )
+    tg_arn = tg_response["TargetGroups"][0]["TargetGroupArn"]
+    logger.debug(f"Target group created: {tg_arn}")
+    
+    # Register EC2 instance
+    logger.debug(f"Waiting for EC2 instance {instance_id} to be running...")
+    waiter = ec2_client.get_waiter('instance_running')
+    waiter.wait(InstanceIds=[instance_id])
+    
+    logger.debug(f"Registering EC2 instance {instance_id} to target group")
+    elbv2_client.register_targets(
+        TargetGroupArn=tg_arn,
+        Targets=[{"Id": instance_id, "Port": target_port}]
+    )
+    
+    # Create listener
+    logger.debug("Creating ALB listener on port 80")
+    listener_response = elbv2_client.create_listener(
+        LoadBalancerArn=alb_info["arn"],
+        Protocol="HTTP",
+        Port=80,
+        DefaultActions=[
+            {
+                "Type": "fixed-response",
+                "FixedResponseConfig": {
+                    "StatusCode": "403",
+                    "ContentType": "text/plain",
+                    "MessageBody": "Access denied"
+                }
+            }
+        ]
+    )
+    listener_arn = listener_response["Listeners"][0]["ListenerArn"]
+    
+    # Add rule for custom header
+    elbv2_client.create_rule(
+        ListenerArn=listener_arn,
+        Priority=10,
+        Conditions=[
+            {
+                "Field": "http-header",
+                "HttpHeaderConfig": {
+                    "HttpHeaderName": custom_header_name,
+                    "Values": [custom_header_value]
+                }
+            }
+        ],
+        Actions=[
+            {
+                "Type": "forward",
+                "TargetGroupArn": tg_arn
+            }
+        ]
+    )
+    
+    logger.info(f"✓ ALB target group and listener created")
+    logger.info(f"  Target group: {tg_arn}")
+    logger.info(f"  Listener: {listener_arn}")
+    
+    return {
+        "target_group_arn": tg_arn,
+        "listener_arn": listener_arn
+    }
+
+
+def main():
+    """Main function to create all infrastructure."""
+    logger.info("="*60)
+    logger.info("Starting AWS Infrastructure Deployment")
+    logger.info("="*60)
+    logger.info(f"Project: {project_name}")
+    logger.info(f"Region: {region}")
+    logger.info(f"Account ID: {account_id}")
+    logger.info(f"Bucket Name: {bucket_name}")
+    logger.info("="*60)
+    
+    start_time = time.time()
+    
+    try:
+        # 1. Create S3 bucket
+        s3_bucket_name = create_s3_bucket()
+        
+        # 2. Create IAM roles
+        knowledge_base_role_arn = create_knowledge_base_role()
+        agent_role_arn = create_agent_role()
+        ec2_role_arn = create_ec2_role(knowledge_base_role_arn)
+        lambda_role_arn = create_lambda_role()
+        agentcore_memory_role_arn = create_agentcore_memory_role()
+        
+        # 3. Create secrets
+        secret_arns = create_secrets()
+        
+        # 4. Create OpenSearch collection
+        opensearch_info = create_opensearch_collection()
+        
+        # 5. Create VPC
+        vpc_info = create_vpc()
+        
+        # 6. Create ALB
+        alb_info = create_alb(vpc_info)
+        
+        # 7. Create CloudFront distribution
+        cloudfront_info = create_cloudfront_distribution(alb_info, s3_bucket_name)
+        
+        # 8. Create EC2 instance
+        instance_id = create_ec2_instance(
+            vpc_info, ec2_role_arn, knowledge_base_role_arn,
+            opensearch_info, s3_bucket_name, cloudfront_info["domain"],
+            agentcore_memory_role_arn
+        )
+        
+        # 9. Create ALB target group and listener
+        alb_listener_info = create_alb_target_group_and_listener(alb_info, instance_id, vpc_info)
+        
+        # Output summary
+        elapsed_time = time.time() - start_time
+        logger.info("")
+        logger.info("="*60)
+        logger.info("Infrastructure Deployment Completed Successfully!")
+        logger.info("="*60)
+        logger.info("Summary:")
+        logger.info(f"  S3 Bucket: {s3_bucket_name}")
+        logger.info(f"  VPC ID: {vpc_info['vpc_id']}")
+        logger.info(f"  ALB DNS: http://{alb_info['dns']}/")
+        logger.info(f"  CloudFront Domain: https://{cloudfront_info['domain']}")
+        logger.info(f"  EC2 Instance ID: {instance_id}")
+        logger.info(f"  OpenSearch Endpoint: {opensearch_info['endpoint']}")
+        logger.info(f"  Knowledge Base Role: {knowledge_base_role_arn}")
+        logger.info(f"  AgentCore Memory Role: {agentcore_memory_role_arn}")
+        logger.info("")
+        logger.info(f"Total deployment time: {elapsed_time/60:.2f} minutes")
+        logger.info("="*60)
+        logger.info("Note: CloudFront distribution may take 15-20 minutes to fully deploy")
+        logger.info("Note: EC2 instance user data script will install and start the application")
+        logger.info("="*60)
+        
+        # Update application/config.json
+        config_path = "application/config.json"
+        config_data = {}
+        
+        # Read existing config if it exists
+        try:
+            with open(config_path, 'r') as f:
+                config_data = json.load(f)
+        except FileNotFoundError:
+            logger.info(f"Creating new {config_path}")
+        except Exception as e:
+            logger.warning(f"Could not read existing {config_path}: {e}")
+        
+        # Update only necessary fields
+        config_data.update({
+            "projectName": project_name,
+            "accountId": account_id,
+            "region": region,
+            "knowledge_base_role": knowledge_base_role_arn,
+            "collectionArn": opensearch_info["arn"],
+            "opensearch_url": opensearch_info["endpoint"],
+            "s3_bucket": s3_bucket_name,
+            "s3_arn": f"arn:aws:s3:::{s3_bucket_name}",
+            "sharing_url": f"https://{cloudfront_info['domain']}",
+            "agentcore_memory_role": agentcore_memory_role_arn
+        })
+        
+        try:
+            with open(config_path, 'w') as f:
+                json.dump(config_data, f, indent=2)
+            logger.info(f"✓ Updated {config_path}")
+        except Exception as e:
+            logger.warning(f"Could not update {config_path}: {e}")
+        
+        logger.info("="*60)
+        
+    except Exception as e:
+        elapsed_time = time.time() - start_time
+        logger.error("")
+        logger.error("="*60)
+        logger.error("Deployment Failed!")
+        logger.error("="*60)
+        logger.error(f"Error: {e}")
+        logger.error(f"Deployment time before failure: {elapsed_time/60:.2f} minutes")
+        logger.error("="*60)
+        import traceback
+        logger.error(traceback.format_exc())
+        raise
+
+
+if __name__ == "__main__":
+    main()
+

@@ -1,0 +1,570 @@
+#!/usr/bin/env python3
+"""
+AWS Infrastructure Uninstaller
+This script deletes all AWS infrastructure resources created by installer.py.
+"""
+
+import boto3
+import json
+import os
+import time
+import logging
+from datetime import datetime
+from typing import Dict, List, Optional
+from botocore.exceptions import ClientError
+
+# Configuration
+project_name = "mcp"
+region = os.environ.get("CDK_DEFAULT_REGION", "us-west-2")
+account_id = os.environ.get("CDK_DEFAULT_ACCOUNT", "")
+
+# Initialize boto3 clients
+s3_client = boto3.client("s3", region_name=region)
+iam_client = boto3.client("iam", region_name=region)
+secrets_client = boto3.client("secretsmanager", region_name=region)
+opensearch_client = boto3.client("opensearchserverless", region_name=region)
+ec2_client = boto3.client("ec2", region_name=region)
+elbv2_client = boto3.client("elbv2", region_name=region)
+cloudfront_client = boto3.client("cloudfront", region_name=region)
+sts_client = boto3.client("sts", region_name=region)
+
+# Get account ID if not set
+if not account_id:
+    account_id = sts_client.get_caller_identity()["Account"]
+
+bucket_name = f"storage-for-{project_name}-{account_id}-{region}"
+
+# Configure logging
+def setup_logging():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S"
+    )
+    return logging.getLogger(__name__)
+
+logger = setup_logging()
+
+def delete_cloudfront_distributions():
+    """Delete CloudFront distributions."""
+    logger.info("[1/9] Deleting CloudFront distributions")
+    
+    try:
+        distributions = cloudfront_client.list_distributions()
+        for dist in distributions.get("DistributionList", {}).get("Items", []):
+            if project_name in dist.get("Comment", ""):
+                dist_id = dist["Id"]
+                logger.info(f"  Disabling distribution: {dist_id}")
+                
+                # Get current config
+                config_response = cloudfront_client.get_distribution_config(Id=dist_id)
+                config = config_response["DistributionConfig"]
+                etag = config_response["ETag"]
+                
+                # Disable distribution
+                config["Enabled"] = False
+                cloudfront_client.update_distribution(
+                    Id=dist_id,
+                    DistributionConfig=config,
+                    IfMatch=etag
+                )
+                
+                logger.info(f"  Distribution {dist_id} disabled, will be deleted after deployment")
+        
+        logger.info("✓ CloudFront distributions processed")
+    except Exception as e:
+        logger.error(f"Error processing CloudFront distributions: {e}")
+
+def delete_alb_resources():
+    """Delete ALB, target groups, and listeners."""
+    logger.info("[2/9] Deleting ALB resources")
+    
+    try:
+        # Delete ALB and its listeners first
+        alb_name = f"alb-for-{project_name}"
+        try:
+            albs = elbv2_client.describe_load_balancers(Names=[alb_name])
+            if albs["LoadBalancers"]:
+                alb_arn = albs["LoadBalancers"][0]["LoadBalancerArn"]
+                
+                # Delete listeners first
+                listeners = elbv2_client.describe_listeners(LoadBalancerArn=alb_arn)
+                for listener in listeners["Listeners"]:
+                    elbv2_client.delete_listener(ListenerArn=listener["ListenerArn"])
+                    logger.info(f"  ✓ Deleted listener: {listener['ListenerArn']}")
+                
+                # Delete ALB
+                elbv2_client.delete_load_balancer(LoadBalancerArn=alb_arn)
+                logger.info(f"  ✓ Deleted ALB: {alb_name}")
+                
+                # Wait for ALB to be deleted
+                time.sleep(30)
+        except ClientError as e:
+            if e.response["Error"]["Code"] != "LoadBalancerNotFound":
+                raise
+        
+        # Delete target groups after ALB is deleted
+        tgs = elbv2_client.describe_target_groups()
+        for tg in tgs["TargetGroups"]:
+            if f"TG-for-{project_name}" in tg["TargetGroupName"]:
+                try:
+                    elbv2_client.delete_target_group(TargetGroupArn=tg["TargetGroupArn"])
+                    logger.info(f"  ✓ Deleted target group: {tg['TargetGroupName']}")
+                except ClientError as e:
+                    if e.response["Error"]["Code"] != "ResourceInUse":
+                        logger.warning(f"  Could not delete target group {tg['TargetGroupName']}: {e}")
+        
+        logger.info("✓ ALB resources deleted")
+    except Exception as e:
+        logger.error(f"Error deleting ALB resources: {e}")
+
+def delete_ec2_instances():
+    """Delete EC2 instances."""
+    logger.info("[3/9] Deleting EC2 instances")
+    
+    try:
+        instances = ec2_client.describe_instances(
+            Filters=[
+                {"Name": "tag:Name", "Values": [f"app-for-{project_name}"]},
+                {"Name": "instance-state-name", "Values": ["running", "pending", "stopping", "stopped"]}
+            ]
+        )
+        
+        instance_ids = []
+        for reservation in instances["Reservations"]:
+            for instance in reservation["Instances"]:
+                instance_ids.append(instance["InstanceId"])
+        
+        if instance_ids:
+            ec2_client.terminate_instances(InstanceIds=instance_ids)
+            logger.info(f"  ✓ Terminated instances: {instance_ids}")
+            
+            # Wait for termination
+            waiter = ec2_client.get_waiter('instance_terminated')
+            waiter.wait(InstanceIds=instance_ids)
+            logger.info("  ✓ Instances terminated")
+        
+        logger.info("✓ EC2 instances deleted")
+    except Exception as e:
+        logger.error(f"Error deleting EC2 instances: {e}")
+
+def delete_vpc_resources():
+    """Delete VPC and related resources."""
+    logger.info("[4/9] Deleting VPC resources")
+    
+    try:
+        vpc_name = f"vpc-for-{project_name}"
+        vpcs = ec2_client.describe_vpcs(
+            Filters=[{"Name": "tag:Name", "Values": [vpc_name]}]
+        )
+        
+        if not vpcs["Vpcs"]:
+            logger.info("  No VPC found to delete")
+            return
+        
+        vpc_id = vpcs["Vpcs"][0]["VpcId"]
+        logger.info(f"  Deleting VPC: {vpc_id}")
+        
+        # Delete VPC endpoints first - force deletion using AWS CLI if boto3 fails
+        try:
+            endpoints = ec2_client.describe_vpc_endpoints(
+                Filters=[{"Name": "vpc-id", "Values": [vpc_id]}]
+            )
+            for endpoint in endpoints["VpcEndpoints"]:
+                if endpoint["State"] not in ["deleted", "deleting"]:
+                    endpoint_id = endpoint["VpcEndpointId"]
+                    try:
+                        # Try using AWS CLI as fallback
+                        import subprocess
+                        result = subprocess.run([
+                            "aws", "ec2", "delete-vpc-endpoints", 
+                            "--vpc-endpoint-ids", endpoint_id,
+                            "--region", region
+                        ], capture_output=True, text=True)
+                        
+                        if result.returncode == 0:
+                            logger.info(f"    ✓ Deleted VPC endpoint: {endpoint_id}")
+                        else:
+                            logger.warning(f"    Could not delete VPC endpoint {endpoint_id}: {result.stderr}")
+                    except Exception as endpoint_error:
+                        logger.warning(f"    Could not delete VPC endpoint {endpoint_id}: {endpoint_error}")
+            
+            # Wait longer for VPC endpoints to be deleted
+            if endpoints["VpcEndpoints"]:
+                logger.info("    Waiting for VPC endpoints to be deleted...")
+                time.sleep(60)
+        except Exception as e:
+            logger.info(f"    Skipping VPC endpoint cleanup: {e}")
+        
+        # Delete network interfaces
+        try:
+            enis = ec2_client.describe_network_interfaces(
+                Filters=[{"Name": "vpc-id", "Values": [vpc_id]}]
+            )
+            for eni in enis["NetworkInterfaces"]:
+                if eni["Status"] == "available":
+                    ec2_client.delete_network_interface(NetworkInterfaceId=eni["NetworkInterfaceId"])
+                    logger.info(f"    ✓ Deleted network interface: {eni['NetworkInterfaceId']}")
+        except Exception as e:
+            logger.warning(f"    Could not delete network interfaces: {e}")
+        
+        # Delete NAT gateways
+        nat_gws = ec2_client.describe_nat_gateways(
+            Filters=[{"Name": "vpc-id", "Values": [vpc_id]}]
+        )
+        for nat_gw in nat_gws["NatGateways"]:
+            if nat_gw["State"] != "deleted":
+                ec2_client.delete_nat_gateway(NatGatewayId=nat_gw["NatGatewayId"])
+                logger.info(f"    ✓ Deleted NAT Gateway: {nat_gw['NatGatewayId']}")
+        
+        # Wait for NAT gateways to be deleted
+        time.sleep(30)
+        
+        # Release Elastic IPs
+        eips = ec2_client.describe_addresses()
+        for eip in eips["Addresses"]:
+            if "NetworkInterfaceId" not in eip and "InstanceId" not in eip:
+                try:
+                    ec2_client.release_address(AllocationId=eip["AllocationId"])
+                    logger.info(f"    ✓ Released EIP: {eip['AllocationId']}")
+                except:
+                    pass
+        
+        # Delete security groups
+        sgs = ec2_client.describe_security_groups(
+            Filters=[{"Name": "vpc-id", "Values": [vpc_id]}]
+        )
+        for sg in sgs["SecurityGroups"]:
+            if sg["GroupName"] != "default":
+                try:
+                    ec2_client.delete_security_group(GroupId=sg["GroupId"])
+                    logger.info(f"    ✓ Deleted security group: {sg['GroupId']}")
+                except:
+                    pass
+        
+        # Delete subnets with retry
+        subnets = ec2_client.describe_subnets(
+            Filters=[{"Name": "vpc-id", "Values": [vpc_id]}]
+        )
+        for subnet in subnets["Subnets"]:
+            subnet_id = subnet["SubnetId"]
+            for attempt in range(3):
+                try:
+                    ec2_client.delete_subnet(SubnetId=subnet_id)
+                    logger.info(f"    ✓ Deleted subnet: {subnet_id}")
+                    break
+                except ClientError as e:
+                    if e.response["Error"]["Code"] == "DependencyViolation":
+                        if attempt < 2:
+                            logger.info(f"    Retrying subnet deletion in 30s: {subnet_id}")
+                            time.sleep(30)
+                        else:
+                            logger.warning(f"    Could not delete subnet {subnet_id}: {e}")
+                    else:
+                        logger.warning(f"    Could not delete subnet {subnet_id}: {e}")
+                        break
+        
+        # Delete route tables
+        route_tables = ec2_client.describe_route_tables(
+            Filters=[{"Name": "vpc-id", "Values": [vpc_id]}]
+        )
+        for rt in route_tables["RouteTables"]:
+            if not any(assoc.get("Main") for assoc in rt["Associations"]):
+                ec2_client.delete_route_table(RouteTableId=rt["RouteTableId"])
+                logger.info(f"    ✓ Deleted route table: {rt['RouteTableId']}")
+        
+        # Delete internet gateway
+        igws = ec2_client.describe_internet_gateways(
+            Filters=[{"Name": "attachment.vpc-id", "Values": [vpc_id]}]
+        )
+        for igw in igws["InternetGateways"]:
+            ec2_client.detach_internet_gateway(
+                InternetGatewayId=igw["InternetGatewayId"],
+                VpcId=vpc_id
+            )
+            ec2_client.delete_internet_gateway(InternetGatewayId=igw["InternetGatewayId"])
+            logger.info(f"    ✓ Deleted internet gateway: {igw['InternetGatewayId']}")
+        
+        # Delete VPC with retry and complete cleanup
+        for attempt in range(3):
+            try:
+                ec2_client.delete_vpc(VpcId=vpc_id)
+                logger.info(f"  ✓ Deleted VPC: {vpc_id}")
+                break
+            except ClientError as e:
+                if e.response["Error"]["Code"] == "DependencyViolation":
+                    if attempt < 2:
+                        logger.info(f"    VPC has dependencies, cleaning up remaining resources (attempt {attempt + 1}/3)...")
+                        
+                        # Additional cleanup for remaining dependencies
+                        try:
+                            # Delete any remaining network ACLs
+                            nacls = ec2_client.describe_network_acls(
+                                Filters=[{"Name": "vpc-id", "Values": [vpc_id]}]
+                            )
+                            for nacl in nacls["NetworkAcls"]:
+                                if not nacl["IsDefault"]:
+                                    try:
+                                        ec2_client.delete_network_acl(NetworkAclId=nacl["NetworkAclId"])
+                                        logger.info(f"    ✓ Deleted network ACL: {nacl['NetworkAclId']}")
+                                    except:
+                                        pass
+                            
+                            # Delete any remaining DHCP options
+                            dhcp_options = ec2_client.describe_dhcp_options()
+                            for dhcp in dhcp_options["DhcpOptions"]:
+                                try:
+                                    ec2_client.disassociate_dhcp_options(VpcId=vpc_id)
+                                    break
+                                except:
+                                    pass
+                        except:
+                            pass
+                        
+                        time.sleep(30)
+                    else:
+                        logger.warning(f"  Could not delete VPC {vpc_id}: {e}")
+                        break
+                else:
+                    logger.warning(f"  Could not delete VPC {vpc_id}: {e}")
+                    break
+        
+        logger.info("✓ VPC resources deleted")
+    except Exception as e:
+        logger.error(f"Error deleting VPC resources: {e}")
+
+def delete_opensearch_collection():
+    """Delete OpenSearch Serverless collection and policies."""
+    logger.info("[5/9] Deleting OpenSearch collection")
+    
+    try:
+        collection_name = project_name
+        
+        # Delete collection
+        try:
+            opensearch_client.delete_collection(id=collection_name)
+            logger.info(f"  ✓ Deleted collection: {collection_name}")
+            
+            # Wait for deletion
+            time.sleep(30)
+        except ClientError as e:
+            if e.response["Error"]["Code"] != "ResourceNotFoundException":
+                raise
+        
+        # Delete data access policy (different API)
+        try:
+            opensearch_client.delete_access_policy(
+                name=f"data-{project_name}",
+                type="data"
+            )
+            logger.info(f"  ✓ Deleted data access policy: data-{project_name}")
+        except ClientError as e:
+            if e.response["Error"]["Code"] != "ResourceNotFoundException":
+                logger.warning(f"  Could not delete data access policy: {e}")
+        
+        # Delete policies
+        policies = [
+            ("network", f"network-{project_name}-{region}"),
+            ("encryption", f"encription-{project_name}-{region}")
+        ]
+        
+        for policy_type, policy_name in policies:
+            try:
+                opensearch_client.delete_security_policy(
+                    name=policy_name,
+                    type=policy_type
+                )
+                logger.info(f"  ✓ Deleted {policy_type} policy: {policy_name}")
+            except ClientError as e:
+                if e.response["Error"]["Code"] != "ResourceNotFoundException":
+                    logger.warning(f"  Could not delete {policy_type} policy {policy_name}: {e}")
+        
+        logger.info("✓ OpenSearch collection deleted")
+    except Exception as e:
+        logger.error(f"Error deleting OpenSearch collection: {e}")
+
+def delete_secrets():
+    """Delete Secrets Manager secrets."""
+    logger.info("[6/9] Deleting secrets")
+    
+    secret_names = [
+        f"openweathermap-{project_name}",
+        f"langsmithapikey-{project_name}",
+        f"tavilyapikey-{project_name}",
+        f"perplexityapikey-{project_name}",
+        f"firecrawlapikey-{project_name}",
+        f"code-interpreter-{project_name}",
+        f"novaactapikey-{project_name}",
+        f"notionapikey-{project_name}"
+    ]
+    
+    for secret_name in secret_names:
+        try:
+            secrets_client.delete_secret(
+                SecretId=secret_name,
+                ForceDeleteWithoutRecovery=True
+            )
+            logger.info(f"  ✓ Deleted secret: {secret_name}")
+        except ClientError as e:
+            if e.response["Error"]["Code"] != "ResourceNotFoundException":
+                logger.warning(f"  Could not delete secret {secret_name}: {e}")
+    
+    logger.info("✓ Secrets deleted")
+
+def delete_iam_roles():
+    """Delete IAM roles and policies."""
+    logger.info("[7/9] Deleting IAM roles")
+    
+    role_names = [
+        f"role-knowledge-base-for-{project_name}-{region}",
+        f"role-agent-for-{project_name}-{region}",
+        f"role-ec2-for-{project_name}-{region}",
+        f"role-lambda-rag-for-{project_name}-{region}",
+        f"role-agentcore-memory-for-{project_name}-{region}"
+    ]
+    
+    for role_name in role_names:
+        try:
+            # Detach managed policies
+            attached_policies = iam_client.list_attached_role_policies(RoleName=role_name)
+            for policy in attached_policies["AttachedPolicies"]:
+                iam_client.detach_role_policy(
+                    RoleName=role_name,
+                    PolicyArn=policy["PolicyArn"]
+                )
+            
+            # Delete inline policies
+            inline_policies = iam_client.list_role_policies(RoleName=role_name)
+            for policy_name in inline_policies["PolicyNames"]:
+                iam_client.delete_role_policy(
+                    RoleName=role_name,
+                    PolicyName=policy_name
+                )
+            
+            # Remove from instance profile if exists
+            instance_profile_name = f"instance-profile-{project_name}-{region}"
+            try:
+                iam_client.remove_role_from_instance_profile(
+                    InstanceProfileName=instance_profile_name,
+                    RoleName=role_name
+                )
+            except:
+                pass
+            
+            # Delete role
+            iam_client.delete_role(RoleName=role_name)
+            logger.info(f"  ✓ Deleted role: {role_name}")
+        except ClientError as e:
+            if e.response["Error"]["Code"] != "NoSuchEntity":
+                logger.warning(f"  Could not delete role {role_name}: {e}")
+    
+    # Delete instance profile
+    try:
+        instance_profile_name = f"instance-profile-{project_name}-{region}"
+        iam_client.delete_instance_profile(InstanceProfileName=instance_profile_name)
+        logger.info(f"  ✓ Deleted instance profile: {instance_profile_name}")
+    except ClientError as e:
+        if e.response["Error"]["Code"] != "NoSuchEntity":
+            logger.warning(f"  Could not delete instance profile: {e}")
+    
+    logger.info("✓ IAM roles deleted")
+
+def delete_s3_bucket():
+    """Delete S3 bucket and all objects."""
+    logger.info("[8/9] Deleting S3 bucket")
+    
+    try:
+        # Delete all objects and versions
+        try:
+            # List and delete all object versions
+            versions = s3_client.list_object_versions(Bucket=bucket_name)
+            delete_keys = []
+            
+            # Add current versions
+            if "Versions" in versions:
+                for version in versions["Versions"]:
+                    delete_keys.append({
+                        "Key": version["Key"],
+                        "VersionId": version["VersionId"]
+                    })
+            
+            # Add delete markers
+            if "DeleteMarkers" in versions:
+                for marker in versions["DeleteMarkers"]:
+                    delete_keys.append({
+                        "Key": marker["Key"],
+                        "VersionId": marker["VersionId"]
+                    })
+            
+            # Delete in batches of 1000
+            if delete_keys:
+                for i in range(0, len(delete_keys), 1000):
+                    batch = delete_keys[i:i+1000]
+                    s3_client.delete_objects(
+                        Bucket=bucket_name,
+                        Delete={"Objects": batch}
+                    )
+                logger.info(f"  ✓ Deleted {len(delete_keys)} objects/versions")
+            
+        except ClientError as e:
+            if e.response["Error"]["Code"] != "NoSuchBucket":
+                logger.warning(f"  Could not delete objects: {e}")
+        
+        # Delete bucket
+        s3_client.delete_bucket(Bucket=bucket_name)
+        logger.info(f"  ✓ Deleted bucket: {bucket_name}")
+        
+        logger.info("✓ S3 bucket deleted")
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "NoSuchBucket":
+            logger.info("  S3 bucket does not exist")
+        else:
+            logger.error(f"Error deleting S3 bucket: {e}")
+
+def main():
+    """Main function to delete all infrastructure."""
+    logger.info("="*60)
+    logger.info("Starting AWS Infrastructure Cleanup")
+    logger.info("="*60)
+    logger.info(f"Project: {project_name}")
+    logger.info(f"Region: {region}")
+    logger.info(f"Account ID: {account_id}")
+    logger.info("="*60)
+    
+    start_time = time.time()
+    
+    try:
+        delete_cloudfront_distributions()
+        delete_alb_resources()
+        delete_ec2_instances()
+        delete_vpc_resources()
+        delete_opensearch_collection()
+        delete_secrets()
+        delete_iam_roles()
+        delete_s3_bucket()
+        
+        elapsed_time = time.time() - start_time
+        logger.info("")
+        logger.info("="*60)
+        logger.info("Infrastructure Cleanup Completed Successfully!")
+        logger.info("="*60)
+        logger.info(f"Total cleanup time: {elapsed_time/60:.2f} minutes")
+        logger.info("="*60)
+        logger.info("Note: CloudFront distributions are disabled and will be deleted automatically")
+        logger.info("="*60)
+        
+    except Exception as e:
+        elapsed_time = time.time() - start_time
+        logger.error("")
+        logger.error("="*60)
+        logger.error("Cleanup Failed!")
+        logger.error("="*60)
+        logger.error(f"Error: {e}")
+        logger.error(f"Cleanup time before failure: {elapsed_time/60:.2f} minutes")
+        logger.error("="*60)
+        import traceback
+        logger.error(traceback.format_exc())
+        raise
+
+if __name__ == "__main__":
+    main()

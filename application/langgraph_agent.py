@@ -78,6 +78,35 @@ async def call_model(state: State, config):
     model = chatModel.bind_tools(tools)
 
     try:
+        messages = []
+        for msg in state["messages"]:
+            if isinstance(msg, ToolMessage):
+                content = msg.content
+                if isinstance(content, list):
+                    text_parts = []
+                    for item in content:
+                        if isinstance(item, dict):
+                            # Remove 'id' field if present, but keep other fields
+                            item_clean = {k: v for k, v in item.items() if k != 'id'}
+                            if 'text' in item_clean:
+                                text_parts.append(item_clean['text'])
+                            elif 'content' in item_clean:
+                                text_parts.append(str(item_clean['content']))
+                        elif isinstance(item, str):
+                            text_parts.append(item)
+                    content = '\n'.join(text_parts) if text_parts else str(content)
+                elif not isinstance(content, str):
+                    content = str(content)
+                
+                # Create ToolMessage without 'name' field (Bedrock doesn't accept it)
+                tool_msg = ToolMessage(
+                    content=content,
+                    tool_call_id=msg.tool_call_id
+                )
+                messages.append(tool_msg)
+            else:
+                messages.append(msg)
+        
         prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", system),
@@ -86,7 +115,7 @@ async def call_model(state: State, config):
         )
         chain = prompt | model
             
-        response = await chain.ainvoke(state["messages"])
+        response = await chain.ainvoke(messages)
         logger.info(f"response of call_model: {response}")
 
     except Exception:

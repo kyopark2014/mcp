@@ -89,6 +89,45 @@ os_client = OpenSearch(
     connection_class=RequestsHttpConnection,
 )
 
+def sanitize_data_source_name(name):
+    """
+    Sanitize a name to comply with AWS Bedrock data source name pattern:
+    ([0-9a-zA-Z][_-]?){1,100}
+    - Pattern means: alphanumeric, optionally followed by underscore or hyphen, repeated 1-100 times
+    - Cannot have consecutive underscores or hyphens
+    - Must start with alphanumeric
+    """
+    import re
+    # Remove any characters that are not alphanumeric, underscore, or hyphen
+    sanitized = re.sub(r'[^0-9a-zA-Z_-]', '', name)
+    
+    # Replace consecutive underscores/hyphens with single hyphen
+    # This ensures the pattern [0-9a-zA-Z][_-]? is followed correctly
+    sanitized = re.sub(r'[_-]{2,}', '-', sanitized)
+    
+    # Ensure it starts with alphanumeric character
+    if sanitized and not sanitized[0].isalnum():
+        sanitized = 'ds' + sanitized
+    
+    # Remove trailing hyphens/underscores (they must be followed by alphanumeric per pattern)
+    sanitized = sanitized.rstrip('_-')
+    
+    # Ensure it's not empty and limit to 100 characters
+    if not sanitized:
+        sanitized = 'datasource'
+    
+    # Final validation: ensure it matches the pattern exactly
+    pattern = re.compile(r'^([0-9a-zA-Z][_-]?){1,100}$')
+    if not pattern.match(sanitized):
+        # If still doesn't match, create a safe default name
+        # Use project name or create a simple alphanumeric name
+        safe_name = re.sub(r'[^0-9a-zA-Z]', '', name.lower())
+        if not safe_name:
+            safe_name = 'datasource'
+        sanitized = safe_name[:100]
+    
+    return sanitized[:100]
+
 def is_not_exist(index_name):    
     logger.info(f"index_name: {index_name}")
         
@@ -270,7 +309,8 @@ def initiate_knowledge_base():
     #########################
     # data source      
     #########################
-    data_source_name = s3_bucket  
+    data_source_name = sanitize_data_source_name(s3_bucket)
+    logger.info(f"Original s3_bucket name: {s3_bucket}, sanitized data_source_name: {data_source_name}")  
     try: 
         response = client.list_data_sources(
             knowledgeBaseId=knowledge_base_id,

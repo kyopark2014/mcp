@@ -4,6 +4,7 @@ import sys
 from typing import List, Literal, Optional
 from pydantic import BaseModel, Field, field_validator
 from tavily import TavilyClient, InvalidAPIKeyError, UsageLimitExceededError
+from tavily.errors import MissingAPIKeyError
 import json
 import os
 from dotenv import load_dotenv
@@ -26,8 +27,7 @@ load_dotenv()
 api_key = utils.tavily_key
 if not api_key:
     err_msg = "TAVILY_API_KEY environment variable is required"
-    logger.error(f"{err_msg}")
-    raise ValueError(err_msg)
+    logger.warning(f"{err_msg} - Tavily tools will not be available")
 
 try:
     mcp = FastMCP(
@@ -39,7 +39,19 @@ except Exception as e:
     logger.error(f"{err_msg}")
 
 # Initialize Tavily client
-client = TavilyClient(api_key=api_key)
+client = None
+if api_key:
+    try:
+        client = TavilyClient(api_key=api_key)
+        logger.info("Tavily client initialized successfully")
+    except MissingAPIKeyError:
+        logger.warning("Tavily API key is missing - Tavily tools will not be available")
+        client = None
+    except Exception as e:
+        logger.error(f"Failed to initialize Tavily client: {str(e)}")
+        client = None
+else:
+    logger.warning("Tavily API key not provided - Tavily tools will not be available")
 
 # Base model for search parameters
 class SearchBase(BaseModel):
@@ -140,6 +152,9 @@ async def tavily_web_search(
     Returns:
         Formatted search results text
     """
+    if client is None:
+        return "Error: Tavily API key is not configured. Please set TAVILY_API_KEY environment variable."
+    
     try:
         # Parse domain lists
         include_domains_list = SearchBase.parse_domains_list(include_domains) if include_domains else []
@@ -190,6 +205,9 @@ async def tavily_answer_search(
     Returns:
         Formatted search results text with answer
     """
+    if client is None:
+        return "Error: Tavily API key is not configured. Please set TAVILY_API_KEY environment variable."
+    
     try:
         # Parse domain lists
         include_domains_list = SearchBase.parse_domains_list(include_domains) if include_domains else []
@@ -240,6 +258,9 @@ async def tavily_news_search(
     Returns:
         Formatted news search results text
     """
+    if client is None:
+        return "Error: Tavily API key is not configured. Please set TAVILY_API_KEY environment variable."
+    
     try:
         # Parse domain lists
         include_domains_list = SearchBase.parse_domains_list(include_domains) if include_domains else []
