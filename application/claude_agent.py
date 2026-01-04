@@ -3,6 +3,8 @@ import re
 import logging
 import sys
 import os
+import asyncio
+import threading
 import info
 import chat
 import mcp_config
@@ -313,3 +315,41 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
                 logger.info(f"Message: {message}")
     
     return final_result, image_url
+
+def run_claude_agent_sync(prompt, mcp_servers, history_mode, containers):
+    """
+    Synchronous wrapper for run_claude_agent to work in Streamlit environment.
+    Runs the async function in a separate thread with a new event loop.
+    """
+    def run_in_thread():
+        # Create a new event loop for this thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(run_claude_agent(prompt, mcp_servers, history_mode, containers))
+        finally:
+            loop.close()
+    
+    # Check if we're in a running event loop (Streamlit environment)
+    try:
+        asyncio.get_running_loop()
+        # If we're in a running loop, use a separate thread
+        result = [None]
+        exception = [None]
+        
+        def target():
+            try:
+                result[0] = run_in_thread()
+            except Exception as e:
+                exception[0] = e
+        
+        thread = threading.Thread(target=target)
+        thread.start()
+        thread.join()
+        
+        if exception[0]:
+            raise exception[0]
+        return result[0]
+    except RuntimeError:
+        # No running loop, use asyncio.run() directly
+        return asyncio.run(run_claude_agent(prompt, mcp_servers, history_mode, containers))

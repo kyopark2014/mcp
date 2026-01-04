@@ -552,11 +552,11 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                         history_mode=history_mode, 
                         containers=containers))
                 else:
-                    response, image_url = asyncio.run(claude_agent.run_claude_agent(
+                    response, image_url = claude_agent.run_claude_agent_sync(
                         prompt=prompt, 
                         mcp_servers=mcp_servers, 
                         history_mode=history_mode, 
-                        containers=containers))
+                        containers=containers)
 
                 if debugMode == "Disable":
                     st.markdown(response)
