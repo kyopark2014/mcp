@@ -292,7 +292,22 @@ asyncio.run(mcp_agent(query, st))
 python installer.py
 ```
 
-설치가 완료되면 CloudFront로 접속하여 동작을 확인합니다. 인프라가 더이상 필요없을때에는 uninstaller.py를 이용해 제거합니다.
+설치가 완료되면 CloudFront로 접속하여 동작을 확인합니다. 
+
+인프라가 더이상 필요없을때에는 uninstaller.py를 이용해 제거합니다.
+
+```text
+python uninstaller.py
+```
+
+
+### EC2 업데이트
+
+Console에서 EC2의 Session Manager를 이용해 접속합니다. 아래 명령어로 업데이트 합니다.
+
+```text
+cd ~/mcp && sudo ./update.sh
+```
 
 ### Local에서 실행하기
 
