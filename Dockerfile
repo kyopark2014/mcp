@@ -83,6 +83,19 @@ RUN wget -q -O /tmp/google-chrome-key.pub https://dl-ssl.google.com/linux/linux_
     && apt-get install -y google-chrome-stable \
     && rm -rf /var/lib/apt/lists/* /tmp/google-chrome-key.pub
 
+# Install Python packages
+RUN pip install streamlit streamlit-chat
+RUN pip install pandas numpy
+RUN pip install boto3 langchain_aws langchain langchain_community langgraph langchain_experimental langgraph-supervisor langgraph-swarm langchain-text-splitters
+RUN pip install mcp langchain-mcp-adapters
+RUN pip install tavily-python==0.5.0 yfinance==0.2.52 rizaio==0.8.0 pytz>=2025.2
+RUN pip install beautifulsoup4==4.12.3 plotly_express==0.4.1 matplotlib==3.10.0 PyPDF2==3.0.1
+RUN pip install opensearch-py wikipedia aioboto3 requests
+RUN pip install uv kaleido diagrams graphviz
+RUN pip install sarif-om==1.0.4 arxiv==2.2.0 chembl-webresource-client==0.10.9 pytrials==1.0.0
+RUN pip install strands-agents strands-agents-tools reportlab arize-phoenix colorama
+RUN pip install rich==13.9.0 bedrock-agentcore claude-agent-sdk
+
 RUN mkdir -p /root/.streamlit
 COPY config.toml /root/.streamlit/
 
@@ -107,13 +120,4 @@ RUN mkdir -p /tmp/playwright && chmod -R 777 /tmp/playwright
 
 HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health
 
-# Create entrypoint script that installs requirements.txt at runtime
-RUN echo '#!/bin/bash' > /entrypoint.sh && \
-    echo 'set -e' >> /entrypoint.sh && \
-    echo 'echo "Installing Python packages from requirements.txt..."' >> /entrypoint.sh && \
-    echo 'pip install --no-cache-dir -r requirements.txt' >> /entrypoint.sh && \
-    echo 'echo "Starting Streamlit application..."' >> /entrypoint.sh && \
-    echo 'exec python -m streamlit run application/app.py --server.port=8501 --server.address=0.0.0.0 "$@"' >> /entrypoint.sh && \
-    chmod +x /entrypoint.sh
-
-ENTRYPOINT ["/entrypoint.sh"]
+ENTRYPOINT ["python", "-m", "streamlit", "run", "application/app.py", "--server.port=8501", "--server.address=0.0.0.0"]
