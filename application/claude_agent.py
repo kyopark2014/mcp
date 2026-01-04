@@ -225,11 +225,12 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
         ) 
     
     final_result = ""    
-    async with ClaudeSDKClient(options=options) as client:
-        await client.query(prompt)
+    try:
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(prompt)
 
-        async for message in client.receive_response():
-            logger.info(f"message: {message}")
+            async for message in client.receive_response():
+                logger.info(f"message: {message}")
             if isinstance(message, SystemMessage):
                 logger.info(f"SystemMessage: {message}")
                 subtype = message.subtype
@@ -321,6 +322,16 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
                         logger.info(f"UserMessage: {block}")
             else:
                 logger.info(f"Message: {message}")
+    except Exception as e:
+        logger.error(f"Error in run_claude_agent: {type(e).__name__}: {e}")
+        # Log additional details if available
+        if hasattr(e, '__cause__') and e.__cause__:
+            logger.error(f"Caused by: {type(e.__cause__).__name__}: {e.__cause__}")
+        if hasattr(e, '__context__') and e.__context__:
+            logger.error(f"Context: {type(e.__context__).__name__}: {e.__context__}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise
     
     return final_result, image_url
 
@@ -329,4 +340,10 @@ def run_claude_agent_sync(prompt, mcp_servers, history_mode, containers):
     Synchronous wrapper for run_claude_agent using nest_asyncio.
     This allows running async code in Streamlit's event loop environment.
     """
-    return asyncio.run(run_claude_agent(prompt, mcp_servers, history_mode, containers))
+    try:
+        return asyncio.run(run_claude_agent(prompt, mcp_servers, history_mode, containers))
+    except Exception as e:
+        logger.error(f"Error in run_claude_agent_sync: {type(e).__name__}: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise
