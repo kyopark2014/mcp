@@ -25,7 +25,7 @@ RUN npm install -g npm@latest
 RUN npm install -g @playwright/mcp@0.0.27
 
 # Install Claude Code
-RUN npm install -g @anthropic-ai/claude-code
+RUN curl -fsSL https://claude.ai/install.sh | bash
 
 # Install AWS CLI
 RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" \
