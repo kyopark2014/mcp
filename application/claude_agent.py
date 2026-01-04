@@ -5,6 +5,7 @@ import sys
 import os
 import asyncio
 import threading
+import queue
 import info
 import chat
 import mcp_config
@@ -34,24 +35,55 @@ logging.basicConfig(
 logger = logging.getLogger("claude_agent")
 
 index = 0
+_message_queue = None
+
+def set_message_queue(q):
+    """Set the message queue for cross-thread communication."""
+    global _message_queue
+    _message_queue = q
+
 def add_notification(containers, message):
     global index
 
     index += 1
 
-    if containers is not None:
-        containers['notification'][index].info(message)
+    # If we have a message queue, use it for cross-thread communication
+    if _message_queue is not None:
+        try:
+            _message_queue.put(("notification", index, message))
+        except Exception:
+            logger.info(f"Notification: {message}")
+    # Only update Streamlit containers from main thread
+    elif containers is not None and threading.current_thread() == threading.main_thread():
+        try:
+            containers['notification'][index].info(message)
+        except Exception:
+            logger.info(f"Notification: {message}")
+    else:
+        logger.info(f"Notification: {message}")
     index += 1
 
 def add_system_message(containers, message, type):
     global index
     index += 1
 
-    if containers is not None:
-        if type == "markdown":
-            containers['notification'][index].markdown(message)
-        elif type == "info":
-            containers['notification'][index].info(message)
+    # If we have a message queue, use it for cross-thread communication
+    if _message_queue is not None:
+        try:
+            _message_queue.put(("system", index, message, type))
+        except Exception:
+            logger.info(f"System message ({type}): {message}")
+    # Only update Streamlit containers from main thread
+    elif containers is not None and threading.current_thread() == threading.main_thread():
+        try:
+            if type == "markdown":
+                containers['notification'][index].markdown(message)
+            elif type == "info":
+                containers['notification'][index].info(message)
+        except Exception:
+            logger.info(f"System message ({type}): {message}")
+    else:
+        logger.info(f"System message ({type}): {message}")
 
 # Claude Code environment variables
 os.environ["CLAUDE_CODE_USE_BEDROCK"] = "1"
@@ -319,9 +351,17 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
 def run_claude_agent_sync(prompt, mcp_servers, history_mode, containers):
     """
     Synchronous wrapper for run_claude_agent to work in Streamlit environment.
-    Runs the async function in a separate thread with a new event loop.
+    Always runs the async function in a separate thread with a new event loop
+    to avoid conflicts with Streamlit's event loop.
+    Uses a queue to update Streamlit containers from the main thread.
     """
+    result = [None]
+    exception = [None]
+    message_queue = queue.Queue()
+    
     def run_in_thread():
+        # Set the message queue for this execution
+        set_message_queue(message_queue)
         # Create a new event loop for this thread
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -329,27 +369,69 @@ def run_claude_agent_sync(prompt, mcp_servers, history_mode, containers):
             return loop.run_until_complete(run_claude_agent(prompt, mcp_servers, history_mode, containers))
         finally:
             loop.close()
+            set_message_queue(None)
     
-    # Check if we're in a running event loop (Streamlit environment)
-    try:
-        asyncio.get_running_loop()
-        # If we're in a running loop, use a separate thread
-        result = [None]
-        exception = [None]
-        
-        def target():
-            try:
-                result[0] = run_in_thread()
-            except Exception as e:
-                exception[0] = e
-        
-        thread = threading.Thread(target=target)
-        thread.start()
-        thread.join()
-        
-        if exception[0]:
-            raise exception[0]
-        return result[0]
-    except RuntimeError:
-        # No running loop, use asyncio.run() directly
-        return asyncio.run(run_claude_agent(prompt, mcp_servers, history_mode, containers))
+    def target():
+        try:
+            result[0] = run_in_thread()
+        except Exception as e:
+            exception[0] = e
+    
+    # Always use a separate thread to avoid event loop conflicts
+    thread = threading.Thread(target=target)
+    thread.start()
+    
+    # Process messages from the queue while the thread is running
+    while thread.is_alive():
+        try:
+            # Check for messages with a timeout
+            msg = message_queue.get(timeout=0.1)
+            if msg[0] == "notification":
+                _, idx, msg_text = msg
+                if containers is not None:
+                    try:
+                        containers['notification'][idx].info(msg_text)
+                    except Exception:
+                        logger.info(f"Notification: {msg_text}")
+            elif msg[0] == "system":
+                _, idx, msg_text, msg_type = msg
+                if containers is not None:
+                    try:
+                        if msg_type == "markdown":
+                            containers['notification'][idx].markdown(msg_text)
+                        elif msg_type == "info":
+                            containers['notification'][idx].info(msg_text)
+                    except Exception:
+                        logger.info(f"System message ({msg_type}): {msg_text}")
+        except queue.Empty:
+            continue
+    
+    thread.join()
+    
+    # Process any remaining messages
+    while not message_queue.empty():
+        try:
+            msg = message_queue.get_nowait()
+            if msg[0] == "notification":
+                _, idx, msg_text = msg
+                if containers is not None:
+                    try:
+                        containers['notification'][idx].info(msg_text)
+                    except Exception:
+                        logger.info(f"Notification: {msg_text}")
+            elif msg[0] == "system":
+                _, idx, msg_text, msg_type = msg
+                if containers is not None:
+                    try:
+                        if msg_type == "markdown":
+                            containers['notification'][idx].markdown(msg_text)
+                        elif msg_type == "info":
+                            containers['notification'][idx].info(msg_text)
+                    except Exception:
+                        logger.info(f"System message ({msg_type}): {msg_text}")
+        except queue.Empty:
+            break
+    
+    if exception[0]:
+        raise exception[0]
+    return result[0]
