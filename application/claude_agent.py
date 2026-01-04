@@ -65,24 +65,64 @@ def add_system_message(containers, message, type):
 os.environ["CLAUDE_CODE_USE_BEDROCK"] = "1"
 os.environ["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = "16384"  # Claude 4 Sonnet max: 128000
 
+# Try to disable WebSocket usage in Bun/Claude Code
+# This might help if Claude Code tries to use WebSocket unnecessarily
+os.environ["DISABLE_WEBSOCKET"] = "1"
+os.environ["NO_WEBSOCKET"] = "1"
+
 # WebSocket error prevention
 import tempfile
 
 # WebSocket mocking script generation
+# This script needs to work with both Node.js and Bun
 websocket_mock_script = '''
-if (typeof window === 'undefined') {
-    global.window = {
-        WebSocket: function() {
-            return {
-                readyState: 1,
-                close: function() {},
-                send: function() {},
-                addEventListener: function() {},
-                removeEventListener: function() {}
-            };
+// Mock WebSocket for Bun/Node.js environments
+(function() {
+    function MockWebSocket() {
+        return {
+            readyState: 1,
+            CONNECTING: 0,
+            OPEN: 1,
+            CLOSING: 2,
+            CLOSED: 3,
+            close: function() {},
+            send: function() {},
+            addEventListener: function() {},
+            removeEventListener: function() {},
+            dispatchEvent: function() { return true; },
+            onopen: null,
+            onclose: null,
+            onerror: null,
+            onmessage: null,
+            url: '',
+            protocol: '',
+            extensions: '',
+            readyState: 1,
+            binaryType: 'blob'
+        };
+    }
+    
+    // Set on global scope for Bun compatibility
+    if (typeof global !== 'undefined') {
+        if (typeof global.window === 'undefined') {
+            global.window = {};
         }
-    };
-}
+        global.window.WebSocket = MockWebSocket;
+        global.WebSocket = MockWebSocket;
+        
+        // Also set on globalThis for broader compatibility
+        if (typeof globalThis !== 'undefined') {
+            globalThis.window = globalThis.window || {};
+            globalThis.window.WebSocket = MockWebSocket;
+            globalThis.WebSocket = MockWebSocket;
+        }
+    }
+    
+    // Set on window if it exists
+    if (typeof window !== 'undefined') {
+        window.WebSocket = MockWebSocket;
+    }
+})();
 '''
 
 # Save WebSocket mocking script to temporary file
@@ -91,7 +131,21 @@ with tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False) as f:
     websocket_mock_file = f.name
 
 # Add WebSocket mocking file to Node.js options
+# Note: Bun doesn't support --require, but we set it anyway for Node.js compatibility
 os.environ["NODE_OPTIONS"] = f"--require {websocket_mock_file}"
+
+# For Bun, try setting BUN_INSTALL_SCRIPT or other Bun-specific environment variables
+# Bun may use different environment variables for preloading scripts
+# However, since Bun doesn't officially support --require, we need to find another way
+
+# Try to set the WebSocket mock file path in a way Bun might recognize
+# This is experimental and may not work, but worth trying
+os.environ["BUN_PRELOAD"] = websocket_mock_file
+
+# Log the WebSocket mock file location for debugging
+logger.info(f"WebSocket mock file created at: {websocket_mock_file}")
+logger.info(f"NODE_OPTIONS set to: {os.environ.get('NODE_OPTIONS')}")
+logger.info(f"BUN_PRELOAD set to: {os.environ.get('BUN_PRELOAD')}")
 
 def get_model_id():
     models = []
