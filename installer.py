@@ -1964,10 +1964,10 @@ def create_ec2_instance(vpc_info: Dict[str, str], ec2_role_arn: str,
     instance_profile_name = f"instance-profile-{project_name}-{region}"
     
     # Create EC2 instance
-    logger.debug(f"Launching EC2 instance: m5.large in subnet {vpc_info['private_subnets'][0]}")
+    logger.debug(f"Launching EC2 instance: t3.medium in subnet {vpc_info['private_subnets'][0]}")
     response = ec2_client.run_instances(
         ImageId=ami_id,
-        InstanceType="m5.large",
+        InstanceType="t3.medium",
         MinCount=1,
         MaxCount=1,
         IamInstanceProfile={"Name": instance_profile_name},
