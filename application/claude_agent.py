@@ -324,11 +324,18 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
                 logger.info(f"Message: {message}")
     except Exception as e:
         logger.error(f"Error in run_claude_agent: {type(e).__name__}: {e}")
+        # Log all attributes of the exception for ProcessError
+        if hasattr(e, '__dict__'):
+            logger.error(f"Exception attributes: {e.__dict__}")
         # Log additional details if available
         if hasattr(e, '__cause__') and e.__cause__:
             logger.error(f"Caused by: {type(e.__cause__).__name__}: {e.__cause__}")
         if hasattr(e, '__context__') and e.__context__:
             logger.error(f"Context: {type(e.__context__).__name__}: {e.__context__}")
+        # Log common ProcessError attributes
+        for attr in ['exit_code', 'returncode', 'stderr', 'stdout', 'cmd', 'args']:
+            if hasattr(e, attr):
+                logger.error(f"ProcessError.{attr}: {getattr(e, attr)}")
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
         raise
