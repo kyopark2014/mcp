@@ -10,7 +10,6 @@ import utils
 import search as search_module
 import base64
 import uuid
-import yfinance as yf
 import os
 
 from typing_extensions import Annotated, TypedDict
@@ -307,45 +306,45 @@ def search_by_tavily(keyword: str) -> str:
                      
     return answer
 
-@tool
-def stock_data_lookup(ticker, country):
-    """
-    Retrieve accurate stock data for a given ticker.
-    country: the english country name of the stock
-    ticker: the ticker to retrieve price history for. In South Korea, a ticker is a 6-digit number.
-    return: the information of ticker
-    """ 
-    com = re.compile('[a-zA-Z]') 
-    alphabet = com.findall(ticker)
-    logger.info(f"alphabet: {alphabet}")
+# @tool
+# def stock_data_lookup(ticker, country):
+#     """
+#     Retrieve accurate stock data for a given ticker.
+#     country: the english country name of the stock
+#     ticker: the ticker to retrieve price history for. In South Korea, a ticker is a 6-digit number.
+#     return: the information of ticker
+#     """ 
+#     com = re.compile('[a-zA-Z]') 
+#     alphabet = com.findall(ticker)
+#     logger.info(f"alphabet: {alphabet}")
 
-    logger.info(f"country: {country}")
+#     logger.info(f"country: {country}")
 
-    if len(alphabet)==0:
-        if country == "South Korea":
-            ticker += ".KS"
-        elif country == "Japan":
-            ticker += ".T"
-    logger.info(f"ticker: {ticker}")
+#     if len(alphabet)==0:
+#         if country == "South Korea":
+#             ticker += ".KS"
+#         elif country == "Japan":
+#             ticker += ".T"
+#     logger.info(f"ticker: {ticker}")
     
-    stock = yf.Ticker(ticker)
+#     stock = yf.Ticker(ticker)
     
-    # get the price history for past 1 month
-    history = stock.history(period="1mo")
-    logger.info(f"history: {history}")
+#     # get the price history for past 1 month
+#     history = stock.history(period="1mo")
+#     logger.info(f"history: {history}")
     
-    result = f"## Trading History\n{history}"
-    #history.reset_index().to_json(orient="split", index=False, date_format="iso")    
+#     result = f"## Trading History\n{history}"
+#     #history.reset_index().to_json(orient="split", index=False, date_format="iso")    
     
-    result += f"\n\n## Financials\n{stock.financials}"    
-    logger.info(f"financials: {stock.financials}")
+#     result += f"\n\n## Financials\n{stock.financials}"    
+#     logger.info(f"financials: {stock.financials}")
 
-    result += f"\n\n## Major Holders\n{stock.major_holders}"
-    logger.info(f"major_holders: {stock.major_holders}")
+#     result += f"\n\n## Major Holders\n{stock.major_holders}"
+#     logger.info(f"major_holders: {stock.major_holders}")
 
-    logger.info(f"result: {result}")
+#     logger.info(f"result: {result}")
 
-    return result
+#     return result
 
 def generate_short_uuid(length=8):
     full_uuid = uuid.uuid4().hex
@@ -570,9 +569,9 @@ def run_agent_executor(query, historyMode, st):
 
     if chat.internet_mode == "Eanble":
         # tools = [get_current_time, get_book_list, get_weather_info, search_by_tavily, search_by_knowledge_base, stock_data_lookup, code_drawer, code_interpreter]        
-        tools = [get_current_time, get_book_list, get_weather_info, search_by_tavily, search_by_knowledge_base, stock_data_lookup, repl_drawer, repl_coder] 
+        tools = [get_current_time, get_book_list, get_weather_info, search_by_tavily, search_by_knowledge_base, repl_drawer, repl_coder] 
     else:
-        tools = [get_current_time, get_book_list, get_weather_info, search_by_knowledge_base, stock_data_lookup, repl_drawer, repl_coder] 
+        tools = [get_current_time, get_book_list, get_weather_info, search_by_knowledge_base, repl_drawer, repl_coder] 
 
     chatModel = chat.get_chat(chat.reasoning_mode)     
     model = chatModel.bind_tools(tools)
