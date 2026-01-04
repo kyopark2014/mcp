@@ -350,129 +350,129 @@ def generate_short_uuid(length=8):
     full_uuid = uuid.uuid4().hex
     return full_uuid[:length]
 
-from rizaio import Riza
-@tool
-def code_drawer(code):
-    """
-    Execute a Python script for draw a graph.
-    Since Python runtime cannot use external APIs, necessary data must be included in the code.
-    The graph should use English exclusively for all textual elements.
-    Do not save pictures locally bacause the runtime does not have filesystem.
-    When a comparison is made, all arrays must be of the same length.
-    code: the Python code was written in English
-    return: the url of graph
-    """ 
-    # The Python runtime does not have filesystem access, but does include the entire standard library.
-    # Make HTTP requests with the httpx or requests libraries.
-    # Read input from stdin and write output to stdout."    
+# from rizaio import Riza
+# @tool
+# def code_drawer(code):
+#     """
+#     Execute a Python script for draw a graph.
+#     Since Python runtime cannot use external APIs, necessary data must be included in the code.
+#     The graph should use English exclusively for all textual elements.
+#     Do not save pictures locally bacause the runtime does not have filesystem.
+#     When a comparison is made, all arrays must be of the same length.
+#     code: the Python code was written in English
+#     return: the url of graph
+#     """ 
+#     # The Python runtime does not have filesystem access, but does include the entire standard library.
+#     # Make HTTP requests with the httpx or requests libraries.
+#     # Read input from stdin and write output to stdout."    
         
-    code = re.sub(r"seaborn", "classic", code)
-    code = re.sub(r"plt.savefig", "#plt.savefig", code)
+#     code = re.sub(r"seaborn", "classic", code)
+#     code = re.sub(r"plt.savefig", "#plt.savefig", code)
     
-    pre = f"os.environ[ 'MPLCONFIGDIR' ] = '/tmp/'\n"  # matplatlib
-    post = """\n
-import io
-import base64
-buffer = io.BytesIO()
-plt.savefig(buffer, format='png')
-buffer.seek(0)
-image_base64 = base64.b64encode(buffer.getvalue()).decode()
+#     pre = f"os.environ[ 'MPLCONFIGDIR' ] = '/tmp/'\n"  # matplatlib
+#     post = """\n
+# import io
+# import base64
+# buffer = io.BytesIO()
+# plt.savefig(buffer, format='png')
+# buffer.seek(0)
+# image_base64 = base64.b64encode(buffer.getvalue()).decode()
 
-print(image_base64)
-"""
-    code = pre + code + post    
-    logger.info(f"code: {code}")
+# print(image_base64)
+# """
+#     code = pre + code + post    
+#     logger.info(f"code: {code}")
     
-    result = ""
-    try:     
-        client = Riza()
+#     result = ""
+#     try:     
+#         client = Riza()
 
-        resp = client.command.exec(
-            runtime_revision_id=chat.code_interpreter_id,
-            language="python",
-            code=code,
-            env={
-                "DEBUG": "true",
-            }
-        )
-        output = dict(resp)
-        #print(f"output: {output}") # includling exit_code, stdout, stderr
+#         resp = client.command.exec(
+#             runtime_revision_id=chat.code_interpreter_id,
+#             language="python",
+#             code=code,
+#             env={
+#                 "DEBUG": "true",
+#             }
+#         )
+#         output = dict(resp)
+#         #print(f"output: {output}") # includling exit_code, stdout, stderr
 
-        if resp.exit_code > 0:
-            logger.debug(f"non-zero exit code {resp.exit_code}")
+#         if resp.exit_code > 0:
+#             logger.debug(f"non-zero exit code {resp.exit_code}")
 
-        base64Img = resp.stdout
+#         base64Img = resp.stdout
 
-        byteImage = BytesIO(base64.b64decode(base64Img))
+#         byteImage = BytesIO(base64.b64decode(base64Img))
 
-        image_name = generate_short_uuid()+'.png'
-        url = chat.upload_to_s3(byteImage, image_name)
-        logger.info(f"url: {url}")
+#         image_name = generate_short_uuid()+'.png'
+#         url = chat.upload_to_s3(byteImage, image_name)
+#         logger.info(f"url: {url}")
 
-        file_name = url[url.rfind('/')+1:]
-        logger.info(f"file_name: {file_name}")
+#         file_name = url[url.rfind('/')+1:]
+#         logger.info(f"file_name: {file_name}")
 
-        global image_url
-        image_url.append(path+'/'+s3_image_prefix+'/'+parse.quote(file_name))
-        logger.info(f"image_url: {image_url}")
+#         global image_url
+#         image_url.append(path+'/'+s3_image_prefix+'/'+parse.quote(file_name))
+#         logger.info(f"image_url: {image_url}")
 
-        result = f"생성된 그래프의 URL: {image_url}"
+#         result = f"생성된 그래프의 URL: {image_url}"
 
-        # im = Image.open(BytesIO(base64.b64decode(base64Img)))  # for debuuing
-        # im.save(image_name, 'PNG')
+#         # im = Image.open(BytesIO(base64.b64decode(base64Img)))  # for debuuing
+#         # im.save(image_name, 'PNG')
 
-    except Exception:
-        result = "그래프 생성에 실패했어요. 다시 시도해주세요."
+#     except Exception:
+#         result = "그래프 생성에 실패했어요. 다시 시도해주세요."
 
-        err_msg = traceback.format_exc()
-        logger.info(f"error message: {err_msg}")
+#         err_msg = traceback.format_exc()
+#         logger.info(f"error message: {err_msg}")
 
-    return result
+#     return result
 
-@tool
-def code_interpreter(code):
-    """
-    Execute a Python script to solve a complex question using code.    
-    Since Python runtime cannot use external APIs, necessary data must be included in the code.
-    The Python runtime does not have filesystem access, but does include the entire standard library.    
-    code: the Python code was written in English
-    return: the stdout value
-    """ 
-    # Make HTTP requests with the httpx or requests libraries.
-    # Read input from stdin and write output to stdout."            
+# @tool
+# def code_interpreter(code):
+#     """
+#     Execute a Python script to solve a complex question using code.    
+#     Since Python runtime cannot use external APIs, necessary data must be included in the code.
+#     The Python runtime does not have filesystem access, but does include the entire standard library.    
+#     code: the Python code was written in English
+#     return: the stdout value
+#     """ 
+#     # Make HTTP requests with the httpx or requests libraries.
+#     # Read input from stdin and write output to stdout."            
         
-    pre = f"os.environ[ 'MPLCONFIGDIR' ] = '/tmp/'\n"  # matplatlib
-    code = pre + code
-    logger.info(f"code: {code}")
+#     pre = f"os.environ[ 'MPLCONFIGDIR' ] = '/tmp/'\n"  # matplatlib
+#     code = pre + code
+#     logger.info(f"code: {code}")
     
-    result = ""
-    try:     
-        client = Riza()
+#     result = ""
+#     try:     
+#         client = Riza()
 
-        resp = client.command.exec(
-            runtime_revision_id=chat.code_interpreter_id,
-            language="python",
-            code=code,
-            env={
-                "DEBUG": "true",
-            }
-        )
-        output = dict(resp)
-        logger.info(f"output: {output}") # includling exit_code, stdout, stderr
+#         resp = client.command.exec(
+#             runtime_revision_id=chat.code_interpreter_id,
+#             language="python",
+#             code=code,
+#             env={
+#                 "DEBUG": "true",
+#             }
+#         )
+#         output = dict(resp)
+#         logger.info(f"output: {output}") # includling exit_code, stdout, stderr
 
-        if resp.exit_code > 0:
-            logger.debug(f"non-zero exit code {resp.exit_code}")
+#         if resp.exit_code > 0:
+#             logger.debug(f"non-zero exit code {resp.exit_code}")
 
-        resp.stdout        
-        result = f"프로그램 실행 결과: {resp.stdout}"
+#         resp.stdout        
+#         result = f"프로그램 실행 결과: {resp.stdout}"
 
-    except Exception:
-        result = "프로그램 실행에 실패했습니다. 다시 시도해주세요."
-        err_msg = traceback.format_exc()
-        logger.info(f"error message: {err_msg}")
+#     except Exception:
+#         result = "프로그램 실행에 실패했습니다. 다시 시도해주세요."
+#         err_msg = traceback.format_exc()
+#         logger.info(f"error message: {err_msg}")
 
-    logger.info(f"result: {result}")
-    return result
+#     logger.info(f"result: {result}")
+#     return result
 
 repl = PythonAstREPLTool()
 
