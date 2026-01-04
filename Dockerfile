@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y \
     curl \
     gnupg \
     unzip \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js
@@ -19,6 +20,23 @@ RUN npm install -g npm@latest
 
 # Install Playwright
 RUN npm install -g @playwright/mcp@0.0.27
+
+# Install Chrome and Playwright dependencies
+RUN apt-get update && apt-get install -y \
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install Chrome
 RUN wget -q -O /tmp/google-chrome-key.pub https://dl-ssl.google.com/linux/linux_signing_key.pub \
