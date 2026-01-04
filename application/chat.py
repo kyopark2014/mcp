@@ -1513,40 +1513,6 @@ def get_rag_prompt(text):
 
     return rag_chain
  
-def retrieve_knowledge_base(query):
-    lambda_client = boto3.client(
-        service_name='lambda',
-        region_name=bedrock_region,
-    )
-
-    functionName = f"knowledge-base-for-{projectName}"
-    logger.info(f"functionName: {functionName}")
-
-    try:
-        payload = {
-            'function': 'search_rag',
-            'knowledge_base_name': knowledge_base_name,
-            'keyword': query,
-            'top_k': numberOfDocs,
-            'grading': grading_mode,
-            'model_name': model_name,
-            'multi_region': multi_region
-        }
-        logger.info(f"payload: {payload}")
-
-        output = lambda_client.invoke(
-            FunctionName=functionName,
-            Payload=json.dumps(payload),
-        )
-        payload = json.load(output['Payload'])
-        logger.info(f"response: {payload['response']}")
-        
-    except Exception:
-        err_msg = traceback.format_exc()
-        logger.info(f"error message: {err_msg}")       
-
-    return payload['response']
-
 def get_reference_docs(docs):    
     reference_docs = []
     for doc in docs:
@@ -1563,6 +1529,86 @@ def get_reference_docs(docs):
         )     
     return reference_docs
 
+bedrock_agent_runtime_client = boto3.client(
+    "bedrock-agent-runtime",
+    region_name=bedrock_region
+)
+
+# boto3로 project_name과 같은 knowledge_base를 찾아서 knowledge_base_id를 리턴하는 함수를 만듭니다.
+def get_knowledge_base_id():
+    client = boto3.client('bedrock-agent', region_name=bedrock_region)
+
+    response = client.list_knowledge_bases(
+        maxResults=50
+    )
+    for knowledge_base in response["knowledgeBaseSummaries"]:
+        if knowledge_base["name"] == projectName:
+            knowledge_base_id = knowledge_base["knowledgeBaseId"]
+            logger.info(f"knowledge_base_id: {knowledge_base_id}")
+
+            config['knowledge_base_id'] = knowledge_base_id
+
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            config_path = os.path.join(script_dir, "../config.json")
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(config, f, ensure_ascii=False, indent=4)
+
+            return knowledge_base_id
+    return None
+
+knowledge_base_id = config.get('knowledge_base_id', get_knowledge_base_id())
+if not knowledge_base_id:
+    raise Exception(f"Knowledge base not found: {projectName}")
+
+number_of_results = 4
+
+def retrieve(query):
+    response = bedrock_agent_runtime_client.retrieve(
+        retrievalQuery={"text": query},
+        knowledgeBaseId=knowledge_base_id,
+            retrievalConfiguration={
+                "vectorSearchConfiguration": {"numberOfResults": number_of_results},
+            },
+        )
+    
+    # logger.info(f"response: {response}")
+    retrieval_results = response.get("retrievalResults", [])
+    # logger.info(f"retrieval_results: {retrieval_results}")
+
+    json_docs = []
+    for result in retrieval_results:
+        text = url = name = None
+        if "content" in result:
+            content = result["content"]
+            if "text" in content:
+                text = content["text"]
+
+        if "location" in result:
+            location = result["location"]
+            if "s3Location" in location:
+                uri = location["s3Location"]["uri"] if location["s3Location"]["uri"] is not None else ""
+                
+                name = uri.split("/")[-1]
+                # encoded_name = parse.quote(name)                
+                # url = f"{path}/{doc_prefix}{encoded_name}"
+                url = uri # TODO: add path and doc_prefix
+                
+            elif "webLocation" in location:
+                url = location["webLocation"]["url"] if location["webLocation"]["url"] is not None else ""
+                name = "WEB"
+
+        json_docs.append({
+            "contents": text,              
+            "reference": {
+                "url": url,                   
+                "title": name,
+                "from": "RAG"
+            }
+        })
+    logger.info(f"json_docs: {json_docs}")
+
+    return json.dumps(json_docs, ensure_ascii=False)
+
 def run_rag_with_knowledge_base(query, st):
     global reference_docs, contentList
     reference_docs = []
@@ -1572,12 +1618,17 @@ def run_rag_with_knowledge_base(query, st):
     if debug_mode == "Enable":
         st.info(f"RAG 검색을 수행합니다. 검색어: {query}")  
 
-    relevant_context = retrieve_knowledge_base(query)    
-    logger.info(f"relevant_context: {relevant_context}")
-    
+    json_docs = retrieve(query)    
+    logger.info(f"json_docs: {json_docs}")
+
+    relevant_docs = json.loads(json_docs)
+
+    relevant_context = ""
+    for doc in relevant_docs:
+        relevant_context += f"{doc['contents']}\n\n"
+
     # change format to document
-    reference_docs = get_reference_docs(json.loads(relevant_context))
-    st.info(f"{len(reference_docs)}개의 관련된 문서를 얻었습니다.")
+    st.info(f"{len(relevant_docs)}개의 관련된 문서를 얻었습니다.")
 
     rag_chain = get_rag_prompt(query)
                        
@@ -1600,13 +1651,13 @@ def run_rag_with_knowledge_base(query, st):
         logger.info(f"error message: {err_msg}")                    
         raise Exception ("Not able to request to LLM")
     
-    if reference_docs:
-        logger.info(f"reference_docs: {reference_docs}")
-        ref = "\n\n### Reference\n"
-        for i, reference in enumerate(reference_docs):
-            ref += f"{i+1}. [{reference.metadata['name']}]({reference.metadata['url']}), {reference.page_content[:100]}...\n"    
-        logger.info(f"ref: {ref}")
-        msg += ref
+    # if relevant_docs:
+    #     ref = "\n\n### Reference\n"
+    #     for i, doc in enumerate(relevant_docs):
+    #         page_content = doc["contents"][:100].replace("\n", "")
+    #         ref += f"{i+1}. [{doc["reference"]['title']}]({doc["reference"]['url']}), {page_content}...\n"    
+    #     logger.info(f"ref: {ref}")
+    #     msg += ref
     
     return msg, reference_docs
    

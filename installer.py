@@ -154,14 +154,35 @@ def create_iam_role(role_name: str, assume_role_policy: Dict, managed_policies: 
         if e.response["Error"]["Code"] == "EntityAlreadyExists":
             logger.warning(f"IAM role already exists: {role_name}")
             response = iam_client.get_role(RoleName=role_name)
-            return response["Role"]["Arn"]
+            role_arn = response["Role"]["Arn"]
+            
+            # Update managed policies if provided
+            if managed_policies:
+                logger.debug(f"Updating managed policies for existing role")
+                # Get currently attached managed policies
+                try:
+                    attached_policies = iam_client.list_attached_role_policies(RoleName=role_name)
+                    current_policy_arns = {policy["PolicyArn"] for policy in attached_policies["AttachedPolicies"]}
+                    
+                    # Attach missing policies
+                    for policy_arn in managed_policies:
+                        if policy_arn not in current_policy_arns:
+                            iam_client.attach_role_policy(
+                                RoleName=role_name,
+                                PolicyArn=policy_arn
+                            )
+                            logger.debug(f"Attached missing policy: {policy_arn}")
+                except ClientError as policy_error:
+                    logger.warning(f"Could not update managed policies: {policy_error}")
+            
+            return role_arn
         logger.error(f"Failed to create IAM role {role_name}: {e}")
         raise
 
 
 def attach_inline_policy(role_name: str, policy_name: str, policy_document: Dict):
-    """Attach inline policy to IAM role."""
-    logger.debug(f"Attaching inline policy {policy_name} to {role_name}")
+    """Attach or update inline policy to IAM role."""
+    logger.debug(f"Attaching/updating inline policy {policy_name} to {role_name}")
     
     try:
         iam_client.put_role_policy(
@@ -169,9 +190,9 @@ def attach_inline_policy(role_name: str, policy_name: str, policy_document: Dict
             PolicyName=policy_name,
             PolicyDocument=json.dumps(policy_document)
         )
-        logger.debug(f"Policy {policy_name} attached successfully")
+        logger.debug(f"Policy {policy_name} attached/updated successfully")
     except ClientError as e:
-        logger.error(f"Error attaching policy {policy_name}: {e}")
+        logger.error(f"Error attaching/updating policy {policy_name}: {e}")
         raise
 
 
@@ -195,7 +216,7 @@ def create_knowledge_base_role() -> str:
     
     role_arn = create_iam_role(role_name, assume_role_policy)
     
-    # Attach inline policies
+    # Always attach/update inline policies (put_role_policy will create or update)
     bedrock_invoke_policy = {
         "Version": "2012-10-17",
         "Statement": [
@@ -265,15 +286,9 @@ def create_agent_role() -> str:
         ]
     }
     
-    role_arn = create_iam_role(role_name, assume_role_policy)
+    role_arn = create_iam_role(role_name, assume_role_policy, ["arn:aws:iam::aws:policy/AWSLambdaExecute"])
     
-    # Attach managed policy
-    iam_client.attach_role_policy(
-        RoleName=role_name,
-        PolicyArn="arn:aws:iam::aws:policy/AWSLambdaExecute"
-    )
-    
-    # Attach inline policies
+    # Always attach/update inline policies
     bedrock_retrieve_policy = {
         "Version": "2012-10-17",
         "Statement": [
@@ -392,7 +407,11 @@ def create_ec2_role(knowledge_base_role_arn: str) -> str:
                 "Statement": [
                     {
                         "Effect": "Allow",
-                        "Action": ["bedrock:*"],
+                        "Action": [
+                            "bedrock:*",
+                            "bedrock-agent-runtime:Retrieve",
+                            "bedrock-agent-runtime:RetrieveAndGenerate"
+                        ],
                         "Resource": ["*"]
                     }
                 ]
@@ -716,7 +735,7 @@ def create_secrets() -> Dict[str, str]:
     return secret_arns
 
 
-def create_opensearch_collection() -> Dict[str, str]:
+def create_opensearch_collection(ec2_role_arn: str = None, knowledge_base_role_arn: str = None) -> Dict[str, str]:
     """Create OpenSearch Serverless collection and policies."""
     logger.info("[4/9] Creating OpenSearch Serverless collection")
     
@@ -785,6 +804,18 @@ def create_opensearch_collection() -> Dict[str, str]:
     
     # Create data access policy
     account_arn = f"arn:aws:iam::{account_id}:root"
+    principals = [account_arn]
+    
+    # Add EC2 role to principals if provided
+    if ec2_role_arn:
+        principals.append(ec2_role_arn)
+        logger.debug(f"Adding EC2 role to data access policy: {ec2_role_arn}")
+    
+    # Add Knowledge Base role to principals if provided
+    if knowledge_base_role_arn:
+        principals.append(knowledge_base_role_arn)
+        logger.debug(f"Adding Knowledge Base role to data access policy: {knowledge_base_role_arn}")
+    
     data_policy = [
         {
             "Rules": [
@@ -811,7 +842,7 @@ def create_opensearch_collection() -> Dict[str, str]:
                     "ResourceType": "index"
                 }
             ],
-            "Principal": [account_arn]
+            "Principal": principals
         }
     ]
     
@@ -825,6 +856,54 @@ def create_opensearch_collection() -> Dict[str, str]:
     except ClientError as e:
         if e.response["Error"]["Code"] == "ConflictException":
             logger.warning(f"Data access policy already exists: {data_policy_name}")
+            # Try to update existing policy to include roles
+            try:
+                # Get current policy version
+                policy_detail = opensearch_client.get_access_policy(
+                    name=data_policy_name,
+                    type="data"
+                )
+                current_policy = policy_detail["accessPolicyDetail"]["policy"]
+                
+                # Check if roles are already in principals and update if needed
+                needs_update = False
+                roles_to_add = []
+                if ec2_role_arn:
+                    roles_to_add.append(("EC2", ec2_role_arn))
+                if knowledge_base_role_arn:
+                    roles_to_add.append(("Knowledge Base", knowledge_base_role_arn))
+                
+                for rule in current_policy:
+                    if "Principal" in rule:
+                        current_principals = rule["Principal"]
+                        if not isinstance(current_principals, list):
+                            current_principals = [current_principals]
+                        
+                        for role_type, role_arn in roles_to_add:
+                            if role_arn and role_arn not in current_principals:
+                                current_principals.append(role_arn)
+                                needs_update = True
+                                logger.debug(f"Adding {role_type} role to data access policy: {role_arn}")
+                        
+                        rule["Principal"] = current_principals
+                
+                # Update policy if needed
+                if needs_update:
+                    opensearch_client.update_access_policy(
+                        name=data_policy_name,
+                        type="data",
+                        policy=json.dumps(current_policy),
+                        policyVersion=policy_detail["accessPolicyDetail"]["policyVersion"]
+                    )
+                    logger.info(f"Updated data access policy to include roles")
+                else:
+                    logger.debug("All roles already present in data access policy")
+            except Exception as update_error:
+                logger.warning(f"Could not update existing data access policy: {update_error}")
+                if ec2_role_arn:
+                    logger.warning(f"Please manually add EC2 role {ec2_role_arn} to the data access policy")
+                if knowledge_base_role_arn:
+                    logger.warning(f"Please manually add Knowledge Base role {knowledge_base_role_arn} to the data access policy")
         else:
             logger.error(f"Failed to create data access policy: {e}")
             raise
@@ -2125,8 +2204,8 @@ def main():
         # 3. Create secrets
         secret_arns = create_secrets()
         
-        # 4. Create OpenSearch collection
-        opensearch_info = create_opensearch_collection()
+        # 4. Create OpenSearch collection (with EC2 and Knowledge Base roles for data access)
+        opensearch_info = create_opensearch_collection(ec2_role_arn, knowledge_base_role_arn)
         
         # 5. Create VPC
         vpc_info = create_vpc()
