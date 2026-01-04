@@ -134,18 +134,22 @@ with tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False) as f:
 # Note: Bun doesn't support --require, but we set it anyway for Node.js compatibility
 os.environ["NODE_OPTIONS"] = f"--require {websocket_mock_file}"
 
-# For Bun, try setting BUN_INSTALL_SCRIPT or other Bun-specific environment variables
-# Bun may use different environment variables for preloading scripts
-# However, since Bun doesn't officially support --require, we need to find another way
-
-# Try to set the WebSocket mock file path in a way Bun might recognize
-# This is experimental and may not work, but worth trying
+# For Bun, we need a different approach since Bun doesn't support --require
+# Try multiple Bun-specific environment variables that might work
+# Note: These are experimental and may not be officially supported by Bun
 os.environ["BUN_PRELOAD"] = websocket_mock_file
+os.environ["BUN_INSTALL_SCRIPT"] = websocket_mock_file
+
+# Also try setting it as a Bun runtime flag via environment
+# Bun might read this from the environment when starting
+os.environ["BUN_RUNTIME_FLAGS"] = f"--preload {websocket_mock_file}"
 
 # Log the WebSocket mock file location for debugging
 logger.info(f"WebSocket mock file created at: {websocket_mock_file}")
 logger.info(f"NODE_OPTIONS set to: {os.environ.get('NODE_OPTIONS')}")
 logger.info(f"BUN_PRELOAD set to: {os.environ.get('BUN_PRELOAD')}")
+logger.info(f"BUN_INSTALL_SCRIPT set to: {os.environ.get('BUN_INSTALL_SCRIPT')}")
+logger.info(f"BUN_RUNTIME_FLAGS set to: {os.environ.get('BUN_RUNTIME_FLAGS')}")
 
 def get_model_id():
     models = []
@@ -258,12 +262,18 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
     logger.info(f"session_id: {session_id}")
     
     # Log environment variables before creating client
-    logger.info(f"CLAUDE_CODE_USE_BEDROCK: {os.environ.get('CLAUDE_CODE_USE_BEDROCK')}")
-    logger.info(f"CLAUDE_CODE_MAX_OUTPUT_TOKENS: {os.environ.get('CLAUDE_CODE_MAX_OUTPUT_TOKENS')}")
-    logger.info(f"NODE_OPTIONS: {os.environ.get('NODE_OPTIONS')}")
-    logger.info(f"BUN_PRELOAD: {os.environ.get('BUN_PRELOAD')}")
-    logger.info(f"DISABLE_WEBSOCKET: {os.environ.get('DISABLE_WEBSOCKET')}")
-    logger.info(f"NO_WEBSOCKET: {os.environ.get('NO_WEBSOCKET')}")
+    logger.info("=" * 80)
+    logger.info("Environment variables before creating ClaudeSDKClient:")
+    logger.info(f"  CLAUDE_CODE_USE_BEDROCK: {os.environ.get('CLAUDE_CODE_USE_BEDROCK')}")
+    logger.info(f"  CLAUDE_CODE_MAX_OUTPUT_TOKENS: {os.environ.get('CLAUDE_CODE_MAX_OUTPUT_TOKENS')}")
+    logger.info(f"  NODE_OPTIONS: {os.environ.get('NODE_OPTIONS')}")
+    logger.info(f"  BUN_PRELOAD: {os.environ.get('BUN_PRELOAD')}")
+    logger.info(f"  BUN_INSTALL_SCRIPT: {os.environ.get('BUN_INSTALL_SCRIPT')}")
+    logger.info(f"  BUN_RUNTIME_FLAGS: {os.environ.get('BUN_RUNTIME_FLAGS')}")
+    logger.info(f"  DISABLE_WEBSOCKET: {os.environ.get('DISABLE_WEBSOCKET')}")
+    logger.info(f"  NO_WEBSOCKET: {os.environ.get('NO_WEBSOCKET')}")
+    logger.info(f"  WebSocket mock file: {websocket_mock_file if 'websocket_mock_file' in globals() else 'not set'}")
+    logger.info("=" * 80)
     
     if session_id is not None and history_mode == "Enable":
         options = ClaudeAgentOptions(
