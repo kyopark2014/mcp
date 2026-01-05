@@ -1973,6 +1973,59 @@ def create_lambda_role() -> str:
     return role_arn
 
 
+def delete_knowledge_base(knowledge_base_id: str) -> None:
+    """Delete Knowledge Base and its data sources."""
+    bedrock_agent_client = boto3.client("bedrock-agent", region_name=region)
+    
+    try:
+        # Delete all data sources first
+        try:
+            data_sources = bedrock_agent_client.list_data_sources(
+                knowledgeBaseId=knowledge_base_id,
+                maxResults=100
+            )
+            for ds in data_sources.get("dataSourceSummaries", []):
+                try:
+                    bedrock_agent_client.delete_data_source(
+                        knowledgeBaseId=knowledge_base_id,
+                        dataSourceId=ds["dataSourceId"]
+                    )
+                    logger.debug(f"Deleted data source: {ds['dataSourceId']}")
+                except Exception as e:
+                    logger.warning(f"Failed to delete data source {ds['dataSourceId']}: {e}")
+        except Exception as e:
+            logger.debug(f"Error listing/deleting data sources: {e}")
+        
+        # Delete the knowledge base
+        bedrock_agent_client.delete_knowledge_base(knowledgeBaseId=knowledge_base_id)
+        logger.info(f"Deleted Knowledge Base: {knowledge_base_id}")
+        
+        # Wait for deletion to complete
+        logger.debug("Waiting for Knowledge Base deletion to complete...")
+        max_wait = 60  # Wait up to 60 seconds
+        waited = 0
+        while waited < max_wait:
+            try:
+                kb_response = bedrock_agent_client.get_knowledge_base(knowledgeBaseId=knowledge_base_id)
+                status = kb_response["knowledgeBase"]["status"]
+                if status == "DELETED":
+                    break
+                time.sleep(5)
+                waited += 5
+            except ClientError as e:
+                if e.response["Error"]["Code"] == "ResourceNotFoundException":
+                    logger.debug("Knowledge Base deletion confirmed")
+                    break
+                raise
+        
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "ResourceNotFoundException":
+            logger.debug(f"Knowledge Base {knowledge_base_id} already deleted")
+        else:
+            logger.error(f"Failed to delete Knowledge Base {knowledge_base_id}: {e}")
+            raise
+
+
 def create_knowledge_base_with_opensearch(opensearch_info: Dict[str, str], knowledge_base_role_arn: str, s3_bucket_name: str) -> str:
     """Create Knowledge Base with correct OpenSearch collection."""
     logger.info("[4.5/9] Creating Knowledge Base with OpenSearch collection")
@@ -1994,11 +2047,12 @@ def create_knowledge_base_with_opensearch(opensearch_info: Dict[str, str], knowl
                     logger.warning(f"Knowledge Base is using wrong OpenSearch collection:")
                     logger.warning(f"  Current: {kb_collection_arn}")
                     logger.warning(f"  Expected: {opensearch_info['arn']}")
-                    logger.warning(f"  Please run 'python fix_knowledge_base.py' to fix this issue")
+
+                    delete_knowledge_base(kb["knowledgeBaseId"])
+                    break                    
                 else:
-                    logger.info(f"Knowledge Base is using correct OpenSearch collection")
-                
-                return kb["knowledgeBaseId"]
+                    logger.info(f"Knowledge Base is using correct OpenSearch collection")                
+                    return kb["knowledgeBaseId"]
     except Exception as e:
         logger.debug(f"Error checking existing Knowledge Base: {e}")
     
