@@ -2008,6 +2008,9 @@ def create_knowledge_base_with_opensearch(opensearch_info: Dict[str, str], knowl
         name=project_name,
         description="Knowledge base based on OpenSearch",
         roleArn=knowledge_base_role_arn,
+        tags={
+            project_name: 'true'
+        },
         knowledgeBaseConfiguration={
             "type": "VECTOR",
             "vectorKnowledgeBaseConfiguration": {
@@ -2016,16 +2019,6 @@ def create_knowledge_base_with_opensearch(opensearch_info: Dict[str, str], knowl
                     "bedrockEmbeddingModelConfiguration": {
                         "dimensions": 1024
                     }
-                },
-                "supplementalDataStorageConfiguration": {
-                    "storageLocations": [
-                        {
-                            "type": "S3",
-                            "s3Location": {
-                                "uri": f"s3://{s3_bucket_name}"
-                            }
-                        }
-                    ]
                 }
             }
         },
@@ -2033,12 +2026,12 @@ def create_knowledge_base_with_opensearch(opensearch_info: Dict[str, str], knowl
             "type": "OPENSEARCH_SERVERLESS",
             "opensearchServerlessConfiguration": {
                 "collectionArn": opensearch_info["arn"],
-                "vectorIndexName": vector_index_name,
                 "fieldMapping": {
-                    "vectorField": "vector_field",
+                    "metadataField": "AMAZON_BEDROCK_METADATA",
                     "textField": "AMAZON_BEDROCK_TEXT",
-                    "metadataField": "AMAZON_BEDROCK_METADATA"
-                }
+                    "vectorField": "vector_field"
+                },
+                "vectorIndexName": vector_index_name
             }
         }
     )
@@ -2067,6 +2060,7 @@ def create_knowledge_base_with_opensearch(opensearch_info: Dict[str, str], knowl
         knowledgeBaseId=knowledge_base_id,
         name=s3_bucket_name,
         description=f"S3 data source: {s3_bucket_name}",
+        dataDeletionPolicy='RETAIN',
         dataSourceConfiguration={
             "type": "S3",
             "s3Configuration": {
@@ -2088,8 +2082,7 @@ def create_knowledge_base_with_opensearch(opensearch_info: Dict[str, str], knowl
             "parsingConfiguration": {
                 "parsingStrategy": "BEDROCK_FOUNDATION_MODEL",
                 "bedrockFoundationModelConfiguration": {
-                    "modelArn": f"arn:aws:bedrock:{region}::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0",
-                    "parsingModality": "MULTIMODAL"
+                    "modelArn": f"arn:aws:bedrock:{region}::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0"
                 }
             }
         }
