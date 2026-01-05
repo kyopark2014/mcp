@@ -740,6 +740,70 @@ def create_opensearch_collection(ec2_role_arn: str = None, knowledge_base_role_a
     net_policy_name = f"network-{project_name}-{region}"
     data_policy_name = f"data-{project_name}"
     
+    # Check if collection already exists first
+    try:
+        existing_collections = opensearch_client.list_collections()
+        for collection in existing_collections.get("collectionSummaries", []):
+            if collection["name"] == collection_name and collection["status"] == "ACTIVE":
+                logger.warning(f"OpenSearch collection already exists: {collection['name']}")
+                collection_arn = collection["arn"]
+                collection_id = collection["id"]
+                
+                # Get collection endpoint
+                collection_details = opensearch_client.batch_get_collection(names=[collection_name])
+                collection_endpoint = collection_details["collectionDetails"][0].get("collectionEndpoint", "")
+                
+                # Update data access policy to include roles if needed
+                try:
+                    policy_detail = opensearch_client.get_access_policy(
+                        name=data_policy_name,
+                        type="data"
+                    )
+                    current_policy = policy_detail["accessPolicyDetail"]["policy"]
+                    
+                    # Check if roles are already in principals and update if needed
+                    needs_update = False
+                    roles_to_add = []
+                    if ec2_role_arn:
+                        roles_to_add.append(("EC2", ec2_role_arn))
+                    if knowledge_base_role_arn:
+                        roles_to_add.append(("Knowledge Base", knowledge_base_role_arn))
+                    
+                    for rule in current_policy:
+                        if "Principal" in rule:
+                            current_principals = rule["Principal"]
+                            if not isinstance(current_principals, list):
+                                current_principals = [current_principals]
+                            
+                            for role_type, role_arn in roles_to_add:
+                                if role_arn and role_arn not in current_principals:
+                                    current_principals.append(role_arn)
+                                    needs_update = True
+                                    logger.debug(f"Adding {role_type} role to data access policy: {role_arn}")
+                            
+                            rule["Principal"] = current_principals
+                    
+                    # Update policy if needed
+                    if needs_update:
+                        opensearch_client.update_access_policy(
+                            name=data_policy_name,
+                            type="data",
+                            policy=json.dumps(current_policy),
+                            policyVersion=policy_detail["accessPolicyDetail"]["policyVersion"]
+                        )
+                        logger.info(f"Updated data access policy to include roles")
+                    else:
+                        logger.debug("All roles already present in data access policy")
+                except Exception as update_error:
+                    logger.warning(f"Could not update existing data access policy: {update_error}")
+                
+                return {
+                    "arn": collection_arn,
+                    "endpoint": collection_endpoint
+                }
+    except Exception as e:
+        logger.debug(f"Error checking existing collections: {e}")
+    
     # Create encryption policy
     enc_policy = {
         "Rules": [
@@ -1909,6 +1973,134 @@ def create_lambda_role() -> str:
     return role_arn
 
 
+def create_knowledge_base_with_opensearch(opensearch_info: Dict[str, str], knowledge_base_role_arn: str, s3_bucket_name: str) -> str:
+    """Create Knowledge Base with correct OpenSearch collection."""
+    logger.info("[4.5/9] Creating Knowledge Base with OpenSearch collection")
+    
+    bedrock_agent_client = boto3.client("bedrock-agent", region_name=region)
+    
+    # Check if Knowledge Base already exists
+    try:
+        kb_list = bedrock_agent_client.list_knowledge_bases()
+        for kb in kb_list.get("knowledgeBaseSummaries", []):
+            if kb["name"] == project_name:
+                logger.warning(f"Knowledge Base already exists: {kb['knowledgeBaseId']}")
+                
+                # Verify it's using the correct OpenSearch collection
+                kb_details = bedrock_agent_client.get_knowledge_base(knowledgeBaseId=kb["knowledgeBaseId"])
+                kb_collection_arn = kb_details["knowledgeBase"]["storageConfiguration"]["opensearchServerlessConfiguration"]["collectionArn"]
+                
+                if kb_collection_arn != opensearch_info["arn"]:
+                    logger.warning(f"Knowledge Base is using wrong OpenSearch collection:")
+                    logger.warning(f"  Current: {kb_collection_arn}")
+                    logger.warning(f"  Expected: {opensearch_info['arn']}")
+                    logger.warning(f"  Please run 'python fix_knowledge_base.py' to fix this issue")
+                else:
+                    logger.info(f"Knowledge Base is using correct OpenSearch collection")
+                
+                return kb["knowledgeBaseId"]
+    except Exception as e:
+        logger.debug(f"Error checking existing Knowledge Base: {e}")
+    
+    # Create Knowledge Base
+    logger.debug(f"Creating Knowledge Base with OpenSearch collection: {opensearch_info['arn']}")
+    response = bedrock_agent_client.create_knowledge_base(
+        name=project_name,
+        description="Knowledge base based on OpenSearch",
+        roleArn=knowledge_base_role_arn,
+        knowledgeBaseConfiguration={
+            "type": "VECTOR",
+            "vectorKnowledgeBaseConfiguration": {
+                "embeddingModelArn": f"arn:aws:bedrock:{region}::foundation-model/amazon.titan-embed-text-v2:0",
+                "embeddingModelConfiguration": {
+                    "bedrockEmbeddingModelConfiguration": {
+                        "dimensions": 1024
+                    }
+                },
+                "supplementalDataStorageConfiguration": {
+                    "storageLocations": [
+                        {
+                            "type": "S3",
+                            "s3Location": {
+                                "uri": f"s3://{s3_bucket_name}"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        storageConfiguration={
+            "type": "OPENSEARCH_SERVERLESS",
+            "opensearchServerlessConfiguration": {
+                "collectionArn": opensearch_info["arn"],
+                "vectorIndexName": vector_index_name,
+                "fieldMapping": {
+                    "vectorField": "vector_field",
+                    "textField": "AMAZON_BEDROCK_TEXT",
+                    "metadataField": "AMAZON_BEDROCK_METADATA"
+                }
+            }
+        }
+    )
+    
+    knowledge_base_id = response["knowledgeBase"]["knowledgeBaseId"]
+    logger.info(f"✓ Knowledge Base created: {knowledge_base_id}")
+    
+    # Wait for Knowledge Base to be active
+    logger.info("  Waiting for Knowledge Base to be active...")
+    while True:
+        kb_response = bedrock_agent_client.get_knowledge_base(knowledgeBaseId=knowledge_base_id)
+        status = kb_response["knowledgeBase"]["status"]
+        
+        if status == "ACTIVE":
+            logger.info("  Knowledge Base is now active")
+            break
+        elif status == "FAILED":
+            raise Exception("Knowledge Base creation failed")
+        
+        logger.debug(f"  Knowledge Base status: {status} (waiting...)")
+        time.sleep(10)
+    
+    # Create data source
+    logger.info("  Creating data source...")
+    data_source_response = bedrock_agent_client.create_data_source(
+        knowledgeBaseId=knowledge_base_id,
+        name=s3_bucket_name,
+        description=f"S3 data source: {s3_bucket_name}",
+        dataSourceConfiguration={
+            "type": "S3",
+            "s3Configuration": {
+                "bucketArn": f"arn:aws:s3:::{s3_bucket_name}",
+                "inclusionPrefixes": ["docs/"]
+            }
+        },
+        vectorIngestionConfiguration={
+            "chunkingConfiguration": {
+                "chunkingStrategy": "HIERARCHICAL",
+                "hierarchicalChunkingConfiguration": {
+                    "levelConfigurations": [
+                        {"maxTokens": 1500},
+                        {"maxTokens": 300}
+                    ],
+                    "overlapTokens": 60
+                }
+            },
+            "parsingConfiguration": {
+                "parsingStrategy": "BEDROCK_FOUNDATION_MODEL",
+                "bedrockFoundationModelConfiguration": {
+                    "modelArn": f"arn:aws:bedrock:{region}::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0",
+                    "parsingModality": "MULTIMODAL"
+                }
+            }
+        }
+    )
+    
+    data_source_id = data_source_response["dataSource"]["dataSourceId"]
+    logger.info(f"  ✓ Data source created: {data_source_id}")
+    
+    return knowledge_base_id
+
+
 def create_agentcore_memory_role() -> str:
     """Create AgentCore Memory IAM role."""
     logger.info("[2/9] Creating AgentCore Memory IAM role")
@@ -2222,7 +2414,7 @@ def run_setup_script_via_ssm(instance_id: str, environment: Dict[str, str], git_
 def create_ec2_instance(vpc_info: Dict[str, str], ec2_role_arn: str, 
                        knowledge_base_role_arn: str, opensearch_info: Dict[str, str],
                        s3_bucket_name: str, cloudfront_domain: str,
-                       agentcore_memory_role_arn: str) -> str:
+                       agentcore_memory_role_arn: str, knowledge_base_id: str) -> str:
     """Create EC2 instance."""
     logger.info("[8/9] Creating EC2 instance")
     
@@ -2261,6 +2453,7 @@ def create_ec2_instance(vpc_info: Dict[str, str], ec2_role_arn: str,
         "projectName": project_name,
         "accountId": account_id,
         "region": region,
+        "knowledge_base_id": knowledge_base_id,
         "knowledge_base_role": knowledge_base_role_arn,
         "collectionArn": opensearch_info["arn"],
         "opensearch_url": opensearch_info["endpoint"],
@@ -2607,6 +2800,9 @@ def main():
         # 4. Create OpenSearch collection (with EC2 and Knowledge Base roles for data access)
         opensearch_info = create_opensearch_collection(ec2_role_arn, knowledge_base_role_arn)
         
+        # 4.5. Create Knowledge Base with correct OpenSearch collection
+        knowledge_base_id = create_knowledge_base_with_opensearch(opensearch_info, knowledge_base_role_arn, s3_bucket_name)
+        
         # 5. Create VPC
         vpc_info = create_vpc()
         
@@ -2620,7 +2816,7 @@ def main():
         instance_id = create_ec2_instance(
             vpc_info, ec2_role_arn, knowledge_base_role_arn,
             opensearch_info, s3_bucket_name, cloudfront_info["domain"],
-            agentcore_memory_role_arn
+            agentcore_memory_role_arn, knowledge_base_id
         )
         
         # 9. Create ALB target group and listener
@@ -2641,6 +2837,7 @@ def main():
         logger.info(f"  CloudFront Domain: https://{cloudfront_info['domain']}")
         logger.info(f"  EC2 Instance ID: {instance_id} (deployed in private subnet)")
         logger.info(f"  OpenSearch Endpoint: {opensearch_info['endpoint']}")
+        logger.info(f"  Knowledge Base ID: {knowledge_base_id}")
         logger.info(f"  Knowledge Base Role: {knowledge_base_role_arn}")
         logger.info(f"  AgentCore Memory Role: {agentcore_memory_role_arn}")
         logger.info("")
@@ -2668,6 +2865,7 @@ def main():
             "projectName": project_name,
             "accountId": account_id,
             "region": region,
+            "knowledge_base_id": knowledge_base_id,
             "knowledge_base_role": knowledge_base_role_arn,
             "collectionArn": opensearch_info["arn"],
             "opensearch_url": opensearch_info["endpoint"],
@@ -2676,6 +2874,10 @@ def main():
             "sharing_url": f"https://{cloudfront_info['domain']}",
             "agentcore_memory_role": agentcore_memory_role_arn
         })
+        
+        # Log the OpenSearch collection ARN for verification
+        logger.info(f"OpenSearch Collection ARN: {opensearch_info['arn']}")
+        logger.info(f"OpenSearch Collection Endpoint: {opensearch_info['endpoint']}")
         
         try:
             with open(config_path, 'w') as f:
