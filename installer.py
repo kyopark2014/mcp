@@ -11,6 +11,7 @@ import time
 import logging
 import argparse
 import base64
+import ipaddress
 from datetime import datetime
 from typing import Dict, List, Optional
 from botocore.exceptions import ClientError
@@ -938,28 +939,6 @@ def create_opensearch_collection(ec2_role_arn: str = None, knowledge_base_role_a
                     break
             time.sleep(10)
         
-        
-        # Wait for collection to be active
-        logger.info("  Waiting for collection to be active (this may take a few minutes)...")
-        collection_endpoint = None
-        wait_count = 0
-        while True:
-            response = opensearch_client.batch_get_collection(
-                names=[collection_name]
-            )
-            collection_detail = response["collectionDetails"][0]
-            status = collection_detail["status"]
-            wait_count += 1
-            if wait_count % 6 == 0:  # Log every minute
-                logger.debug(f"  Collection status: {status} (waited {wait_count * 10} seconds)")
-            
-            # Check if endpoint is available
-            if "collectionEndpoint" in collection_detail:
-                collection_endpoint = collection_detail["collectionEndpoint"]
-                if status == "ACTIVE":
-                    break
-            time.sleep(10)
-        
         logger.info(f"✓ OpenSearch collection created: {collection_name}")
         logger.info(f"  Endpoint: {collection_endpoint}")
         return {
@@ -980,12 +959,135 @@ def create_opensearch_collection(ec2_role_arn: str = None, knowledge_base_role_a
         raise
 
 
+def get_available_cidr_block() -> str:
+    """Get an available CIDR block that doesn't conflict with existing VPCs."""
+    # Candidate CIDR blocks to try
+    candidate_cidrs = [
+        "10.20.0.0/16",
+        "10.21.0.0/16", 
+        "10.22.0.0/16",
+        "10.23.0.0/16",
+        "10.24.0.0/16",
+        "172.16.0.0/16",
+        "172.17.0.0/16",
+        "172.18.0.0/16",
+        "192.168.0.0/16"
+    ]
+    
+    # Get all existing VPC CIDR blocks
+    existing_cidrs = set()
+    try:
+        vpcs = ec2_client.describe_vpcs()
+        for vpc in vpcs["Vpcs"]:
+            existing_cidrs.add(vpc["CidrBlock"])
+            # Also check additional CIDR blocks
+            for cidr_assoc in vpc.get("CidrBlockAssociationSet", []):
+                existing_cidrs.add(cidr_assoc["CidrBlock"])
+    except Exception as e:
+        logger.warning(f"Could not check existing VPCs: {e}")
+    
+    # Find first available CIDR
+    for cidr in candidate_cidrs:
+        if cidr not in existing_cidrs:
+            logger.info(f"Using CIDR block: {cidr}")
+            return cidr
+    
+    # Fallback - this should rarely happen
+    logger.warning("All candidate CIDR blocks are in use, using 10.25.0.0/16")
+    return "10.25.0.0/16"
+
+
+def get_or_create_internet_gateway(vpc_id: str) -> str:
+    """Get existing Internet Gateway or create a new one for the VPC."""
+    igws = ec2_client.describe_internet_gateways(
+        Filters=[{"Name": "attachment.vpc-id", "Values": [vpc_id]}]
+    )
+    
+    if igws["InternetGateways"]:
+        igw_id = igws["InternetGateways"][0]["InternetGatewayId"]
+        logger.debug(f"Found existing Internet Gateway: {igw_id}")
+        return igw_id
+    
+    # Create Internet Gateway if it doesn't exist
+    logger.info("  No Internet Gateway found. Creating Internet Gateway...")
+    igw_response = ec2_client.create_internet_gateway(
+        TagSpecifications=[
+            {
+                "ResourceType": "internet-gateway",
+                "Tags": [{"Key": "Name", "Value": f"igw-{project_name}"}]
+            }
+        ]
+    )
+    igw_id = igw_response["InternetGateway"]["InternetGatewayId"]
+    ec2_client.attach_internet_gateway(InternetGatewayId=igw_id, VpcId=vpc_id)
+    logger.info(f"  Created and attached Internet Gateway: {igw_id}")
+    return igw_id
+
+
+def wait_for_nat_gateway(nat_gateway_id: str, log_interval: int = 6) -> None:
+    """Wait for NAT Gateway to become available."""
+    wait_count = 0
+    while True:
+        response = ec2_client.describe_nat_gateways(NatGatewayIds=[nat_gateway_id])
+        state = response["NatGateways"][0]["State"]
+        wait_count += 1
+        if wait_count % log_interval == 0:
+            logger.debug(f"  NAT Gateway status: {state} (waited {wait_count * 10} seconds)")
+        if state == "available":
+            break
+        time.sleep(10)
+    logger.debug(f"NAT Gateway is available: {nat_gateway_id}")
+
+
+def get_or_create_nat_gateway(vpc_id: str, public_subnet_id: str) -> str:
+    """Get existing NAT Gateway or create a new one in the public subnet."""
+    nat_gateways = ec2_client.describe_nat_gateways(
+        Filters=[
+            {"Name": "vpc-id", "Values": [vpc_id]},
+            {"Name": "state", "Values": ["available", "pending"]}
+        ]
+    )
+    
+    if nat_gateways["NatGateways"]:
+        nat_gateway_id = nat_gateways["NatGateways"][0]["NatGatewayId"]
+        logger.debug(f"Found existing NAT Gateway: {nat_gateway_id}")
+        # Wait if it's still pending
+        if nat_gateways["NatGateways"][0]["State"] == "pending":
+            logger.info("  Waiting for existing NAT Gateway to be available...")
+            wait_for_nat_gateway(nat_gateway_id)
+        return nat_gateway_id
+    
+    # Create NAT Gateway if it doesn't exist
+    logger.info("  Allocating Elastic IP for NAT Gateway...")
+    eip_response = ec2_client.allocate_address(Domain="vpc")
+    eip_allocation_id = eip_response["AllocationId"]
+    
+    logger.info("  Creating NAT Gateway (this may take a few minutes)...")
+    nat_response = ec2_client.create_nat_gateway(
+        SubnetId=public_subnet_id,
+        AllocationId=eip_allocation_id
+    )
+    nat_gateway_id = nat_response["NatGateway"]["NatGatewayId"]
+    
+    # Tag NAT Gateway
+    ec2_client.create_tags(
+        Resources=[nat_gateway_id],
+        Tags=[{"Key": "Name", "Value": f"nat-{project_name}"}]
+    )
+    
+    # Wait for NAT Gateway to be available
+    logger.info("  Waiting for NAT Gateway to be available...")
+    wait_for_nat_gateway(nat_gateway_id)
+    
+    return nat_gateway_id
+
+
 def create_vpc() -> Dict[str, str]:
     """Create VPC with subnets and security groups."""
     logger.info("[5/9] Creating VPC and networking resources")
     
     vpc_name = f"vpc-for-{project_name}"
-    cidr_block = "10.20.0.0/16"
+    cidr_block = get_available_cidr_block()
     
     # Check if VPC already exists
     try:
@@ -1030,10 +1132,240 @@ def create_vpc() -> Dict[str, str]:
                     else:
                         private_subnets.append(subnet["SubnetId"])
             
-            # If no private subnets found, use public subnets
-            if not private_subnets and public_subnets:
-                private_subnets = public_subnets.copy()
-                logger.warning("  No private subnets found, using public subnets for EC2")
+            # If no private subnets found, create them automatically
+            if not private_subnets:
+                logger.info("  No private subnets found. Creating private subnets for EC2 deployment...")
+                
+                # Get VPC CIDR and availability zones
+                vpc_detail = ec2_client.describe_vpcs(VpcIds=[vpc_id])["Vpcs"][0]
+                vpc_cidr = vpc_detail["CidrBlock"]
+                
+                # Get availability zones
+                azs = ec2_client.describe_availability_zones()["AvailabilityZones"][:2]
+                az_names = [az["ZoneName"] for az in azs]
+                
+                # Get existing subnet CIDRs to avoid conflicts
+                existing_cidrs = set()
+                for subnet in subnets["Subnets"]:
+                    existing_cidrs.add(subnet["CidrBlock"])
+                
+                # Parse VPC CIDR to determine subnet CIDRs
+                vpc_network = ipaddress.ip_network(vpc_cidr)
+                base_octets = str(vpc_network.network_address).split('.')
+                
+                # Get NAT Gateway (create if needed)
+                if not public_subnets:
+                    raise ValueError(
+                        "Cannot create private subnets without public subnets for NAT Gateway. "
+                        "Please ensure your VPC has at least one public subnet."
+                    )
+                nat_gateway_id = get_or_create_nat_gateway(vpc_id, public_subnets[0])
+                
+                # Create private subnets
+                for i, az in enumerate(az_names):
+                    # Use offset +2 to avoid overlap with public subnets (0,1)
+                    subnet_cidr = f"{base_octets[0]}.{base_octets[1]}.{i+2}.0/24"
+                    
+                    # Check if CIDR conflicts
+                    if subnet_cidr in existing_cidrs:
+                        # Try alternative offsets
+                        for offset in range(10, 20):
+                            alt_cidr = f"{base_octets[0]}.{base_octets[1]}.{offset}.0/24"
+                            if alt_cidr not in existing_cidrs:
+                                subnet_cidr = alt_cidr
+                                break
+                    
+                    try:
+                        subnet_response = ec2_client.create_subnet(
+                            VpcId=vpc_id,
+                            CidrBlock=subnet_cidr,
+                            AvailabilityZone=az,
+                            TagSpecifications=[
+                                {
+                                    "ResourceType": "subnet",
+                                    "Tags": [
+                                        {"Key": "Name", "Value": f"private-subnet-for-{project_name}-{i+1}"},
+                                        {"Key": "aws-cdk:subnet-type", "Value": "Private"},
+                                        {"Key": "aws-cdk:subnet-name", "Value": f"private-subnet-for-{project_name}"}
+                                    ]
+                                }
+                            ]
+                        )
+                        new_subnet_id = subnet_response["Subnet"]["SubnetId"]
+                        private_subnets.append(new_subnet_id)
+                        logger.info(f"  Created private subnet: {new_subnet_id} in {az} with CIDR {subnet_cidr}")
+                        
+                        # Find or create private route table
+                        route_tables = ec2_client.describe_route_tables(
+                            Filters=[{"Name": "vpc-id", "Values": [vpc_id]}]
+                        )
+                        private_rt_id = None
+                        for rt in route_tables["RouteTables"]:
+                            # Check if route table has NAT Gateway route
+                            for route in rt["Routes"]:
+                                if route.get("NatGatewayId") == nat_gateway_id:
+                                    private_rt_id = rt["RouteTableId"]
+                                    break
+                            if private_rt_id:
+                                break
+                        
+                        if not private_rt_id:
+                            # Create private route table
+                            private_rt_response = ec2_client.create_route_table(
+                                VpcId=vpc_id,
+                                TagSpecifications=[
+                                    {
+                                        "ResourceType": "route-table",
+                                        "Tags": [{"Key": "Name", "Value": f"private-rt-{project_name}"}]
+                                    }
+                                ]
+                            )
+                            private_rt_id = private_rt_response["RouteTable"]["RouteTableId"]
+                            ec2_client.create_route(
+                                RouteTableId=private_rt_id,
+                                DestinationCidrBlock="0.0.0.0/0",
+                                NatGatewayId=nat_gateway_id
+                            )
+                            logger.info(f"  Created private route table: {private_rt_id}")
+                        
+                        # Associate subnet with private route table
+                        ec2_client.associate_route_table(
+                            RouteTableId=private_rt_id,
+                            SubnetId=new_subnet_id
+                        )
+                        
+                    except ClientError as e:
+                        if e.response["Error"]["Code"] == "InvalidSubnet.Overlap":
+                            logger.warning(f"  Subnet CIDR {subnet_cidr} overlaps, trying alternative...")
+                            continue
+                        else:
+                            logger.error(f"  Failed to create private subnet: {e}")
+                            raise
+                
+                if not private_subnets:
+                    raise ValueError(
+                        "Failed to create private subnets. "
+                        "Please ensure your VPC has available CIDR space and try again."
+                    )
+                
+                logger.info(f"  ✓ Created {len(private_subnets)} private subnet(s) for EC2 deployment")
+            
+            # Check if we need to create additional public subnets for ALB
+            if len(public_subnets) < 2:
+                logger.info(f"  Found only {len(public_subnets)} public subnet(s). Creating additional public subnets for ALB...")
+                
+                # Get VPC CIDR and availability zones
+                vpc_detail = ec2_client.describe_vpcs(VpcIds=[vpc_id])["Vpcs"][0]
+                vpc_cidr = vpc_detail["CidrBlock"]
+                
+                # Get availability zones
+                azs = ec2_client.describe_availability_zones()["AvailabilityZones"][:2]
+                az_names = [az["ZoneName"] for az in azs]
+                
+                # Get existing subnet CIDRs to avoid conflicts
+                existing_cidrs = set()
+                for subnet in subnets["Subnets"]:
+                    existing_cidrs.add(subnet["CidrBlock"])
+                
+                # Get or create Internet Gateway
+                igw_id = get_or_create_internet_gateway(vpc_id)
+                
+                # Find or create public route table
+                route_tables = ec2_client.describe_route_tables(
+                    Filters=[{"Name": "vpc-id", "Values": [vpc_id]}]
+                )
+                public_rt_id = None
+                for rt in route_tables["RouteTables"]:
+                    for route in rt["Routes"]:
+                        if route.get("GatewayId", "") == igw_id:
+                            public_rt_id = rt["RouteTableId"]
+                            break
+                    if public_rt_id:
+                        break
+                
+                if not public_rt_id and igw_id:
+                    # Create public route table
+                    public_rt_response = ec2_client.create_route_table(
+                        VpcId=vpc_id,
+                        TagSpecifications=[
+                            {
+                                "ResourceType": "route-table",
+                                "Tags": [{"Key": "Name", "Value": f"public-rt-{project_name}"}]
+                            }
+                        ]
+                    )
+                    public_rt_id = public_rt_response["RouteTable"]["RouteTableId"]
+                    ec2_client.create_route(
+                        RouteTableId=public_rt_id,
+                        DestinationCidrBlock="0.0.0.0/0",
+                        GatewayId=igw_id
+                    )
+                    logger.info(f"  Created public route table: {public_rt_id}")
+                
+                # Parse VPC CIDR to determine subnet CIDRs
+                vpc_network = ipaddress.ip_network(vpc_cidr)
+                base_octets = str(vpc_network.network_address).split('.')
+                
+                # Create public subnets in different AZs
+                for i, az in enumerate(az_names):
+                    if len(public_subnets) >= 2:
+                        break
+                    
+                    # Try different CIDR blocks starting from offset 0
+                    for offset in range(20):  # Try up to 20 different offsets
+                        try:
+                            # Calculate subnet CIDR (using /24 subnets)
+                            subnet_networks = list(vpc_network.subnets(new_prefix=24))
+                            if offset < len(subnet_networks):
+                                subnet_network = subnet_networks[offset]
+                                subnet_cidr = str(subnet_network)
+                                
+                                if subnet_cidr not in existing_cidrs:
+                                    subnet_response = ec2_client.create_subnet(
+                                        VpcId=vpc_id,
+                                        CidrBlock=subnet_cidr,
+                                        AvailabilityZone=az,
+                                        TagSpecifications=[
+                                            {
+                                                "ResourceType": "subnet",
+                                                "Tags": [{"Key": "Name", "Value": f"public-subnet-for-{project_name}-{len(public_subnets)+1}"}]
+                                            }
+                                        ]
+                                    )
+                                    new_subnet_id = subnet_response["Subnet"]["SubnetId"]
+                                    public_subnets.append(new_subnet_id)
+                                    logger.info(f"  Created public subnet: {new_subnet_id} in {az} with CIDR {subnet_cidr}")
+                                    
+                                    # Associate with public route table
+                                    if public_rt_id:
+                                        ec2_client.associate_route_table(
+                                            RouteTableId=public_rt_id,
+                                            SubnetId=new_subnet_id
+                                        )
+                                    
+                                    break
+                        except (ClientError, ValueError) as e:
+                            error_msg = str(e).lower()
+                            if "already exists" not in error_msg and "overlaps" not in error_msg and "invalid" not in error_msg:
+                                logger.debug(f"  Could not create subnet with offset {offset}: {e}")
+                            continue
+                
+                if len(public_subnets) < 2:
+                    raise ValueError(
+                        f"Could not create enough public subnets. Found {len(public_subnets)} public subnet(s), "
+                        f"but ALB requires at least 2 subnets in different availability zones. "
+                        f"Please manually create additional public subnets or delete and recreate the VPC."
+                    )
+            
+            # Check availability zones for public subnets
+            if len(public_subnets) >= 2:
+                subnet_details = ec2_client.describe_subnets(SubnetIds=public_subnets)
+                azs = {subnet["AvailabilityZone"] for subnet in subnet_details["Subnets"]}
+                if len(azs) < 2:
+                    logger.warning(
+                        f"  Warning: Public subnets are only in {len(azs)} availability zone(s): {azs}. "
+                        f"ALB requires subnets in at least 2 different availability zones."
+                    )
             
             # Get security groups
             sgs = ec2_client.describe_security_groups(
@@ -1134,24 +1466,21 @@ def create_vpc() -> Dict[str, str]:
                                 break
                         break
             
+            # Check and create Internet Gateway if missing
+            igw_id = get_or_create_internet_gateway(vpc_id)
+            
             # Add IGW route if missing
-            if main_rt_id and not has_igw_route:
-                # Get Internet Gateway
-                igws = ec2_client.describe_internet_gateways(
-                    Filters=[{"Name": "attachment.vpc-id", "Values": [vpc_id]}]
-                )
-                if igws["InternetGateways"]:
-                    igw_id = igws["InternetGateways"][0]["InternetGatewayId"]
-                    try:
-                        ec2_client.create_route(
-                            RouteTableId=main_rt_id,
-                            DestinationCidrBlock="0.0.0.0/0",
-                            GatewayId=igw_id
-                        )
-                        logger.info(f"  Added internet gateway route to main route table: {main_rt_id}")
-                    except ClientError as e:
-                        if e.response["Error"]["Code"] != "RouteAlreadyExists":
-                            logger.warning(f"Failed to add IGW route: {e}")
+            if main_rt_id and not has_igw_route and igw_id:
+                try:
+                    ec2_client.create_route(
+                        RouteTableId=main_rt_id,
+                        DestinationCidrBlock="0.0.0.0/0",
+                        GatewayId=igw_id
+                    )
+                    logger.info(f"  Added internet gateway route to main route table: {main_rt_id}")
+                except ClientError as e:
+                    if e.response["Error"]["Code"] != "RouteAlreadyExists":
+                        logger.warning(f"Failed to add IGW route: {e}")
             
             return {
                 "vpc_id": vpc_id,
@@ -1189,25 +1518,19 @@ def create_vpc() -> Dict[str, str]:
     az_names = [az["ZoneName"] for az in azs]
     logger.debug(f"Using availability zones: {az_names}")
     
+    # Parse CIDR to get base network for subnet creation
+    vpc_network = ipaddress.ip_network(cidr_block)
+    base_octets = str(vpc_network.network_address).split('.')
+    
     # Create Internet Gateway
     logger.debug("Creating Internet Gateway")
-    igw_response = ec2_client.create_internet_gateway(
-        TagSpecifications=[
-            {
-                "ResourceType": "internet-gateway",
-                "Tags": [{"Key": "Name", "Value": f"igw-{project_name}"}]
-            }
-        ]
-    )
-    igw_id = igw_response["InternetGateway"]["InternetGatewayId"]
-    ec2_client.attach_internet_gateway(InternetGatewayId=igw_id, VpcId=vpc_id)
-    logger.debug(f"Internet Gateway created and attached: {igw_id}")
+    igw_id = get_or_create_internet_gateway(vpc_id)
     
     # Create public subnets
     logger.debug("Creating public subnets")
     public_subnets = []
     for i, az in enumerate(az_names):
-        subnet_cidr = f"10.20.{i}.0/24"
+        subnet_cidr = f"{base_octets[0]}.{base_octets[1]}.{i}.0/24"
         subnet_response = ec2_client.create_subnet(
             VpcId=vpc_id,
             CidrBlock=subnet_cidr,
@@ -1215,50 +1538,32 @@ def create_vpc() -> Dict[str, str]:
             TagSpecifications=[
                 {
                     "ResourceType": "subnet",
-                    "Tags": [{"Key": "Name", "Value": f"public-subnet-for-{project_name}-{i+1}"}]
+                    "Tags": [
+                        {"Key": "Name", "Value": f"public-subnet-for-{project_name}-{i+1}"},
+                        {"Key": "aws-cdk:subnet-type", "Value": "Public"},
+                        {"Key": "aws-cdk:subnet-name", "Value": f"public-subnet-for-{project_name}"}
+                    ]
                 }
             ]
         )
         public_subnets.append(subnet_response["Subnet"]["SubnetId"])
         logger.debug(f"Created public subnet: {subnet_response['Subnet']['SubnetId']} in {az}")
+        
+        # Enable auto-assign public IP for public subnets
+        ec2_client.modify_subnet_attribute(
+            SubnetId=subnet_response["Subnet"]["SubnetId"],
+            MapPublicIpOnLaunch={"Value": True}
+        )
     
     # Create NAT Gateway in first public subnet
-    logger.debug("Allocating Elastic IP for NAT Gateway")
-    eip_response = ec2_client.allocate_address(Domain="vpc")
-    eip_allocation_id = eip_response["AllocationId"]
-    
-    logger.debug("Creating NAT Gateway (this may take a few minutes)...")
-    nat_response = ec2_client.create_nat_gateway(
-        SubnetId=public_subnets[0],
-        AllocationId=eip_allocation_id
-    )
-    nat_gateway_id = nat_response["NatGateway"]["NatGatewayId"]
-    
-    # Tag NAT Gateway after creation
-    ec2_client.create_tags(
-        Resources=[nat_gateway_id],
-        Tags=[{"Key": "Name", "Value": f"nat-{project_name}"}]
-    )
-    
-    # Wait for NAT Gateway to be available
-    logger.info("  Waiting for NAT Gateway to be available (this may take a few minutes)...")
-    wait_count = 0
-    while True:
-        response = ec2_client.describe_nat_gateways(NatGatewayIds=[nat_gateway_id])
-        state = response["NatGateways"][0]["State"]
-        wait_count += 1
-        if wait_count % 6 == 0:  # Log every minute
-            logger.debug(f"  NAT Gateway status: {state} (waited {wait_count * 10} seconds)")
-        if state == "available":
-            break
-        time.sleep(10)
-    logger.debug(f"NAT Gateway is available: {nat_gateway_id}")
+    logger.debug("Creating NAT Gateway")
+    nat_gateway_id = get_or_create_nat_gateway(vpc_id, public_subnets[0])
     
     # Create private subnets
     logger.debug("Creating private subnets")
     private_subnets = []
     for i, az in enumerate(az_names):
-        subnet_cidr = f"10.20.{i+10}.0/24"
+        subnet_cidr = f"{base_octets[0]}.{base_octets[1]}.{i+2}.0/24"  # Use +2 to avoid overlap with public subnets (0,1)
         subnet_response = ec2_client.create_subnet(
             VpcId=vpc_id,
             CidrBlock=subnet_cidr,
@@ -1266,7 +1571,11 @@ def create_vpc() -> Dict[str, str]:
             TagSpecifications=[
                 {
                     "ResourceType": "subnet",
-                    "Tags": [{"Key": "Name", "Value": f"private-subnet-for-{project_name}-{i+1}"}]
+                    "Tags": [
+                        {"Key": "Name", "Value": f"private-subnet-for-{project_name}-{i+1}"},
+                        {"Key": "aws-cdk:subnet-type", "Value": "Private"},
+                        {"Key": "aws-cdk:subnet-name", "Value": f"private-subnet-for-{project_name}"}
+                    ]
                 }
             ]
         )
@@ -1474,10 +1783,29 @@ def create_alb(vpc_info: Dict[str, str]) -> Dict[str, str]:
         if e.response["Error"]["Code"] != "LoadBalancerNotFound":
             raise
     
-    logger.debug(f"Creating ALB: {alb_name}")
+    # Validate that we have at least 2 subnets in different availability zones
+    public_subnets = vpc_info["public_subnets"]
+    if len(public_subnets) < 2:
+        raise ValueError(
+            f"ALB requires at least 2 subnets in different availability zones. "
+            f"Found only {len(public_subnets)} public subnet(s). "
+            f"Please ensure your VPC has at least 2 public subnets."
+        )
+    
+    # Check that subnets are in different availability zones
+    subnet_details = ec2_client.describe_subnets(SubnetIds=public_subnets)
+    azs = {subnet["AvailabilityZone"] for subnet in subnet_details["Subnets"]}
+    if len(azs) < 2:
+        raise ValueError(
+            f"ALB requires subnets in at least 2 different availability zones. "
+            f"Found subnets only in {len(azs)} availability zone(s): {azs}. "
+            f"Please ensure your VPC has public subnets in at least 2 different availability zones."
+        )
+    
+    logger.debug(f"Creating ALB: {alb_name} with {len(public_subnets)} subnets in {len(azs)} availability zones")
     response = elbv2_client.create_load_balancer(
         Name=alb_name,
-        Subnets=vpc_info["public_subnets"],
+        Subnets=public_subnets,
         SecurityGroups=[vpc_info["alb_sg_id"]],
         Scheme="internet-facing",
         Type="application",
@@ -1989,7 +2317,8 @@ def create_ec2_instance(vpc_info: Dict[str, str], ec2_role_arn: str,
     
     instance_id = response["Instances"][0]["InstanceId"]
     logger.info(f"✓ EC2 instance created: {instance_id}")
-    logger.info(f"  Instance type: m5.large")
+    logger.info(f"  Instance type: t3.medium")
+    logger.info(f"  Deployed in private subnet: {vpc_info['private_subnets'][0]}")
     logger.info(f"  User data script configured for application deployment")
     
     return instance_id
@@ -2155,6 +2484,72 @@ def run_setup_on_existing_instance(instance_id: Optional[str] = None):
     return result
 
 
+def verify_ec2_subnet_deployment():
+    """Verify that existing EC2 instances are deployed in private subnets."""
+    logger.info("Verifying EC2 subnet deployment...")
+    
+    instance_name = f"app-for-{project_name}"
+    
+    try:
+        instances = ec2_client.describe_instances(
+            Filters=[
+                {"Name": "tag:Name", "Values": [instance_name]},
+                {"Name": "instance-state-name", "Values": ["running", "pending", "stopping", "stopped"]}
+            ]
+        )
+        
+        for reservation in instances["Reservations"]:
+            for instance in reservation["Instances"]:
+                instance_id = instance["InstanceId"]
+                subnet_id = instance["SubnetId"]
+                has_public_ip = instance.get("PublicIpAddress") is not None
+                
+                # Check subnet type
+                subnet_details = ec2_client.describe_subnets(SubnetIds=[subnet_id])
+                subnet = subnet_details["Subnets"][0]
+                
+                # Determine if subnet is private or public
+                is_private_subnet = False
+                for tag in subnet.get("Tags", []):
+                    if tag["Key"] == "aws-cdk:subnet-type" and tag["Value"] == "Private":
+                        is_private_subnet = True
+                        break
+                
+                # If no explicit tag, check route table for internet gateway
+                if not is_private_subnet:
+                    route_tables = ec2_client.describe_route_tables(
+                        Filters=[{"Name": "association.subnet-id", "Values": [subnet_id]}]
+                    )
+                    for rt in route_tables["RouteTables"]:
+                        for route in rt["Routes"]:
+                            if route.get("GatewayId", "").startswith("igw-") and route.get("DestinationCidrBlock") == "0.0.0.0/0":
+                                # This subnet has direct internet gateway route, so it's public
+                                break
+                        else:
+                            continue
+                        break
+                    else:
+                        # No direct internet gateway route found, likely private
+                        is_private_subnet = True
+                
+                logger.info(f"  Instance {instance_id}:")
+                logger.info(f"    Subnet: {subnet_id} ({subnet['CidrBlock']})")
+                logger.info(f"    Subnet Type: {'Private' if is_private_subnet else 'Public'}")
+                logger.info(f"    Has Public IP: {has_public_ip}")
+                logger.info(f"    Private IP: {instance['PrivateIpAddress']}")
+                
+                if is_private_subnet and not has_public_ip:
+                    logger.info(f"    ✓ Correctly deployed in private subnet")
+                elif not is_private_subnet:
+                    logger.warning(f"    ⚠️  WARNING: Instance is deployed in a PUBLIC subnet!")
+                    logger.warning(f"    ⚠️  This is not recommended for production environments.")
+                elif has_public_ip:
+                    logger.warning(f"    ⚠️  WARNING: Instance has a public IP address!")
+                
+    except Exception as e:
+        logger.debug(f"Could not verify EC2 deployment: {e}")
+
+
 def main():
     """Main function to create all infrastructure."""
     parser = argparse.ArgumentParser(description="AWS Infrastructure Installer")
@@ -2165,6 +2560,11 @@ def main():
         const="",
         help="Run setup script on existing EC2 instance via SSM. If INSTANCE_ID is not provided, will find instance by name."
     )
+    parser.add_argument(
+        "--verify-deployment",
+        action="store_true",
+        help="Verify that existing EC2 instances are properly deployed in private subnets"
+    )
     
     args = parser.parse_args()
     
@@ -2172,6 +2572,11 @@ def main():
     if args.run_setup is not None:
         instance_id = args.run_setup if args.run_setup else None
         run_setup_on_existing_instance(instance_id)
+        return
+    
+    # If --verify-deployment flag is provided, verify EC2 subnet deployment
+    if args.verify_deployment:
+        verify_ec2_subnet_deployment()
         return
     
     logger.info("="*60)
@@ -2230,9 +2635,11 @@ def main():
         logger.info("Summary:")
         logger.info(f"  S3 Bucket: {s3_bucket_name}")
         logger.info(f"  VPC ID: {vpc_info['vpc_id']}")
+        logger.info(f"  Public Subnets: {', '.join(vpc_info['public_subnets'])}")
+        logger.info(f"  Private Subnets: {', '.join(vpc_info['private_subnets'])}")
         logger.info(f"  ALB DNS: http://{alb_info['dns']}/")
         logger.info(f"  CloudFront Domain: https://{cloudfront_info['domain']}")
-        logger.info(f"  EC2 Instance ID: {instance_id}")
+        logger.info(f"  EC2 Instance ID: {instance_id} (deployed in private subnet)")
         logger.info(f"  OpenSearch Endpoint: {opensearch_info['endpoint']}")
         logger.info(f"  Knowledge Base Role: {knowledge_base_role_arn}")
         logger.info(f"  AgentCore Memory Role: {agentcore_memory_role_arn}")

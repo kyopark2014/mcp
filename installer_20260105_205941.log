@@ -1,0 +1,66 @@
+2026-01-05 20:59:41 - INFO - ============================================================
+2026-01-05 20:59:41 - INFO - Starting AWS Infrastructure Deployment
+2026-01-05 20:59:41 - INFO - ============================================================
+2026-01-05 20:59:41 - INFO - Project: mcp
+2026-01-05 20:59:41 - INFO - Region: us-west-2
+2026-01-05 20:59:41 - INFO - Account ID: 262976740991
+2026-01-05 20:59:41 - INFO - Bucket Name: storage-for-mcp-262976740991-us-west-2
+2026-01-05 20:59:41 - INFO - ============================================================
+2026-01-05 20:59:41 - INFO - [1/9] Creating S3 bucket: storage-for-mcp-262976740991-us-west-2
+2026-01-05 20:59:42 - WARNING - S3 bucket already exists: storage-for-mcp-262976740991-us-west-2
+2026-01-05 20:59:42 - INFO - [2/9] Creating Knowledge Base IAM role
+2026-01-05 20:59:43 - WARNING - IAM role already exists: role-knowledge-base-for-mcp-us-west-2
+2026-01-05 20:59:45 - INFO - [2/9] Creating Agent IAM role
+2026-01-05 20:59:45 - WARNING - IAM role already exists: role-agent-for-mcp-us-west-2
+2026-01-05 20:59:46 - INFO - [2/9] Creating EC2 IAM role
+2026-01-05 20:59:47 - WARNING - IAM role already exists: role-ec2-for-mcp-us-west-2
+2026-01-05 20:59:51 - INFO - [2/9] Creating Lambda RAG IAM role
+2026-01-05 20:59:51 - WARNING - IAM role already exists: role-lambda-rag-for-mcp-us-west-2
+2026-01-05 20:59:53 - INFO - [2/9] Creating AgentCore Memory IAM role
+2026-01-05 20:59:53 - WARNING - IAM role already exists: role-agentcore-memory-for-mcp-us-west-2
+2026-01-05 20:59:53 - INFO - [3/9] Creating Secrets Manager secrets
+2026-01-05 20:59:53 - INFO - Please enter API keys when prompted (press Enter to skip and leave empty):
+2026-01-05 20:59:54 - WARNING -   Secret already exists: openweathermap-mcp
+2026-01-05 20:59:54 - WARNING -   Secret already exists: langsmithapikey-mcp
+2026-01-05 20:59:54 - WARNING -   Secret already exists: tavilyapikey-mcp
+2026-01-05 20:59:54 - WARNING -   Secret already exists: perplexityapikey-mcp
+2026-01-05 20:59:54 - WARNING -   Secret already exists: firecrawlapikey-mcp
+2026-01-05 20:59:55 - WARNING -   Secret already exists: novaactapikey-mcp
+2026-01-05 20:59:55 - WARNING -   Secret already exists: notionapikey-mcp
+2026-01-05 20:59:55 - INFO - ✓ Created 7 secrets
+2026-01-05 20:59:55 - INFO - [4/9] Creating OpenSearch Serverless collection
+2026-01-05 20:59:55 - WARNING - Encryption policy already exists: encription-mcp-us-west-2
+2026-01-05 20:59:55 - WARNING - Network policy already exists: network-mcp-us-west-2
+2026-01-05 20:59:56 - WARNING - Data access policy already exists: data-mcp
+2026-01-05 21:00:01 - WARNING - OpenSearch collection already exists: mcp
+2026-01-05 21:00:01 - INFO - [5/9] Creating VPC and networking resources
+2026-01-05 21:00:02 - WARNING - VPC already exists: vpc-0fc660d73dc7a242c
+2026-01-05 21:00:02 - INFO -   Found only 0 public subnet(s). Creating additional public subnets for ALB...
+2026-01-05 21:00:04 - INFO -   Created public subnet: subnet-0b97311b0447b0727 in us-west-2a with CIDR 10.20.0.0/24
+2026-01-05 21:00:05 - INFO -   Created public subnet: subnet-0e6f46f1cc56cfacb in us-west-2b with CIDR 10.20.1.0/24
+2026-01-05 21:00:06 - INFO - [6/9] Creating Application Load Balancer
+2026-01-05 21:00:08 - ERROR - 
+2026-01-05 21:00:08 - ERROR - ============================================================
+2026-01-05 21:00:08 - ERROR - Deployment Failed!
+2026-01-05 21:00:08 - ERROR - ============================================================
+2026-01-05 21:00:08 - ERROR - Error: An error occurred (InvalidSubnet) when calling the CreateLoadBalancer operation: VPC vpc-0fc660d73dc7a242c has no internet gateway
+2026-01-05 21:00:08 - ERROR - Deployment time before failure: 0.46 minutes
+2026-01-05 21:00:08 - ERROR - ============================================================
+2026-01-05 21:00:08 - ERROR - Traceback (most recent call last):
+  File "/Users/ksdyb/Documents/src/mcp/installer.py", line 2327, in main
+    alb_info = create_alb(vpc_info)
+  File "/Users/ksdyb/Documents/src/mcp/installer.py", line 1596, in create_alb
+    response = elbv2_client.create_load_balancer(
+        Name=alb_name,
+    ...<6 lines>...
+        ]
+    )
+  File "/opt/homebrew/lib/python3.13/site-packages/botocore/client.py", line 602, in _api_call
+    return self._make_api_call(operation_name, kwargs)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/lib/python3.13/site-packages/botocore/context.py", line 123, in wrapper
+    return func(*args, **kwargs)
+  File "/opt/homebrew/lib/python3.13/site-packages/botocore/client.py", line 1078, in _make_api_call
+    raise error_class(parsed_response, operation_name)
+botocore.errorfactory.InvalidSubnetException: An error occurred (InvalidSubnet) when calling the CreateLoadBalancer operation: VPC vpc-0fc660d73dc7a242c has no internet gateway
+

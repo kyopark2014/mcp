@@ -1,0 +1,98 @@
+2026-01-05 21:19:20 - INFO - ============================================================
+2026-01-05 21:19:20 - INFO - Starting AWS Infrastructure Deployment
+2026-01-05 21:19:20 - INFO - ============================================================
+2026-01-05 21:19:20 - INFO - Project: mcp
+2026-01-05 21:19:20 - INFO - Region: us-west-2
+2026-01-05 21:19:20 - INFO - Account ID: 262976740991
+2026-01-05 21:19:20 - INFO - Bucket Name: storage-for-mcp-262976740991-us-west-2
+2026-01-05 21:19:20 - INFO - ============================================================
+2026-01-05 21:19:20 - INFO - [1/9] Creating S3 bucket: storage-for-mcp-262976740991-us-west-2
+2026-01-05 21:19:22 - INFO - ✓ S3 bucket created successfully: storage-for-mcp-262976740991-us-west-2
+2026-01-05 21:19:22 - INFO - [2/9] Creating Knowledge Base IAM role
+2026-01-05 21:19:23 - INFO - ✓ IAM role created: role-knowledge-base-for-mcp-us-west-2
+2026-01-05 21:19:24 - INFO - [2/9] Creating Agent IAM role
+2026-01-05 21:19:25 - INFO - ✓ IAM role created: role-agent-for-mcp-us-west-2
+2026-01-05 21:19:26 - INFO - [2/9] Creating EC2 IAM role
+2026-01-05 21:19:27 - INFO - ✓ IAM role created: role-ec2-for-mcp-us-west-2
+2026-01-05 21:19:32 - INFO - [2/9] Creating Lambda RAG IAM role
+2026-01-05 21:19:32 - INFO - ✓ IAM role created: role-lambda-rag-for-mcp-us-west-2
+2026-01-05 21:19:34 - INFO - [2/9] Creating AgentCore Memory IAM role
+2026-01-05 21:19:34 - INFO - ✓ IAM role created: role-agentcore-memory-for-mcp-us-west-2
+2026-01-05 21:19:34 - INFO - [3/9] Creating Secrets Manager secrets
+2026-01-05 21:19:34 - INFO - Please enter API keys when prompted (press Enter to skip and leave empty):
+2026-01-05 21:19:35 - INFO - Enter credential of openweathermap-mcp (Weather API Key - OpenWeatherMap):
+2026-01-05 21:19:50 - INFO -   ✓ Created secret: openweathermap-mcp
+2026-01-05 21:19:50 - INFO - Enter credential of langsmithapikey-mcp (LangSmith API Key):
+2026-01-05 21:20:02 - INFO -   ✓ Created secret: langsmithapikey-mcp
+2026-01-05 21:20:02 - INFO - Enter credential of tavilyapikey-mcp (Tavily API Key):
+2026-01-05 21:20:10 - INFO -   ✓ Created secret: tavilyapikey-mcp
+2026-01-05 21:20:10 - INFO - Enter credential of perplexityapikey-mcp (Perplexity API Key):
+2026-01-05 21:20:19 - INFO -   ✓ Created secret: perplexityapikey-mcp
+2026-01-05 21:20:19 - INFO - Enter credential of firecrawlapikey-mcp (Firecrawl API Key):
+2026-01-05 21:20:30 - INFO -   ✓ Created secret: firecrawlapikey-mcp
+2026-01-05 21:20:30 - INFO - Enter credential of novaactapikey-mcp (Nova Act API Key):
+2026-01-05 21:20:39 - INFO -   ✓ Created secret: novaactapikey-mcp
+2026-01-05 21:20:39 - INFO - Enter credential of notionapikey-mcp (Notion API Key):
+2026-01-05 21:20:47 - INFO -   ✓ Created secret: notionapikey-mcp
+2026-01-05 21:20:47 - INFO - ✓ Created 7 secrets
+2026-01-05 21:20:47 - INFO - [4/9] Creating OpenSearch Serverless collection
+2026-01-05 21:20:54 - INFO -   Waiting for collection to be active (this may take a few minutes)...
+2026-01-05 21:21:55 - INFO - ✓ OpenSearch collection created: mcp
+2026-01-05 21:21:55 - INFO -   Endpoint: https://bmv28o7lr1xiu510wd4c.us-west-2.aoss.amazonaws.com
+2026-01-05 21:21:55 - INFO - [5/9] Creating VPC and networking resources
+2026-01-05 21:21:56 - INFO - Using CIDR block: 10.21.0.0/16
+2026-01-05 21:21:58 - INFO -   No Internet Gateway found. Creating Internet Gateway...
+2026-01-05 21:21:58 - INFO -   Created and attached Internet Gateway: igw-0e39bfb5b35fd0a29
+2026-01-05 21:22:00 - INFO -   Allocating Elastic IP for NAT Gateway...
+2026-01-05 21:22:01 - INFO -   Creating NAT Gateway (this may take a few minutes)...
+2026-01-05 21:22:01 - INFO -   Waiting for NAT Gateway to be available...
+2026-01-05 21:24:05 - INFO - ✓ VPC created: vpc-0a2fb148a47b6fb70
+2026-01-05 21:24:05 - INFO - [6/9] Creating Application Load Balancer
+2026-01-05 21:24:07 - INFO - ✓ ALB created: alb-for-mcp-592921734.us-west-2.elb.amazonaws.com
+2026-01-05 21:24:07 - INFO - [7/9] Creating CloudFront distribution
+2026-01-05 21:24:08 - WARNING - Could not get reference distribution config: An error occurred (NoSuchDistribution) when calling the GetDistributionConfig operation: The specified distribution does not exist.
+2026-01-05 21:24:09 - INFO - ✓ CloudFront distribution created: dszmcnwdhpbdi.cloudfront.net
+2026-01-05 21:24:09 - INFO -   Distribution ID: ECT8I8WG9ZBV2
+2026-01-05 21:24:09 - WARNING -   Note: CloudFront distribution may take 15-20 minutes to deploy
+2026-01-05 21:24:09 - INFO - [8/9] Creating EC2 instance
+2026-01-05 21:24:12 - INFO - ✓ EC2 instance created: i-0b50eb79d28ff8b8a
+2026-01-05 21:24:12 - INFO -   Instance type: t3.medium
+2026-01-05 21:24:12 - INFO -   Deployed in private subnet: subnet-0b23e2021d94baca9
+2026-01-05 21:24:12 - INFO -   User data script configured for application deployment
+2026-01-05 21:24:12 - INFO - [9/9] Creating ALB target group and listener
+2026-01-05 21:24:28 - INFO - ✓ ALB target group and listener created
+2026-01-05 21:24:28 - INFO -   Target group: arn:aws:elasticloadbalancing:us-west-2:262976740991:targetgroup/TG-for-mcp/f4a13a9c63687ceb
+2026-01-05 21:24:28 - INFO -   Listener: arn:aws:elasticloadbalancing:us-west-2:262976740991:listener/app/alb-for-mcp/c625fe144292250b/766412d97a284e2d
+2026-01-05 21:24:28 - INFO - 
+2026-01-05 21:24:28 - INFO - ============================================================
+2026-01-05 21:24:28 - INFO - Infrastructure Deployment Completed Successfully!
+2026-01-05 21:24:28 - INFO - ============================================================
+2026-01-05 21:24:28 - INFO - Summary:
+2026-01-05 21:24:28 - INFO -   S3 Bucket: storage-for-mcp-262976740991-us-west-2
+2026-01-05 21:24:28 - INFO -   VPC ID: vpc-0a2fb148a47b6fb70
+2026-01-05 21:24:28 - INFO -   Public Subnets: subnet-085ba1db2443e4722, subnet-0cdabe71843e05def
+2026-01-05 21:24:28 - INFO -   Private Subnets: subnet-0b23e2021d94baca9, subnet-0814e889ccc9373dd
+2026-01-05 21:24:28 - INFO -   ALB DNS: http://alb-for-mcp-592921734.us-west-2.elb.amazonaws.com/
+2026-01-05 21:24:28 - INFO -   CloudFront Domain: https://dszmcnwdhpbdi.cloudfront.net
+2026-01-05 21:24:28 - INFO -   EC2 Instance ID: i-0b50eb79d28ff8b8a (deployed in private subnet)
+2026-01-05 21:24:28 - INFO -   OpenSearch Endpoint: https://bmv28o7lr1xiu510wd4c.us-west-2.aoss.amazonaws.com
+2026-01-05 21:24:28 - INFO -   Knowledge Base Role: arn:aws:iam::262976740991:role/role-knowledge-base-for-mcp-us-west-2
+2026-01-05 21:24:28 - INFO -   AgentCore Memory Role: arn:aws:iam::262976740991:role/role-agentcore-memory-for-mcp-us-west-2
+2026-01-05 21:24:28 - INFO - 
+2026-01-05 21:24:28 - INFO - Total deployment time: 5.14 minutes
+2026-01-05 21:24:28 - INFO - ============================================================
+2026-01-05 21:24:28 - INFO - Note: CloudFront distribution may take 15-20 minutes to fully deploy
+2026-01-05 21:24:28 - INFO - Note: EC2 instance user data script will install and start the application
+2026-01-05 21:24:28 - INFO - ============================================================
+2026-01-05 21:24:28 - INFO - ✓ Updated application/config.json
+2026-01-05 21:24:28 - INFO - ============================================================
+2026-01-05 21:24:28 - INFO - 
+2026-01-05 21:24:28 - INFO - ============================================================
+2026-01-05 21:24:28 - INFO - ⚠️  IMPORTANT: CloudFront Domain Address
+2026-01-05 21:24:28 - INFO - ============================================================
+2026-01-05 21:24:28 - INFO - 🌐 CloudFront URL: https://dszmcnwdhpbdi.cloudfront.net
+2026-01-05 21:24:28 - INFO - 
+2026-01-05 21:24:28 - INFO - Note: CloudFront distribution may take 15-20 minutes to fully deploy
+2026-01-05 21:24:28 - INFO -       Once deployed, you can access your application at the URL above
+2026-01-05 21:24:28 - INFO - ============================================================
+2026-01-05 21:24:28 - INFO - 

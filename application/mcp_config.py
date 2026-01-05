@@ -86,7 +86,7 @@ def initialize_config():
     knowledge_base_id = config.get("knowledge_base_id", "")
     if not knowledge_base_id:
         # search knowledge base id using knowledge base name
-        bedrock_agent_client = boto3.client("bedrock-agent")
+        bedrock_agent_client = boto3.client("bedrock-agent", region_name=region)
         response = bedrock_agent_client.list_knowledge_bases()
         for knowledge_base in response["knowledgeBaseSummaries"]:
             if knowledge_base["name"] == projectName:

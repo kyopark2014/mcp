@@ -1,0 +1,55 @@
+2026-01-05 20:57:57 - INFO - ============================================================
+2026-01-05 20:57:57 - INFO - Starting AWS Infrastructure Deployment
+2026-01-05 20:57:57 - INFO - ============================================================
+2026-01-05 20:57:57 - INFO - Project: mcp
+2026-01-05 20:57:57 - INFO - Region: us-west-2
+2026-01-05 20:57:57 - INFO - Account ID: 262976740991
+2026-01-05 20:57:57 - INFO - Bucket Name: storage-for-mcp-262976740991-us-west-2
+2026-01-05 20:57:57 - INFO - ============================================================
+2026-01-05 20:57:57 - INFO - [1/9] Creating S3 bucket: storage-for-mcp-262976740991-us-west-2
+2026-01-05 20:57:58 - WARNING - S3 bucket already exists: storage-for-mcp-262976740991-us-west-2
+2026-01-05 20:57:58 - INFO - [2/9] Creating Knowledge Base IAM role
+2026-01-05 20:57:58 - WARNING - IAM role already exists: role-knowledge-base-for-mcp-us-west-2
+2026-01-05 20:58:00 - INFO - [2/9] Creating Agent IAM role
+2026-01-05 20:58:00 - WARNING - IAM role already exists: role-agent-for-mcp-us-west-2
+2026-01-05 20:58:01 - INFO - [2/9] Creating EC2 IAM role
+2026-01-05 20:58:02 - WARNING - IAM role already exists: role-ec2-for-mcp-us-west-2
+2026-01-05 20:58:06 - INFO - [2/9] Creating Lambda RAG IAM role
+2026-01-05 20:58:06 - WARNING - IAM role already exists: role-lambda-rag-for-mcp-us-west-2
+2026-01-05 20:58:07 - INFO - [2/9] Creating AgentCore Memory IAM role
+2026-01-05 20:58:07 - WARNING - IAM role already exists: role-agentcore-memory-for-mcp-us-west-2
+2026-01-05 20:58:08 - INFO - [3/9] Creating Secrets Manager secrets
+2026-01-05 20:58:08 - INFO - Please enter API keys when prompted (press Enter to skip and leave empty):
+2026-01-05 20:58:08 - WARNING -   Secret already exists: openweathermap-mcp
+2026-01-05 20:58:09 - WARNING -   Secret already exists: langsmithapikey-mcp
+2026-01-05 20:58:09 - WARNING -   Secret already exists: tavilyapikey-mcp
+2026-01-05 20:58:09 - WARNING -   Secret already exists: perplexityapikey-mcp
+2026-01-05 20:58:09 - WARNING -   Secret already exists: firecrawlapikey-mcp
+2026-01-05 20:58:09 - WARNING -   Secret already exists: novaactapikey-mcp
+2026-01-05 20:58:10 - WARNING -   Secret already exists: notionapikey-mcp
+2026-01-05 20:58:10 - INFO - ✓ Created 7 secrets
+2026-01-05 20:58:10 - INFO - [4/9] Creating OpenSearch Serverless collection
+2026-01-05 20:58:10 - WARNING - Encryption policy already exists: encription-mcp-us-west-2
+2026-01-05 20:58:10 - WARNING - Network policy already exists: network-mcp-us-west-2
+2026-01-05 20:58:10 - WARNING - Data access policy already exists: data-mcp
+2026-01-05 20:58:16 - WARNING - OpenSearch collection already exists: mcp
+2026-01-05 20:58:16 - INFO - [5/9] Creating VPC and networking resources
+2026-01-05 20:58:17 - WARNING - VPC already exists: vpc-0fc660d73dc7a242c
+2026-01-05 20:58:17 - WARNING -   Warning: Found only 0 public subnet(s). ALB requires at least 2 subnets in different availability zones. Please create additional public subnets or delete and recreate the VPC.
+2026-01-05 20:58:18 - INFO - [6/9] Creating Application Load Balancer
+2026-01-05 20:58:19 - ERROR - 
+2026-01-05 20:58:19 - ERROR - ============================================================
+2026-01-05 20:58:19 - ERROR - Deployment Failed!
+2026-01-05 20:58:19 - ERROR - ============================================================
+2026-01-05 20:58:19 - ERROR - Error: ALB requires at least 2 subnets in different availability zones. Found only 0 public subnet(s). Please ensure your VPC has at least 2 public subnets.
+2026-01-05 20:58:19 - ERROR - Deployment time before failure: 0.37 minutes
+2026-01-05 20:58:19 - ERROR - ============================================================
+2026-01-05 20:58:19 - ERROR - Traceback (most recent call last):
+  File "/Users/ksdyb/Documents/src/mcp/installer.py", line 2224, in main
+    alb_info = create_alb(vpc_info)
+  File "/Users/ksdyb/Documents/src/mcp/installer.py", line 1476, in create_alb
+    raise ValueError(
+    ...<3 lines>...
+    )
+ValueError: ALB requires at least 2 subnets in different availability zones. Found only 0 public subnet(s). Please ensure your VPC has at least 2 public subnets.
+
