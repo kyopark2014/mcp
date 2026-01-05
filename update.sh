@@ -50,7 +50,8 @@ echo "✅ Docker cleanup completed"
 # Step 3: Build Docker image
 echo ""
 echo "🔨 Building Docker image..."
-./build-docker-with-args.sh
+#./build-docker-with-args.sh
+./build-docker.sh
 
 if [ $? -ne 0 ]; then
     echo "❌ Docker build failed"

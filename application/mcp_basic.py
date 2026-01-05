@@ -2,7 +2,6 @@ import logging
 import sys
 import datetime
 import requests
-import yfinance as yf
 import traceback
 import json
 import re
@@ -227,42 +226,42 @@ def get_weather_info(city: str) -> str:
     logger.info(f"weather_str: {weather_str}")                        
     return weather_str
 
-def stock_data_lookup(ticker, country, period="1mo"):
-    """
-    Retrieve accurate stock data for a given ticker.
-    country: the english country name of the stock
-    ticker: the ticker to retrieve stock price history for. In South Korea, a ticker is a 6-digit number.
-    period: the period to retrieve stock price history for. for example, "1mo", "1y", "5y", "max"
-    return: the information of ticker
-    """ 
-    com = re.compile('[a-zA-Z]') 
-    alphabet = com.findall(ticker)
-    logger.info(f"alphabet: {alphabet}")
+# def stock_data_lookup(ticker, country, period="1mo"):
+#     """
+#     Retrieve accurate stock data for a given ticker.
+#     country: the english country name of the stock
+#     ticker: the ticker to retrieve stock price history for. In South Korea, a ticker is a 6-digit number.
+#     period: the period to retrieve stock price history for. for example, "1mo", "1y", "5y", "max"
+#     return: the information of ticker
+#     """ 
+#     com = re.compile('[a-zA-Z]') 
+#     alphabet = com.findall(ticker)
+#     logger.info(f"alphabet: {alphabet}")
 
-    logger.info(f"country: {country}")
+#     logger.info(f"country: {country}")
 
-    if len(alphabet)==0:
-        if country == "South Korea":
-            ticker += ".KS"
-        elif country == "Japan":
-            ticker += ".T"
-    logger.info(f"ticker: {ticker}")
+#     if len(alphabet)==0:
+#         if country == "South Korea":
+#             ticker += ".KS"
+#         elif country == "Japan":
+#             ticker += ".T"
+#     logger.info(f"ticker: {ticker}")
     
-    stock = yf.Ticker(ticker)
+#     stock = yf.Ticker(ticker)
     
-    # get the price history for past 1 month
-    history = stock.history(period=period)
-    logger.info(f"history: {history}")
+#     # get the price history for past 1 month
+#     history = stock.history(period=period)
+#     logger.info(f"history: {history}")
     
-    result = f"## Trading History\n{history}"
-    #history.reset_index().to_json(orient="split", index=False, date_format="iso")    
+#     result = f"## Trading History\n{history}"
+#     #history.reset_index().to_json(orient="split", index=False, date_format="iso")    
     
-    result += f"\n\n## Financials\n{stock.financials}"    
-    logger.info(f"financials: {stock.financials}")
+#     result += f"\n\n## Financials\n{stock.financials}"    
+#     logger.info(f"financials: {stock.financials}")
 
-    result += f"\n\n## Major Holders\n{stock.major_holders}"
-    logger.info(f"major_holders: {stock.major_holders}")
+#     result += f"\n\n## Major Holders\n{stock.major_holders}"
+#     logger.info(f"major_holders: {stock.major_holders}")
 
-    logger.info(f"result: {result}")
+#     logger.info(f"result: {result}")
 
-    return result
+#     return result
