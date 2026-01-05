@@ -77,29 +77,20 @@ def initialize_config():
     global config
 
     # knowledge base name
-    knowledge_base_name = config.get("knowledge_base_name", "")
-    if not knowledge_base_name:
-        knowledge_base_name = projectName
-        config['knowledge_base_name'] = knowledge_base_name
+    knowledge_base_name = projectName
 
-    # knowledge base id    
     # search knowledge base id using knowledge base name
     knowledge_base_id = ""
     bedrock_agent_client = boto3.client("bedrock-agent", region_name=region)
     response = bedrock_agent_client.list_knowledge_bases()
     for knowledge_base in response["knowledgeBaseSummaries"]:
-        if knowledge_base["name"] == projectName:
+        if knowledge_base["name"] == knowledge_base_name:
             knowledge_base_id = knowledge_base["knowledgeBaseId"]
             logger.info(f"knowledge_base_id: {knowledge_base_id}")
-            config['knowledge_base_name'] = projectName
-            config['knowledge_base_id'] = knowledge_base_id
             break
     
-    if knowledge_base_id != config.get("knowledge_base_id"):
-        logger.info(f"updating knowledge_base_id in config.json")
-        config['knowledge_base_id'] = knowledge_base_id
-        with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(config, f, indent=2)    
+    config['knowledge_base_name'] = projectName
+    config['knowledge_base_id'] = knowledge_base_id            
 
     # secret name
     if not "secret_name" in config:
