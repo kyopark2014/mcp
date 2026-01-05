@@ -116,12 +116,36 @@ def create_s3_bucket() -> str:
             VersioningConfiguration={"Status": "Suspended"}
         )
         
+        # Create docs folder
+        logger.debug("Creating docs folder")
+        try:
+            s3_client.put_object(
+                Bucket=bucket_name,
+                Key="docs/",
+                Body=b""
+            )
+            logger.debug("docs folder created successfully")
+        except ClientError as e:
+            logger.warning(f"Failed to create docs folder: {e}")
+        
         logger.info(f"✓ S3 bucket created successfully: {bucket_name}")
         return bucket_name
     
     except ClientError as e:
         if e.response["Error"]["Code"] in ["BucketAlreadyExists", "BucketAlreadyOwnedByYou"]:
             logger.warning(f"S3 bucket already exists: {bucket_name}")
+            # Create docs folder if bucket already exists
+            logger.debug("Creating docs folder in existing bucket")
+            try:
+                s3_client.put_object(
+                    Bucket=bucket_name,
+                    Key="docs/",
+                    Body=b""
+                )
+                logger.debug("docs folder created successfully")
+            except ClientError as folder_error:
+                if folder_error.response["Error"]["Code"] != "NoSuchBucket":
+                    logger.warning(f"Failed to create docs folder: {folder_error}")
             return bucket_name
         logger.error(f"Failed to create S3 bucket: {e}")
         raise
@@ -2026,9 +2050,100 @@ def delete_knowledge_base(knowledge_base_id: str) -> None:
             raise
 
 
+def create_vector_index_in_opensearch(collection_endpoint: str, index_name: str) -> bool:
+    """Create vector index in OpenSearch Serverless collection."""
+    try:
+        # Try to import required packages, install if missing
+        try:
+            import requests
+            from requests_aws4auth import AWS4Auth
+        except ImportError:
+            logger.info("  Installing required packages for OpenSearch index creation...")
+            import subprocess
+            import sys
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "requests-aws4auth"])
+            import requests
+            from requests_aws4auth import AWS4Auth
+        
+        # Get AWS credentials
+        session = boto3.Session()
+        credentials = session.get_credentials()
+        awsauth = AWS4Auth(credentials.access_key, credentials.secret_key, region, 'aoss', session_token=credentials.token)
+        
+        # Check if index already exists
+        url = f"{collection_endpoint}/{index_name}"
+        response = requests.get(url, auth=awsauth, timeout=30)
+        if response.status_code == 200:
+            logger.debug(f"Vector index '{index_name}' already exists")
+            return True
+        
+        # Index mapping for vector search
+        index_mapping = {
+            "settings": {
+                "index": {
+                    "knn": True,
+                    "knn.algo_param.ef_search": 512
+                }
+            },
+            "mappings": {
+                "properties": {
+                    "vector_field": {
+                        "type": "knn_vector",
+                        "dimension": 1024,
+                        "method": {
+                            "name": "hnsw",
+                            "space_type": "cosinesimil",
+                            "engine": "faiss",
+                            "parameters": {
+                                "ef_construction": 512,
+                                "m": 16
+                            }
+                        }
+                    },
+                    "AMAZON_BEDROCK_TEXT": {
+                        "type": "text"
+                    },
+                    "AMAZON_BEDROCK_METADATA": {
+                        "type": "text"
+                    }
+                }
+            }
+        }
+        
+        # Create index
+        headers = {"Content-Type": "application/json"}
+        response = requests.put(
+            url,
+            auth=awsauth,
+            headers=headers,
+            data=json.dumps(index_mapping),
+            timeout=30
+        )
+        
+        if response.status_code in [200, 201]:
+            logger.info(f"  ✓ Vector index '{index_name}' created successfully")
+            time.sleep(5)  # Wait for index to be ready
+            return True
+        else:
+            logger.error(f"  Failed to create vector index: {response.status_code} - {response.text}")
+            return False
+            
+    except ImportError:
+        logger.error("  requests-aws4auth package is required. Install with: pip install requests-aws4auth")
+        return False
+    except Exception as e:
+        logger.error(f"  Error creating vector index: {e}")
+        return False
+
+
 def create_knowledge_base_with_opensearch(opensearch_info: Dict[str, str], knowledge_base_role_arn: str, s3_bucket_name: str) -> str:
     """Create Knowledge Base with correct OpenSearch collection."""
     logger.info("[4.5/9] Creating Knowledge Base with OpenSearch collection")
+    
+    # Create vector index first
+    logger.info("  Creating vector index in OpenSearch collection...")
+    if not create_vector_index_in_opensearch(opensearch_info["endpoint"], vector_index_name):
+        raise Exception("Failed to create vector index in OpenSearch collection")
     
     bedrock_agent_client = boto3.client("bedrock-agent", region_name=region)
     
