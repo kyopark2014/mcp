@@ -688,8 +688,6 @@ def main():
         logger.info("="*60)
         logger.info(f"Total cleanup time: {elapsed_time/60:.2f} minutes")
         logger.info("="*60)
-        logger.info("Note: CloudFront distributions are disabled and will be deleted automatically")
-        logger.info("="*60)
         
     except Exception as e:
         elapsed_time = time.time() - start_time
