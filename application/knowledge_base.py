@@ -29,14 +29,20 @@ projectName = config["projectName"] if "projectName" in config else "mcp"
 
 vectorIndexName = projectName
 knowledge_base_name = projectName
-bedrock_region = config["region"] if "region" in config else "us-west-2"
-region = config["region"] if "region" in config else "us-west-2"
+region = config.get("region", "us-west-2")
 logger.info(f"region: {region}")
-s3_bucket = config["s3_bucket"] if "s3_bucket" in config else None
+
+s3_bucket = config.get("s3_bucket", None)
 if s3_bucket is None:
     raise Exception ("No storage!")
 
-parsingModelArn = f"arn:aws:bedrock:{region}::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0"
+account_id = config.get("accountId", None)
+if account_id is None:
+    client = boto3.client("sts", region_name=region)
+    account_id = client.get_caller_identity()["Account"]    
+
+# parsingModelArn = f"arn:aws:bedrock:{region}::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0"
+parsingModelArn = f"arn:aws:bedrock:{region}:{account_id}:inference-profile/us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 embeddingModelArn = f"arn:aws:bedrock:{region}::foundation-model/amazon.titan-embed-text-v2:0"
 
 collectionArn = config["collectionArn"] if "collectionArn" in config else None
@@ -228,7 +234,7 @@ def initiate_knowledge_base():
     try: 
         client = boto3.client(
             service_name='bedrock-agent',
-            region_name=bedrock_region
+            region_name=region
         )
             
         response = client.list_knowledge_bases(
@@ -399,7 +405,7 @@ def retrieve_documents_from_knowledge_base(query, top_k):
                 "numberOfResults": top_k,
                 "overrideSearchType": "HYBRID"   # SEMANTIC
             }},
-            region_name=bedrock_region
+            region_name=region
         )
         
         try: 
@@ -457,7 +463,7 @@ def sync_data_source():
         try:
             bedrock_client = boto3.client(
                 service_name='bedrock-agent',
-                region_name=bedrock_region
+                region_name=region
             )
                 
             response = bedrock_client.start_ingestion_job(
