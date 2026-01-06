@@ -1023,7 +1023,11 @@ def create_opensearch_collection(ec2_role_arn: str = None, knowledge_base_role_a
                 if status == "ACTIVE":
                     break
             time.sleep(10)
-        
+
+        # Wait for opensearch correction to be ready
+        logger.debug("Waiting for opensearch correction to be ready...")
+        time.sleep(30)
+            
         logger.info(f"✓ OpenSearch collection created: {collection_name}")
         logger.info(f"  Endpoint: {collection_endpoint}")
         return {
@@ -3391,7 +3395,7 @@ def main():
         opensearch_info = create_opensearch_collection(ec2_role_arn, knowledge_base_role_arn)
         logger.info(f"OpenSearch collection created: {opensearch_info}")
         
-        # 4.5. Create Knowledge Base with correct OpenSearch collection
+        # 4.5. Create Knowledge Base with correct OpenSearch collection        
         knowledge_base_id = create_knowledge_base_with_opensearch(opensearch_info, knowledge_base_role_arn, s3_bucket_name)
         
         # 5. Create VPC
