@@ -2590,7 +2590,7 @@ def create_knowledge_base_with_opensearch(opensearch_info: Dict[str, str], knowl
             "parsingConfiguration": {
                 "parsingStrategy": "BEDROCK_FOUNDATION_MODEL",
                 "bedrockFoundationModelConfiguration": {
-                    "modelArn": f"arn:aws:bedrock:{region}::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0"
+                    "modelArn": f"arn:aws:bedrock:{region}::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0"
                 }
             }
         }
