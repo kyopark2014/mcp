@@ -2458,7 +2458,8 @@ def create_vector_index_in_opensearch(collection_endpoint: str, index_name: str)
         
         if response.status_code in [200, 201]:
             logger.info(f"  ✓ Vector index '{index_name}' created successfully")
-            time.sleep(5)  # Wait for index to be ready
+            logger.info("  Waiting for index to be ready...")
+            time.sleep(30)  # Wait for index to be ready
             return True
         else:
             logger.error(f"  Failed to create vector index: {response.status_code} - {response.text}")
@@ -2485,6 +2486,7 @@ def create_knowledge_base_with_opensearch(opensearch_info: Dict[str, str], knowl
     
     # Check if Knowledge Base already exists
     try:
+        logger.info("  Checking if Knowledge Base already exists...")
         kb_list = bedrock_agent_client.list_knowledge_bases()
         for kb in kb_list.get("knowledgeBaseSummaries", []):
             if kb["name"] == project_name:
@@ -2504,6 +2506,7 @@ def create_knowledge_base_with_opensearch(opensearch_info: Dict[str, str], knowl
                 else:
                     logger.info(f"Knowledge Base is using correct OpenSearch collection")                
                     return kb["knowledgeBaseId"]
+        logger.info("  Knowledge Base does not exist. Creating new one...")
     except Exception as e:
         logger.debug(f"Error checking existing Knowledge Base: {e}")
     

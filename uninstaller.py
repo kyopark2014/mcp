@@ -28,7 +28,6 @@ opensearch_client = boto3.client("opensearchserverless", region_name=region)
 ec2_client = boto3.client("ec2", region_name=region)
 elbv2_client = boto3.client("elbv2", region_name=region)
 cloudfront_client = boto3.client("cloudfront", region_name=region)
-sts_client = boto3.client("sts", region_name=region)
 bedrock_agent_client = boto3.client("bedrock-agent", region_name=region)
 
 # Get account ID if not set
