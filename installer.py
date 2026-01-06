@@ -18,9 +18,7 @@ from botocore.exceptions import ClientError
 
 # Configuration
 project_name = "mcp"
-
-session = boto3.Session()
-region = session.region_name
+region = "us-west-2"
 
 sts_client = boto3.client("sts", region_name=region)
 account_id = sts_client.get_caller_identity()["Account"]
