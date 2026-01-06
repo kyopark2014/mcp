@@ -15,8 +15,10 @@ from botocore.exceptions import ClientError
 
 # Configuration
 project_name = "mcp"
-region = os.environ.get("CDK_DEFAULT_REGION", "us-west-2")
-account_id = os.environ.get("CDK_DEFAULT_ACCOUNT", "")
+region = "us-west-2"
+
+sts_client = boto3.client("sts", region_name=region)
+account_id = sts_client.get_caller_identity()["Account"]
 
 # Initialize boto3 clients
 s3_client = boto3.client("s3", region_name=region)
@@ -183,23 +185,11 @@ def delete_ec2_instances():
     except Exception as e:
         logger.error(f"Error deleting EC2 instances: {e}")
 
-def delete_vpc_resources():
-    """Delete VPC and related resources."""
-    logger.info("[4/9] Deleting VPC resources")
+def delete_single_vpc(vpc_id: str):
+    """Delete a single VPC and all its related resources."""
+    logger.info(f"  Deleting VPC: {vpc_id}")
     
     try:
-        vpc_name = f"vpc-for-{project_name}"
-        vpcs = ec2_client.describe_vpcs(
-            Filters=[{"Name": "tag:Name", "Values": [vpc_name]}]
-        )
-        
-        if not vpcs["Vpcs"]:
-            logger.info("  No VPC found to delete")
-            return
-        
-        vpc_id = vpcs["Vpcs"][0]["VpcId"]
-        logger.info(f"  Deleting VPC: {vpc_id}")
-        
         # Delete VPC endpoints first - force deletion using AWS CLI if boto3 fails
         try:
             endpoints = ec2_client.describe_vpc_endpoints(
@@ -363,6 +353,107 @@ def delete_vpc_resources():
                 else:
                     logger.warning(f"  Could not delete VPC {vpc_id}: {e}")
                     break
+        
+        logger.info(f"  ✓ VPC {vpc_id} deleted")
+    except Exception as e:
+        logger.error(f"Error deleting VPC {vpc_id}: {e}")
+
+def delete_vpc_resources():
+    """Delete VPC and related resources."""
+    logger.info("[4/9] Deleting VPC resources")
+    
+    try:
+        # Find all VPCs that might be related to the project
+        vpc_name = f"vpc-for-{project_name}"
+        
+        # First, try to find VPCs by tag name
+        vpcs_by_tag = ec2_client.describe_vpcs(
+            Filters=[{"Name": "tag:Name", "Values": [vpc_name]}]
+        )
+        
+        # Also get all VPCs to check for any that might be related
+        all_vpcs = ec2_client.describe_vpcs()
+        
+        # Collect VPCs to delete
+        vpcs_to_delete = []
+        vpc_ids_found = set()
+        
+        # Add VPCs found by tag
+        for vpc in vpcs_by_tag.get("Vpcs", []):
+            vpc_id = vpc["VpcId"]
+            if vpc_id not in vpc_ids_found:
+                vpcs_to_delete.append(vpc_id)
+                vpc_ids_found.add(vpc_id)
+        
+        # Check all VPCs for project-related resources (subnets, security groups, etc.)
+        for vpc in all_vpcs.get("Vpcs", []):
+            vpc_id = vpc["VpcId"]
+            if vpc_id in vpc_ids_found:
+                continue
+            
+            # Check if VPC has project-related resources
+            try:
+                # Check subnets
+                subnets = ec2_client.describe_subnets(
+                    Filters=[{"Name": "vpc-id", "Values": [vpc_id]}]
+                )
+                has_project_subnets = False
+                for subnet in subnets.get("Subnets", []):
+                    for tag in subnet.get("Tags", []):
+                        if project_name in tag.get("Value", ""):
+                            has_project_subnets = True
+                            break
+                    if has_project_subnets:
+                        break
+                
+                # Check security groups
+                sgs = ec2_client.describe_security_groups(
+                    Filters=[{"Name": "vpc-id", "Values": [vpc_id]}]
+                )
+                has_project_sgs = False
+                for sg in sgs.get("SecurityGroups", []):
+                    if project_name in sg.get("GroupName", ""):
+                        has_project_sgs = True
+                        break
+                
+                # Check NAT gateways
+                nat_gws = ec2_client.describe_nat_gateways(
+                    Filters=[{"Name": "vpc-id", "Values": [vpc_id]}]
+                )
+                has_project_nat = False
+                for nat_gw in nat_gws.get("NatGateways", []):
+                    if nat_gw["State"] not in ["deleted", "deleting"]:
+                        # Check tags
+                        tags_response = ec2_client.describe_tags(
+                            Filters=[
+                                {"Name": "resource-id", "Values": [nat_gw["NatGatewayId"]]},
+                                {"Name": "resource-type", "Values": ["nat-gateway"]}
+                            ]
+                        )
+                        for tag in tags_response.get("Tags", []):
+                            if project_name in tag.get("Value", ""):
+                                has_project_nat = True
+                                break
+                        if has_project_nat:
+                            break
+                
+                # If VPC has project-related resources, add it to deletion list
+                if has_project_subnets or has_project_sgs or has_project_nat:
+                    vpcs_to_delete.append(vpc_id)
+                    vpc_ids_found.add(vpc_id)
+                    logger.info(f"  Found project-related VPC: {vpc_id}")
+            except Exception as e:
+                logger.debug(f"  Error checking VPC {vpc_id}: {e}")
+        
+        if not vpcs_to_delete:
+            logger.info("  No VPC found to delete")
+            return
+        
+        logger.info(f"  Found {len(vpcs_to_delete)} VPC(s) to delete: {vpcs_to_delete}")
+        
+        # Delete each VPC
+        for vpc_id in vpcs_to_delete:
+            delete_single_vpc(vpc_id)
         
         logger.info("✓ VPC resources deleted")
     except Exception as e:
