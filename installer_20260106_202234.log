@@ -1,0 +1,67 @@
+2026-01-06 20:22:34 - INFO - ============================================================
+2026-01-06 20:22:34 - INFO - Starting AWS Infrastructure Deployment
+2026-01-06 20:22:34 - INFO - ============================================================
+2026-01-06 20:22:34 - INFO - Project: mcp
+2026-01-06 20:22:34 - INFO - Region: us-west-2
+2026-01-06 20:22:34 - INFO - Account ID: 262976740991
+2026-01-06 20:22:34 - INFO - Bucket Name: storage-for-mcp-262976740991-us-west-2
+2026-01-06 20:22:34 - INFO - ============================================================
+2026-01-06 20:22:34 - INFO - [1/9] Creating S3 bucket: storage-for-mcp-262976740991-us-west-2
+2026-01-06 20:22:35 - WARNING - S3 bucket already exists: storage-for-mcp-262976740991-us-west-2
+2026-01-06 20:22:35 - INFO - [2/9] Creating Knowledge Base IAM role
+2026-01-06 20:22:36 - WARNING - IAM role already exists: role-knowledge-base-for-mcp-us-west-2
+2026-01-06 20:22:37 - INFO - [2/9] Creating Agent IAM role
+2026-01-06 20:22:38 - WARNING - IAM role already exists: role-agent-for-mcp-us-west-2
+2026-01-06 20:22:39 - INFO - [2/9] Creating EC2 IAM role
+2026-01-06 20:22:39 - WARNING - IAM role already exists: role-ec2-for-mcp-us-west-2
+2026-01-06 20:22:44 - INFO - [2/9] Creating Lambda RAG IAM role
+2026-01-06 20:22:44 - WARNING - IAM role already exists: role-lambda-rag-for-mcp-us-west-2
+2026-01-06 20:22:45 - INFO - [2/9] Creating AgentCore Memory IAM role
+2026-01-06 20:22:46 - WARNING - IAM role already exists: role-agentcore-memory-for-mcp-us-west-2
+2026-01-06 20:22:46 - INFO - [3/9] Creating Secrets Manager secrets
+2026-01-06 20:22:46 - INFO - Please enter API keys when prompted (press Enter to skip and leave empty):
+2026-01-06 20:22:47 - WARNING -   Secret already exists: openweathermap-mcp
+2026-01-06 20:22:47 - WARNING -   Secret already exists: langsmithapikey-mcp
+2026-01-06 20:22:47 - WARNING -   Secret already exists: tavilyapikey-mcp
+2026-01-06 20:22:47 - WARNING -   Secret already exists: perplexityapikey-mcp
+2026-01-06 20:22:47 - WARNING -   Secret already exists: firecrawlapikey-mcp
+2026-01-06 20:22:48 - WARNING -   Secret already exists: novaactapikey-mcp
+2026-01-06 20:22:48 - WARNING -   Secret already exists: notionapikey-mcp
+2026-01-06 20:22:48 - INFO - ✓ Created 7 secrets
+2026-01-06 20:22:48 - INFO - [4/9] Creating OpenSearch Serverless collection
+2026-01-06 20:22:48 - WARNING - OpenSearch collection already exists: mcp
+2026-01-06 20:22:49 - INFO - OpenSearch collection created: {'arn': 'arn:aws:aoss:us-west-2:262976740991:collection/m73qrelw9bi3cv8bqgfe', 'endpoint': 'https://m73qrelw9bi3cv8bqgfe.us-west-2.aoss.amazonaws.com'}
+2026-01-06 20:22:49 - INFO - [4.5/9] Creating Knowledge Base with OpenSearch collection
+2026-01-06 20:22:49 - INFO -   Creating vector index in OpenSearch collection...
+2026-01-06 20:22:49 - INFO - Found credentials in shared credentials file: ~/.aws/credentials
+2026-01-06 20:22:49 - INFO -   Checking if Knowledge Base already exists...
+2026-01-06 20:22:50 - INFO -   Knowledge Base does not exist. Creating new one...
+2026-01-06 20:22:51 - INFO - ✓ Knowledge Base created: 7GIVPDGOTM
+2026-01-06 20:22:51 - INFO -   Waiting for Knowledge Base to be active...
+2026-01-06 20:23:01 - INFO -   Knowledge Base is now active
+2026-01-06 20:23:01 - INFO -   Creating data source...
+2026-01-06 20:23:01 - ERROR - 
+2026-01-06 20:23:01 - ERROR - ============================================================
+2026-01-06 20:23:01 - ERROR - Deployment Failed!
+2026-01-06 20:23:01 - ERROR - ============================================================
+2026-01-06 20:23:01 - ERROR - Error: An error occurred (ValidationException) when calling the CreateDataSource operation: Knowledge base is not able to get the Inference Profile Model: Not authorized to call GetInferenceProfile for arn:aws:bedrock:us-west-2:381491850457:inference-profile/global.anthropic.claude-sonnet-4-5-20250929-v1:0
+2026-01-06 20:23:01 - ERROR - Deployment time before failure: 0.45 minutes
+2026-01-06 20:23:01 - ERROR - ============================================================
+2026-01-06 20:23:01 - ERROR - Traceback (most recent call last):
+  File "/Users/ksdyb/Documents/src/mcp/installer.py", line 3434, in main
+    knowledge_base_id = create_knowledge_base_with_opensearch(opensearch_info, knowledge_base_role_arn, s3_bucket_name)
+  File "/Users/ksdyb/Documents/src/mcp/installer.py", line 2599, in create_knowledge_base_with_opensearch
+    data_source_response = bedrock_agent_client.create_data_source(
+        knowledgeBaseId=knowledge_base_id,
+    ...<27 lines>...
+        }
+    )
+  File "/opt/homebrew/lib/python3.13/site-packages/botocore/client.py", line 602, in _api_call
+    return self._make_api_call(operation_name, kwargs)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/lib/python3.13/site-packages/botocore/context.py", line 123, in wrapper
+    return func(*args, **kwargs)
+  File "/opt/homebrew/lib/python3.13/site-packages/botocore/client.py", line 1078, in _make_api_call
+    raise error_class(parsed_response, operation_name)
+botocore.errorfactory.ValidationException: An error occurred (ValidationException) when calling the CreateDataSource operation: Knowledge base is not able to get the Inference Profile Model: Not authorized to call GetInferenceProfile for arn:aws:bedrock:us-west-2:381491850457:inference-profile/global.anthropic.claude-sonnet-4-5-20250929-v1:0
+

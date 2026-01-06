@@ -245,8 +245,19 @@ def create_knowledge_base_role() -> str:
         "Statement": [
             {
                 "Effect": "Allow",
-                "Action": ["bedrock:*"],
-                "Resource": ["*"]
+                "Action": [
+                    "bedrock:*",
+                    "bedrock:InvokeModel",
+                    "bedrock:InvokeModelWithResponseStream",
+                    "bedrock:GetInferenceProfile",
+                    "bedrock:GetFoundationModel"
+                ],
+                "Resource": [
+                    "*",
+                    f"arn:aws:bedrock:{region}:{account_id}:inference-profile/*",
+                    f"arn:aws:bedrock:{region}:*:inference-profile/*",
+                    "arn:aws:bedrock:*::foundation-model/*"
+                ]
             }
         ]
     }
@@ -281,8 +292,14 @@ def create_knowledge_base_role() -> str:
         "Statement": [
             {
                 "Effect": "Allow",
-                "Action": ["bedrock:*"],
-                "Resource": ["*"]
+                "Action": [
+                    "bedrock:*",
+                    "bedrock:GetInferenceProfile"
+                ],
+                "Resource": [
+                    "*",
+                    f"arn:aws:bedrock:{region}:*:inference-profile/*"
+                ]
             }
         ]
     }
@@ -1651,6 +1668,11 @@ def create_vpc() -> Dict[str, str]:
                     public_subnets = public_subnets if 'public_subnets' in locals() else []
                     private_subnets = private_subnets if 'private_subnets' in locals() else []
             
+            # Validate that we have required subnets
+            if not private_subnets:
+                logger.warning(f"  WARNING: No private subnets found in VPC {vpc_id}")
+                logger.warning(f"  This may cause EC2 instance creation to fail.")
+            
             # Return minimal configuration with existing VPC
             return {
                 "vpc_id": vpc_id,
@@ -2483,6 +2505,7 @@ def create_knowledge_base_with_opensearch(opensearch_info: Dict[str, str], knowl
         raise Exception("Failed to create vector index in OpenSearch collection")
     
     bedrock_agent_client = boto3.client("bedrock-agent", region_name=region)
+    parsing_model_arn = f"arn:aws:bedrock:{region}:{account_id}:inference-profile/us.anthropic.claude-sonnet-4-5-20250929-v1:0"
     
     # Check if Knowledge Base already exists
     try:
@@ -2590,7 +2613,7 @@ def create_knowledge_base_with_opensearch(opensearch_info: Dict[str, str], knowl
             "parsingConfiguration": {
                 "parsingStrategy": "BEDROCK_FOUNDATION_MODEL",
                 "bedrockFoundationModelConfiguration": {
-                    "modelArn": f"arn:aws:bedrock:{region}::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0"
+                    "modelArn": parsing_model_arn
                 }
             }
         }
@@ -2969,6 +2992,19 @@ def create_ec2_instance(vpc_info: Dict[str, str], ec2_role_arn: str,
     
     # Get instance profile name
     instance_profile_name = f"instance-profile-{project_name}-{region}"
+    
+    # Validate VPC info
+    if not vpc_info.get("private_subnets"):
+        raise ValueError(
+            f"No private subnets found in VPC {vpc_info.get('vpc_id', 'unknown')}. "
+            "Please ensure the VPC has at least one private subnet for EC2 deployment."
+        )
+    
+    if not vpc_info.get("ec2_sg_id"):
+        raise ValueError(
+            f"No EC2 security group found in VPC {vpc_info.get('vpc_id', 'unknown')}. "
+            "Please ensure the VPC has an EC2 security group."
+        )
     
     # Create EC2 instance
     logger.debug(f"Launching EC2 instance: t3.medium in subnet {vpc_info['private_subnets'][0]}")

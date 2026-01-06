@@ -1,0 +1,52 @@
+2026-01-06 20:13:54 - INFO - ============================================================
+2026-01-06 20:13:54 - INFO - Starting AWS Infrastructure Deployment
+2026-01-06 20:13:54 - INFO - ============================================================
+2026-01-06 20:13:54 - INFO - Project: mcp
+2026-01-06 20:13:54 - INFO - Region: us-west-2
+2026-01-06 20:13:54 - INFO - Account ID: 262976740991
+2026-01-06 20:13:54 - INFO - Bucket Name: storage-for-mcp-262976740991-us-west-2
+2026-01-06 20:13:54 - INFO - ============================================================
+2026-01-06 20:13:54 - INFO - [1/9] Creating S3 bucket: storage-for-mcp-262976740991-us-west-2
+2026-01-06 20:13:55 - WARNING - S3 bucket already exists: storage-for-mcp-262976740991-us-west-2
+2026-01-06 20:13:55 - INFO - [2/9] Creating Knowledge Base IAM role
+2026-01-06 20:13:56 - WARNING - IAM role already exists: role-knowledge-base-for-mcp-us-west-2
+2026-01-06 20:13:58 - INFO - [2/9] Creating Agent IAM role
+2026-01-06 20:13:58 - WARNING - IAM role already exists: role-agent-for-mcp-us-west-2
+2026-01-06 20:13:59 - INFO - [2/9] Creating EC2 IAM role
+2026-01-06 20:14:00 - WARNING - IAM role already exists: role-ec2-for-mcp-us-west-2
+2026-01-06 20:14:04 - INFO - [2/9] Creating Lambda RAG IAM role
+2026-01-06 20:14:04 - WARNING - IAM role already exists: role-lambda-rag-for-mcp-us-west-2
+2026-01-06 20:14:06 - INFO - [2/9] Creating AgentCore Memory IAM role
+2026-01-06 20:14:06 - WARNING - IAM role already exists: role-agentcore-memory-for-mcp-us-west-2
+2026-01-06 20:14:06 - INFO - [3/9] Creating Secrets Manager secrets
+2026-01-06 20:14:06 - INFO - Please enter API keys when prompted (press Enter to skip and leave empty):
+2026-01-06 20:14:07 - WARNING -   Secret already exists: openweathermap-mcp
+2026-01-06 20:14:07 - WARNING -   Secret already exists: langsmithapikey-mcp
+2026-01-06 20:14:07 - WARNING -   Secret already exists: tavilyapikey-mcp
+2026-01-06 20:14:07 - WARNING -   Secret already exists: perplexityapikey-mcp
+2026-01-06 20:14:07 - WARNING -   Secret already exists: firecrawlapikey-mcp
+2026-01-06 20:14:07 - WARNING -   Secret already exists: novaactapikey-mcp
+2026-01-06 20:14:08 - WARNING -   Secret already exists: notionapikey-mcp
+2026-01-06 20:14:08 - INFO - ✓ Created 7 secrets
+2026-01-06 20:14:08 - INFO - [4/9] Creating OpenSearch Serverless collection
+2026-01-06 20:14:08 - WARNING - OpenSearch collection already exists: mcp
+2026-01-06 20:14:08 - INFO - OpenSearch collection created: {'arn': 'arn:aws:aoss:us-west-2:262976740991:collection/m73qrelw9bi3cv8bqgfe', 'endpoint': 'https://m73qrelw9bi3cv8bqgfe.us-west-2.aoss.amazonaws.com'}
+2026-01-06 20:14:08 - INFO - [4.5/9] Creating Knowledge Base with OpenSearch collection
+2026-01-06 20:14:08 - INFO -   Creating vector index in OpenSearch collection...
+2026-01-06 20:14:08 - INFO - Found credentials in shared credentials file: ~/.aws/credentials
+2026-01-06 20:14:10 - INFO -   Profile details: {'ResponseMetadata': {'RequestId': '4c46af54-06f0-4ec3-9162-68f8023e6e68', 'HTTPStatusCode': 200, 'HTTPHeaders': {'date': 'Tue, 06 Jan 2026 11:14:10 GMT', 'content-type': 'application/json', 'content-length': '805', 'connection': 'keep-alive', 'x-amzn-requestid': '4c46af54-06f0-4ec3-9162-68f8023e6e68'}, 'RetryAttempts': 0}, 'inferenceProfileName': 'US Anthropic Claude Sonnet 4.5', 'description': 'Routes requests to Anthropic Claude Sonnet 4.5 in us-east-1, us-east-2 and us-west-2.', 'createdAt': datetime.datetime(2025, 9, 27, 7, 1, 53, 787000, tzinfo=tzutc()), 'updatedAt': datetime.datetime(2025, 12, 17, 0, 58, 38, 184000, tzinfo=tzutc()), 'inferenceProfileArn': 'arn:aws:bedrock:us-west-2:262976740991:inference-profile/us.anthropic.claude-sonnet-4-5-20250929-v1:0', 'models': [{'modelArn': 'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0'}, {'modelArn': 'arn:aws:bedrock:us-east-2::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0'}, {'modelArn': 'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0'}], 'inferenceProfileId': 'us.anthropic.claude-sonnet-4-5-20250929-v1:0', 'status': 'ACTIVE', 'type': 'SYSTEM_DEFINED'}
+2026-01-06 20:14:10 - INFO -   Models: [{'modelArn': 'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0'}, {'modelArn': 'arn:aws:bedrock:us-east-2::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0'}, {'modelArn': 'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0'}]
+2026-01-06 20:14:10 - ERROR - 
+2026-01-06 20:14:10 - ERROR - ============================================================
+2026-01-06 20:14:10 - ERROR - Deployment Failed!
+2026-01-06 20:14:10 - ERROR - ============================================================
+2026-01-06 20:14:10 - ERROR - Error: No inference profile found
+2026-01-06 20:14:10 - ERROR - Deployment time before failure: 0.26 minutes
+2026-01-06 20:14:10 - ERROR - ============================================================
+2026-01-06 20:14:10 - ERROR - Traceback (most recent call last):
+  File "/Users/ksdyb/Documents/src/mcp/installer.py", line 3432, in main
+    knowledge_base_id = create_knowledge_base_with_opensearch(opensearch_info, knowledge_base_role_arn, s3_bucket_name)
+  File "/Users/ksdyb/Documents/src/mcp/installer.py", line 2515, in create_knowledge_base_with_opensearch
+    raise Exception("No inference profile found")
+Exception: No inference profile found
+
