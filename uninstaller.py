@@ -76,6 +76,40 @@ def delete_cloudfront_distributions():
     except Exception as e:
         logger.error(f"Error processing CloudFront distributions: {e}")
 
+def delete_disabled_cloudfront_distributions():
+    """Delete disabled CloudFront distributions."""
+    logger.info("Deleting disabled CloudFront distributions")
+    
+    try:
+        distributions = cloudfront_client.list_distributions()
+        for dist in distributions.get("DistributionList", {}).get("Items", []):
+            if project_name in dist.get("Comment", "") and not dist.get("Enabled", True):
+                dist_id = dist["Id"]
+                logger.info(f"  Deleting disabled distribution: {dist_id}")
+                
+                try:
+                    # Get current config and ETag
+                    config_response = cloudfront_client.get_distribution_config(Id=dist_id)
+                    etag = config_response["ETag"]
+                    
+                    # Delete distribution
+                    cloudfront_client.delete_distribution(
+                        Id=dist_id,
+                        IfMatch=etag
+                    )
+                    logger.info(f"  ✓ Deleted distribution: {dist_id}")
+                except ClientError as e:
+                    if e.response["Error"]["Code"] == "DistributionNotDisabled":
+                        logger.info(f"  Distribution {dist_id} is not fully disabled yet, skipping")
+                    elif e.response["Error"]["Code"] == "NoSuchDistribution":
+                        logger.debug(f"  Distribution {dist_id} already deleted")
+                    else:
+                        logger.warning(f"  Could not delete distribution {dist_id}: {e}")
+        
+        logger.info("✓ Disabled CloudFront distributions processed")
+    except Exception as e:
+        logger.error(f"Error deleting disabled CloudFront distributions: {e}")
+
 def delete_alb_resources():
     """Delete ALB, target groups, and listeners."""
     logger.info("[2/9] Deleting ALB resources")
@@ -645,6 +679,7 @@ def main():
         delete_secrets()
         delete_iam_roles()
         delete_s3_buckets()
+        delete_disabled_cloudfront_distributions()
         
         elapsed_time = time.time() - start_time
         logger.info("")
