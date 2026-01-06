@@ -22,22 +22,49 @@ logging.basicConfig(
 )
 logger = logging.getLogger("utils")
 
+script_dir = os.path.dirname(os.path.abspath(__file__))
+config_path = os.path.join(script_dir, "config.json")
+
 def load_config():
     config = None
     
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    config_path = os.path.join(script_dir, "config.json")
-    
-    with open(config_path, "r", encoding="utf-8") as f:
-        config = json.load(f)
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            config = json.load(f)
+    except Exception as e:
+        logger.error(f"Error loading config: {e}")
+        config = {}
+        
+        project_name = "mcp"
+
+        session = boto3.Session()
+        region = session.region_name
+
+        sts_client = boto3.client("sts", region_name=region)
+        account_id = sts_client.get_caller_identity()["Account"]
+
+        config['projectName'] = project_name
+        config['accountId'] = account_id
+        config['region'] = region
+
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2)
     
     return config
 
 config = load_config()
 
-bedrock_region = config['region']
-accountId = config['accountId']
-projectName = config['projectName']
+bedrock_region = config.get('region', 'us-west-2')
+accountId = config.get('accountId', None)
+if accountId is None:
+    session = boto3.Session()
+    region = session.region_name
+    
+    sts_client = boto3.client("sts", region_name=region)
+    accountId = sts_client.get_caller_identity()["Account"]
+    config['accountId'] = accountId
+
+projectName = config.get('projectName', 'mcp')
 
 def get_contents_type(file_name):
     if file_name.lower().endswith((".jpg", ".jpeg")):

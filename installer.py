@@ -18,8 +18,13 @@ from botocore.exceptions import ClientError
 
 # Configuration
 project_name = "mcp"
-region = os.environ.get("CDK_DEFAULT_REGION", "us-west-2")
-account_id = os.environ.get("CDK_DEFAULT_ACCOUNT", "")
+
+session = boto3.Session()
+region = session.region_name
+
+sts_client = boto3.client("sts", region_name=region)
+account_id = sts_client.get_caller_identity()["Account"]
+
 vector_index_name = project_name
 custom_header_name = "X-Custom-Header"
 custom_header_value = f"{project_name}_12dab15e4s31"
@@ -33,15 +38,9 @@ ec2_client = boto3.client("ec2", region_name=region)
 elbv2_client = boto3.client("elbv2", region_name=region)
 cloudfront_client = boto3.client("cloudfront", region_name=region)
 lambda_client = boto3.client("lambda", region_name=region)
-sts_client = boto3.client("sts", region_name=region)
 ssm_client = boto3.client("ssm", region_name=region)
 
-# Get account ID if not set
-if not account_id:
-    account_id = sts_client.get_caller_identity()["Account"]
-
 bucket_name = f"storage-for-{project_name}-{account_id}-{region}"
-
 
 # Configure logging
 def setup_logging(log_level=logging.INFO):
@@ -116,12 +115,36 @@ def create_s3_bucket() -> str:
             VersioningConfiguration={"Status": "Suspended"}
         )
         
+        # Create docs folder
+        logger.debug("Creating docs folder")
+        try:
+            s3_client.put_object(
+                Bucket=bucket_name,
+                Key="docs/",
+                Body=b""
+            )
+            logger.debug("docs folder created successfully")
+        except ClientError as e:
+            logger.warning(f"Failed to create docs folder: {e}")
+        
         logger.info(f"✓ S3 bucket created successfully: {bucket_name}")
         return bucket_name
     
     except ClientError as e:
         if e.response["Error"]["Code"] in ["BucketAlreadyExists", "BucketAlreadyOwnedByYou"]:
             logger.warning(f"S3 bucket already exists: {bucket_name}")
+            # Create docs folder if bucket already exists
+            logger.debug("Creating docs folder in existing bucket")
+            try:
+                s3_client.put_object(
+                    Bucket=bucket_name,
+                    Key="docs/",
+                    Body=b""
+                )
+                logger.debug("docs folder created successfully")
+            except ClientError as folder_error:
+                if folder_error.response["Error"]["Code"] != "NoSuchBucket":
+                    logger.warning(f"Failed to create docs folder: {folder_error}")
             return bucket_name
         logger.error(f"Failed to create S3 bucket: {e}")
         raise
@@ -1154,14 +1177,14 @@ def create_vpc() -> Dict[str, str]:
     cidr_block = get_available_cidr_block()
     
     # Check if VPC already exists
-    try:
-        vpcs = ec2_client.describe_vpcs(
-            Filters=[{"Name": "tag:Name", "Values": [vpc_name]}]
-        )
-        if vpcs["Vpcs"]:
-            vpc_id = vpcs["Vpcs"][0]["VpcId"]
-            logger.warning(f"VPC already exists: {vpc_id}")
-            
+    vpcs = ec2_client.describe_vpcs(
+        Filters=[{"Name": "tag:Name", "Values": [vpc_name]}]
+    )
+    if vpcs["Vpcs"]:
+        vpc_id = vpcs["Vpcs"][0]["VpcId"]
+        logger.warning(f"VPC already exists: {vpc_id}")
+        
+        try:
             # Get existing resources
             subnets = ec2_client.describe_subnets(
                 Filters=[{"Name": "vpc-id", "Values": [vpc_id]}]
@@ -1554,8 +1577,22 @@ def create_vpc() -> Dict[str, str]:
                 "ec2_sg_id": ec2_sg_id,
                 "vpc_endpoint_id": vpc_endpoint_id
             }
-    except Exception as e:
-        logger.debug(f"No existing VPC found, creating new one: {e}")
+        except Exception as e:
+            # If there's an error processing existing VPC, log warning but still return what we have
+            logger.warning(f"Error processing existing VPC {vpc_id}: {e}")
+            logger.warning("Returning existing VPC with minimal configuration. Some resources may need manual setup.")
+            # Return minimal configuration with existing VPC
+            return {
+                "vpc_id": vpc_id,
+                "public_subnets": public_subnets if 'public_subnets' in locals() else [],
+                "private_subnets": private_subnets if 'private_subnets' in locals() else [],
+                "alb_sg_id": alb_sg_id if 'alb_sg_id' in locals() else None,
+                "ec2_sg_id": ec2_sg_id if 'ec2_sg_id' in locals() else None,
+                "vpc_endpoint_id": vpc_endpoint_id if 'vpc_endpoint_id' in locals() else None
+            }
+    
+    # No existing VPC found, create new one
+    logger.info("No existing VPC found, creating new VPC...")
     
     # Create VPC
     logger.debug(f"Creating VPC: {vpc_name} with CIDR {cidr_block}")
@@ -2026,9 +2063,100 @@ def delete_knowledge_base(knowledge_base_id: str) -> None:
             raise
 
 
+def create_vector_index_in_opensearch(collection_endpoint: str, index_name: str) -> bool:
+    """Create vector index in OpenSearch Serverless collection."""
+    try:
+        # Try to import required packages, install if missing
+        try:
+            import requests
+            from requests_aws4auth import AWS4Auth
+        except ImportError:
+            logger.info("  Installing required packages for OpenSearch index creation...")
+            import subprocess
+            import sys
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "requests-aws4auth"])
+            import requests
+            from requests_aws4auth import AWS4Auth
+        
+        # Get AWS credentials
+        session = boto3.Session()
+        credentials = session.get_credentials()
+        awsauth = AWS4Auth(credentials.access_key, credentials.secret_key, region, 'aoss', session_token=credentials.token)
+        
+        # Check if index already exists
+        url = f"{collection_endpoint}/{index_name}"
+        response = requests.get(url, auth=awsauth, timeout=30)
+        if response.status_code == 200:
+            logger.debug(f"Vector index '{index_name}' already exists")
+            return True
+        
+        # Index mapping for vector search
+        index_mapping = {
+            "settings": {
+                "index": {
+                    "knn": True,
+                    "knn.algo_param.ef_search": 512
+                }
+            },
+            "mappings": {
+                "properties": {
+                    "vector_field": {
+                        "type": "knn_vector",
+                        "dimension": 1024,
+                        "method": {
+                            "name": "hnsw",
+                            "space_type": "cosinesimil",
+                            "engine": "faiss",
+                            "parameters": {
+                                "ef_construction": 512,
+                                "m": 16
+                            }
+                        }
+                    },
+                    "AMAZON_BEDROCK_TEXT": {
+                        "type": "text"
+                    },
+                    "AMAZON_BEDROCK_METADATA": {
+                        "type": "text"
+                    }
+                }
+            }
+        }
+        
+        # Create index
+        headers = {"Content-Type": "application/json"}
+        response = requests.put(
+            url,
+            auth=awsauth,
+            headers=headers,
+            data=json.dumps(index_mapping),
+            timeout=30
+        )
+        
+        if response.status_code in [200, 201]:
+            logger.info(f"  ✓ Vector index '{index_name}' created successfully")
+            time.sleep(5)  # Wait for index to be ready
+            return True
+        else:
+            logger.error(f"  Failed to create vector index: {response.status_code} - {response.text}")
+            return False
+            
+    except ImportError:
+        logger.error("  requests-aws4auth package is required. Install with: pip install requests-aws4auth")
+        return False
+    except Exception as e:
+        logger.error(f"  Error creating vector index: {e}")
+        return False
+
+
 def create_knowledge_base_with_opensearch(opensearch_info: Dict[str, str], knowledge_base_role_arn: str, s3_bucket_name: str) -> str:
     """Create Knowledge Base with correct OpenSearch collection."""
     logger.info("[4.5/9] Creating Knowledge Base with OpenSearch collection")
+    
+    # Create vector index first
+    logger.info("  Creating vector index in OpenSearch collection...")
+    if not create_vector_index_in_opensearch(opensearch_info["endpoint"], vector_index_name):
+        raise Exception("Failed to create vector index in OpenSearch collection")
     
     bedrock_agent_client = boto3.client("bedrock-agent", region_name=region)
     
@@ -2569,71 +2697,167 @@ def create_alb_target_group_and_listener(alb_info: Dict[str, str], instance_id: 
     logger.info("[9/9] Creating ALB target group and listener")
     
     target_port = 8501
+    target_group_name = f"TG-for-{project_name}"
     
-    # Create target group
-    logger.debug(f"Creating target group on port {target_port}")
-    tg_response = elbv2_client.create_target_group(
-        Name=f"TG-for-{project_name}",
-        Protocol="HTTP",
-        Port=target_port,
-        VpcId=vpc_info["vpc_id"],
-        HealthCheckProtocol="HTTP",
-        HealthCheckPath="/",
-        HealthCheckIntervalSeconds=30,
-        HealthCheckTimeoutSeconds=5,
-        HealthyThresholdCount=2,
-        UnhealthyThresholdCount=3,
-        TargetType="instance"
-    )
-    tg_arn = tg_response["TargetGroups"][0]["TargetGroupArn"]
-    logger.debug(f"Target group created: {tg_arn}")
+    # Check if target group already exists
+    tg_arn = None
+    try:
+        tgs = elbv2_client.describe_target_groups(Names=[target_group_name])
+        if tgs["TargetGroups"]:
+            tg_arn = tgs["TargetGroups"][0]["TargetGroupArn"]
+            logger.warning(f"  Target group already exists: {tg_arn}")
+    except ClientError as e:
+        if e.response["Error"]["Code"] != "TargetGroupNotFound":
+            logger.warning(f"  Error checking existing target group: {e}")
     
-    # Register EC2 instance
-    logger.debug(f"Waiting for EC2 instance {instance_id} to be running...")
-    waiter = ec2_client.get_waiter('instance_running')
-    waiter.wait(InstanceIds=[instance_id])
+    # Create target group if it doesn't exist
+    if not tg_arn:
+        logger.debug(f"Creating target group on port {target_port}")
+        try:
+            tg_response = elbv2_client.create_target_group(
+                Name=target_group_name,
+                Protocol="HTTP",
+                Port=target_port,
+                VpcId=vpc_info["vpc_id"],
+                HealthCheckProtocol="HTTP",
+                HealthCheckPath="/",
+                HealthCheckIntervalSeconds=30,
+                HealthCheckTimeoutSeconds=5,
+                HealthyThresholdCount=2,
+                UnhealthyThresholdCount=3,
+                TargetType="instance"
+            )
+            tg_arn = tg_response["TargetGroups"][0]["TargetGroupArn"]
+            logger.debug(f"Target group created: {tg_arn}")
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "DuplicateTargetGroupName":
+                # Try to get the existing target group again
+                tgs = elbv2_client.describe_target_groups(Names=[target_group_name])
+                if tgs["TargetGroups"]:
+                    tg_arn = tgs["TargetGroups"][0]["TargetGroupArn"]
+                    logger.warning(f"  Target group already exists: {tg_arn}")
+            else:
+                raise
     
-    logger.debug(f"Registering EC2 instance {instance_id} to target group")
-    elbv2_client.register_targets(
-        TargetGroupArn=tg_arn,
-        Targets=[{"Id": instance_id, "Port": target_port}]
-    )
+    # Check if EC2 instance is already registered in target group
+    instance_registered = False
+    try:
+        targets = elbv2_client.describe_target_health(TargetGroupArn=tg_arn)
+        for target in targets.get("TargetHealthDescriptions", []):
+            if target["Target"]["Id"] == instance_id and target["Target"]["Port"] == target_port:
+                instance_registered = True
+                logger.warning(f"  EC2 instance {instance_id} is already registered in target group")
+                break
+    except ClientError as e:
+        logger.debug(f"  Error checking registered targets: {e}")
     
-    # Create listener
-    logger.debug("Creating ALB listener on port 80")
-    listener_response = elbv2_client.create_listener(
-        LoadBalancerArn=alb_info["arn"],
-        Protocol="HTTP",
-        Port=80,
-        DefaultActions=[
-            {
-                "Type": "forward",
-                "TargetGroupArn": tg_arn
-            }
-        ]
-    )
-    listener_arn = listener_response["Listeners"][0]["ListenerArn"]
+    # Register EC2 instance if not already registered
+    if not instance_registered:
+        logger.debug(f"Waiting for EC2 instance {instance_id} to be running...")
+        waiter = ec2_client.get_waiter('instance_running')
+        waiter.wait(InstanceIds=[instance_id])
+        
+        logger.debug(f"Registering EC2 instance {instance_id} to target group")
+        try:
+            elbv2_client.register_targets(
+                TargetGroupArn=tg_arn,
+                Targets=[{"Id": instance_id, "Port": target_port}]
+            )
+            logger.info(f"  ✓ Registered EC2 instance {instance_id} to target group")
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "DuplicateTarget":
+                logger.warning(f"  EC2 instance {instance_id} is already registered in target group")
+            else:
+                raise
     
-    # Add rule for custom header
-    elbv2_client.create_rule(
-        ListenerArn=listener_arn,
-        Priority=10,
-        Conditions=[
-            {
-                "Field": "http-header",
-                "HttpHeaderConfig": {
-                    "HttpHeaderName": custom_header_name,
-                    "Values": [custom_header_value]
-                }
-            }
-        ],
-        Actions=[
-            {
-                "Type": "forward",
-                "TargetGroupArn": tg_arn
-            }
-        ]
-    )
+    # Check if listener already exists
+    listener_arn = None
+    try:
+        listeners = elbv2_client.describe_listeners(LoadBalancerArn=alb_info["arn"])
+        for listener in listeners.get("Listeners", []):
+            if listener["Port"] == 80 and listener["Protocol"] == "HTTP":
+                listener_arn = listener["ListenerArn"]
+                logger.warning(f"  Listener already exists on port 80: {listener_arn}")
+                break
+    except ClientError as e:
+        logger.warning(f"  Error checking existing listeners: {e}")
+    
+    # Create listener if it doesn't exist
+    if not listener_arn:
+        logger.debug("Creating ALB listener on port 80")
+        try:
+            listener_response = elbv2_client.create_listener(
+                LoadBalancerArn=alb_info["arn"],
+                Protocol="HTTP",
+                Port=80,
+                DefaultActions=[
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": tg_arn
+                    }
+                ]
+            )
+            listener_arn = listener_response["Listeners"][0]["ListenerArn"]
+            logger.debug(f"Listener created: {listener_arn}")
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "DuplicateListener":
+                # Try to get the existing listener again
+                listeners = elbv2_client.describe_listeners(LoadBalancerArn=alb_info["arn"])
+                for listener in listeners.get("Listeners", []):
+                    if listener["Port"] == 80 and listener["Protocol"] == "HTTP":
+                        listener_arn = listener["ListenerArn"]
+                        logger.warning(f"  Listener already exists on port 80: {listener_arn}")
+                        break
+            else:
+                raise
+    
+    # Check if rule already exists for custom header
+    rule_exists = False
+    try:
+        rules = elbv2_client.describe_rules(ListenerArn=listener_arn)
+        for rule in rules.get("Rules", []):
+            # Check if rule has Priority 10 and matches our custom header condition
+            if rule.get("Priority") == "10":
+                for condition in rule.get("Conditions", []):
+                    if (condition.get("Field") == "http-header" and 
+                        condition.get("HttpHeaderConfig", {}).get("HttpHeaderName") == custom_header_name):
+                        rule_exists = True
+                        logger.warning(f"  Rule with Priority 10 for custom header already exists: {rule['RuleArn']}")
+                        break
+                if rule_exists:
+                    break
+    except ClientError as e:
+        logger.debug(f"  Error checking existing rules: {e}")
+    
+    # Add rule for custom header if it doesn't exist
+    if not rule_exists:
+        logger.debug("Creating rule for custom header")
+        try:
+            elbv2_client.create_rule(
+                ListenerArn=listener_arn,
+                Priority=10,
+                Conditions=[
+                    {
+                        "Field": "http-header",
+                        "HttpHeaderConfig": {
+                            "HttpHeaderName": custom_header_name,
+                            "Values": [custom_header_value]
+                        }
+                    }
+                ],
+                Actions=[
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": tg_arn
+                    }
+                ]
+            )
+            logger.info(f"  ✓ Created rule for custom header")
+        except ClientError as e:
+            if e.response["Error"]["Code"] in ["PriorityInUse", "RuleAlreadyExists"]:
+                logger.warning(f"  Rule with Priority 10 already exists")
+            else:
+                raise
     
     logger.info(f"✓ ALB target group and listener created")
     logger.info(f"  Target group: {tg_arn}")
@@ -2781,10 +3005,10 @@ def verify_ec2_subnet_deployment():
                 if is_private_subnet and not has_public_ip:
                     logger.info(f"    ✓ Correctly deployed in private subnet")
                 elif not is_private_subnet:
-                    logger.warning(f"    ⚠️  WARNING: Instance is deployed in a PUBLIC subnet!")
-                    logger.warning(f"    ⚠️  This is not recommended for production environments.")
+                    logger.warning(f"    WARNING: Instance is deployed in a PUBLIC subnet!")
+                    logger.warning(f"    This is not recommended for production environments.")
                 elif has_public_ip:
-                    logger.warning(f"    ⚠️  WARNING: Instance has a public IP address!")
+                    logger.warning(f"    WARNING: Instance has a public IP address!")
                 
     except Exception as e:
         logger.debug(f"Could not verify EC2 deployment: {e}")
@@ -2846,6 +3070,7 @@ def main():
         
         # 4. Create OpenSearch collection (with EC2 and Knowledge Base roles for data access)
         opensearch_info = create_opensearch_collection(ec2_role_arn, knowledge_base_role_arn)
+        logger.info(f"OpenSearch collection created: {opensearch_info}")
         
         # 4.5. Create Knowledge Base with correct OpenSearch collection
         knowledge_base_id = create_knowledge_base_with_opensearch(opensearch_info, knowledge_base_role_arn, s3_bucket_name)
@@ -2936,11 +3161,11 @@ def main():
         logger.info("="*60)
         logger.info("")
         logger.info("="*60)
-        logger.info("⚠️  IMPORTANT: CloudFront Domain Address")
+        logger.info("  IMPORTANT: CloudFront Domain Address")
         logger.info("="*60)
-        logger.info(f"🌐 CloudFront URL: https://{cloudfront_info['domain']}")
+        logger.info(f" CloudFront URL: https://{cloudfront_info['domain']}")
         logger.info("")
-        logger.info("Note: CloudFront distribution may take 15-20 minutes to fully deploy")
+        logger.info("Note: CloudFront distribution and agent application on EC2 instance may take 15-20 minutes to fully deploy")
         logger.info("      Once deployed, you can access your application at the URL above")
         logger.info("="*60)
         logger.info("")
