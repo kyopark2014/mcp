@@ -27,6 +27,7 @@ ec2_client = boto3.client("ec2", region_name=region)
 elbv2_client = boto3.client("elbv2", region_name=region)
 cloudfront_client = boto3.client("cloudfront", region_name=region)
 sts_client = boto3.client("sts", region_name=region)
+bedrock_agent_client = boto3.client("bedrock-agent", region_name=region)
 
 # Get account ID if not set
 if not account_id:
@@ -395,6 +396,87 @@ def delete_opensearch_collection():
     except Exception as e:
         logger.error(f"Error deleting OpenSearch collection: {e}")
 
+def delete_knowledge_bases():
+    """Delete Knowledge Bases and their data sources."""
+    logger.info("[5.5/9] Deleting Knowledge Bases")
+    
+    try:
+        # List all knowledge bases
+        try:
+            kb_list = bedrock_agent_client.list_knowledge_bases()
+            knowledge_bases = kb_list.get("knowledgeBaseSummaries", [])
+            
+            # Find knowledge bases matching project name
+            kb_to_delete = []
+            for kb in knowledge_bases:
+                if kb["name"] == project_name:
+                    kb_to_delete.append(kb["knowledgeBaseId"])
+                    logger.info(f"  Knowledge Base found: {kb['knowledgeBaseId']}")
+                                
+            if not kb_to_delete:
+                logger.info(f"  No Knowledge Base found with name: {project_name}")
+                return
+            
+            # Delete each knowledge base
+            for kb_id in kb_to_delete:
+                try:
+                    logger.info(f"  Deleting Knowledge Base: {kb_id}")
+                    
+                    # Delete all data sources first
+                    try:
+                        data_sources = bedrock_agent_client.list_data_sources(
+                            knowledgeBaseId=kb_id,
+                            maxResults=100
+                        )
+                        for ds in data_sources.get("dataSourceSummaries", []):
+                            try:
+                                bedrock_agent_client.delete_data_source(
+                                    knowledgeBaseId=kb_id,
+                                    dataSourceId=ds["dataSourceId"]
+                                )
+                                logger.info(f"    ✓ Deleted data source: {ds['dataSourceId']}")
+                            except Exception as e:
+                                logger.warning(f"    Could not delete data source {ds['dataSourceId']}: {e}")
+                    except Exception as e:
+                        logger.debug(f"    Error listing/deleting data sources: {e}")
+                    
+                    # Delete the knowledge base
+                    bedrock_agent_client.delete_knowledge_base(knowledgeBaseId=kb_id)
+                    logger.info(f"  ✓ Deleted Knowledge Base: {kb_id}")
+                    
+                    # Wait for deletion to complete
+                    logger.debug("    Waiting for Knowledge Base deletion to complete...")
+                    max_wait = 60  # Wait up to 60 seconds
+                    waited = 0
+                    while waited < max_wait:
+                        try:
+                            kb_response = bedrock_agent_client.get_knowledge_base(knowledgeBaseId=kb_id)
+                            status = kb_response["knowledgeBase"]["status"]
+                            if status == "DELETED":
+                                break
+                            time.sleep(5)
+                            waited += 5
+                        except ClientError as e:
+                            if e.response["Error"]["Code"] == "ResourceNotFoundException":
+                                logger.debug("    Knowledge Base deletion confirmed")
+                                break
+                            raise
+                    
+                except ClientError as e:
+                    if e.response["Error"]["Code"] == "ResourceNotFoundException":
+                        logger.debug(f"  Knowledge Base {kb_id} already deleted")
+                    else:
+                        logger.warning(f"  Could not delete Knowledge Base {kb_id}: {e}")
+                except Exception as e:
+                    logger.warning(f"  Error deleting Knowledge Base {kb_id}: {e}")
+            
+            logger.info("✓ Knowledge Bases deleted")
+        except Exception as e:
+            logger.warning(f"  Could not list Knowledge Bases: {e}")
+            
+    except Exception as e:
+        logger.error(f"Error deleting Knowledge Bases: {e}")
+
 def delete_secrets():
     """Delete Secrets Manager secrets."""
     logger.info("[6/9] Deleting secrets")
@@ -559,6 +641,7 @@ def main():
         delete_ec2_instances()
         delete_vpc_resources()
         delete_opensearch_collection()
+        delete_knowledge_bases()
         delete_secrets()
         delete_iam_roles()
         delete_s3_buckets()

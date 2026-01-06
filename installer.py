@@ -18,8 +18,13 @@ from botocore.exceptions import ClientError
 
 # Configuration
 project_name = "mcp"
-region = os.environ.get("CDK_DEFAULT_REGION", "us-west-2")
-account_id = os.environ.get("CDK_DEFAULT_ACCOUNT", "")
+
+session = boto3.Session()
+region = session.region_name
+
+sts_client = boto3.client("sts", region_name=region)
+account_id = sts_client.get_caller_identity()["Account"]
+
 vector_index_name = project_name
 custom_header_name = "X-Custom-Header"
 custom_header_value = f"{project_name}_12dab15e4s31"
@@ -33,15 +38,9 @@ ec2_client = boto3.client("ec2", region_name=region)
 elbv2_client = boto3.client("elbv2", region_name=region)
 cloudfront_client = boto3.client("cloudfront", region_name=region)
 lambda_client = boto3.client("lambda", region_name=region)
-sts_client = boto3.client("sts", region_name=region)
 ssm_client = boto3.client("ssm", region_name=region)
 
-# Get account ID if not set
-if not account_id:
-    account_id = sts_client.get_caller_identity()["Account"]
-
 bucket_name = f"storage-for-{project_name}-{account_id}-{region}"
-
 
 # Configure logging
 def setup_logging(log_level=logging.INFO):
@@ -2961,6 +2960,7 @@ def main():
         
         # 4. Create OpenSearch collection (with EC2 and Knowledge Base roles for data access)
         opensearch_info = create_opensearch_collection(ec2_role_arn, knowledge_base_role_arn)
+        logger.info(f"OpenSearch collection created: {opensearch_info}")
         
         # 4.5. Create Knowledge Base with correct OpenSearch collection
         knowledge_base_id = create_knowledge_base_with_opensearch(opensearch_info, knowledge_base_role_arn, s3_bucket_name)
@@ -3051,11 +3051,11 @@ def main():
         logger.info("="*60)
         logger.info("")
         logger.info("="*60)
-        logger.info("⚠️  IMPORTANT: CloudFront Domain Address")
+        logger.info("  IMPORTANT: CloudFront Domain Address")
         logger.info("="*60)
-        logger.info(f"🌐 CloudFront URL: https://{cloudfront_info['domain']}")
+        logger.info(f" CloudFront URL: https://{cloudfront_info['domain']}")
         logger.info("")
-        logger.info("Note: CloudFront distribution may take 15-20 minutes to fully deploy")
+        logger.info("Note: CloudFront distribution and agent application on EC2 instance may take 15-20 minutes to fully deploy")
         logger.info("      Once deployed, you can access your application at the URL above")
         logger.info("="*60)
         logger.info("")
