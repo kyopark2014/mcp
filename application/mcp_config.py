@@ -21,8 +21,8 @@ config_path = os.path.join(script_dir, "config.json")
 config = utils.load_config()
 logger.info(f"config: {config}")
 
-region = config["region"] if "region" in config else "us-west-2"
-projectName = config["projectName"] if "projectName" in config else "mcp"
+region = config.get("region", "us-west-2")
+projectName = config.get("projectName", "mcp")
 workingDir = os.path.dirname(os.path.abspath(__file__))
 logger.info(f"workingDir: {workingDir}")
 
@@ -54,13 +54,18 @@ def get_cognito_config(cognito_config):
 
     client_id = cognito_config.get('client_id')
     if not client_id:
-        response = cognito_client.list_user_pool_clients(UserPoolId=user_pool_id)
-        for client in response['UserPoolClients']:
-            if client['ClientName'] == client_name:
-                client_id = client['ClientId']
-                print(f"Found cognito client: {client_id}")
-                cognito_config['client_id'] = client_id     
-                break
+        try:
+            response = cognito_client.list_user_pool_clients(UserPoolId=user_pool_id)
+            for client in response['UserPoolClients']:
+                if client['ClientName'] == client_name:
+                    client_id = client['ClientId']
+                    print(f"Found cognito client: {client_id}")
+                    cognito_config['client_id'] = client_id     
+                    break
+        except Exception as e:
+            logger.error(f"Error listing user pool clients: {e}")
+            cognito_config['client_id'] = None
+            pass
 
     username = cognito_config.get('test_username')
     password = cognito_config.get('test_password')
