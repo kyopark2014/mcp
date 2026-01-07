@@ -19,6 +19,7 @@ from botocore.exceptions import ClientError
 # Configuration
 project_name = "mcp"
 region = "us-west-2"
+git_name = "mcp"
 
 sts_client = boto3.client("sts", region_name=region)
 account_id = sts_client.get_caller_identity()["Account"]
@@ -2986,8 +2987,7 @@ def create_ec2_instance(vpc_info: Dict[str, str], ec2_role_arn: str,
         "sharing_url": f"https://{cloudfront_domain}",
         "agentcore_memory_role": agentcore_memory_role_arn
     }
-    
-    git_name = "mcp"
+        
     user_data_script = get_setup_script(environment, git_name)
     
     # Get instance profile name

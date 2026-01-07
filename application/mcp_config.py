@@ -666,19 +666,32 @@ def load_config(mcp_type):
             }
         }    
     
-    elif mcp_type == "tavily":
+    # elif mcp_type == "tavily":
+    #     return {
+    #         "mcpServers": {
+    #             "tavily-mcp": {
+    #                 "command": "npx",
+    #                 "args": ["-y", "tavily-mcp@0.1.4"],
+    #                 "env": {
+    #                     "TAVILY_API_KEY": utils.tavily_key
+    #                 },
+    #             }
+    #         }
+    #     }
+    elif mcp_type == "tavily": 
         return {
             "mcpServers": {
-                "tavily-mcp": {
+                "tavily-remote-mcp": {
                     "command": "npx",
-                    "args": ["-y", "tavily-mcp@0.1.4"],
-                    "env": {
-                        "TAVILY_API_KEY": utils.tavily_key
-                    },
+                    "args": [
+                        "-y",
+                        "mcp-remote",
+                        f"https://mcp.tavily.com/mcp/?tavilyApiKey={utils.tavily_key}"
+                    ]
                 }
             }
         }
-    
+
     elif mcp_type == "wikipedia":
         return {
             "mcpServers": {
