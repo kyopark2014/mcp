@@ -5,8 +5,6 @@ This script deletes all AWS infrastructure resources created by installer.py.
 """
 
 import boto3
-import json
-import os
 import time
 import logging
 from datetime import datetime
@@ -388,6 +386,20 @@ def delete_vpc_resources():
         for vpc in all_vpcs.get("Vpcs", []):
             vpc_id = vpc["VpcId"]
             if vpc_id in vpc_ids_found:
+                continue
+            
+            # First, check if VPC has the correct name tag
+            vpc_has_name_tag = False
+            for tag in vpc.get("Tags", []):
+                if tag.get("Key") == "Name" and tag.get("Value") == vpc_name:
+                    vpc_has_name_tag = True
+                    vpcs_to_delete.append(vpc_id)
+                    vpc_ids_found.add(vpc_id)
+                    logger.info(f"  Found VPC by name tag: {vpc_id}")
+                    break
+            
+            # If VPC has the correct name tag, skip checking resources
+            if vpc_has_name_tag:
                 continue
             
             # Check if VPC has project-related resources
