@@ -2787,10 +2787,7 @@ def create_knowledge_base_with_opensearch(opensearch_info: Dict[str, str], knowl
         raise Exception("Failed to create vector index in OpenSearch collection")
     
     bedrock_agent_client = boto3.client("bedrock-agent", region_name=region)
-    if region == "ap-northeast-2":
-        parsing_model_arn = f"arn:aws:bedrock:{region}:{account_id}:inference-profile/apac.anthropic.claude-sonnet-4-5-20250929-v1:0"
-    else:
-        parsing_model_arn = f"arn:aws:bedrock:{region}:{account_id}:inference-profile/us.anthropic.claude-sonnet-4-5-20250929-v1:0"    
+    parsing_model_arn = f"arn:aws:bedrock:{region}:{account_id}:inference-profile/global.anthropic.claude-sonnet-4-5-20250929-v1:0"    
     
     # Check if Knowledge Base already exists
     try:

@@ -1,0 +1,101 @@
+2026-01-08 16:31:35 - INFO - ============================================================
+2026-01-08 16:31:35 - INFO - Starting AWS Infrastructure Deployment
+2026-01-08 16:31:35 - INFO - ============================================================
+2026-01-08 16:31:35 - INFO - Project: mcp
+2026-01-08 16:31:35 - INFO - Region: us-west-2
+2026-01-08 16:31:35 - INFO - Account ID: 262976740991
+2026-01-08 16:31:35 - INFO - Bucket Name: storage-for-mcp-262976740991-us-west-2
+2026-01-08 16:31:35 - INFO - ============================================================
+2026-01-08 16:31:35 - INFO - [1/10] Creating S3 bucket: storage-for-mcp-262976740991-us-west-2
+2026-01-08 16:31:36 - WARNING - S3 bucket already exists: storage-for-mcp-262976740991-us-west-2
+2026-01-08 16:31:36 - INFO - [2/10] Creating Knowledge Base IAM role
+2026-01-08 16:31:37 - WARNING - IAM role already exists: role-knowledge-base-for-mcp-us-west-2
+2026-01-08 16:31:38 - INFO - [2/10] Creating Agent IAM role
+2026-01-08 16:31:39 - WARNING - IAM role already exists: role-agent-for-mcp-us-west-2
+2026-01-08 16:31:40 - INFO - [2/10] Creating EC2 IAM role
+2026-01-08 16:31:40 - WARNING - IAM role already exists: role-ec2-for-mcp-us-west-2
+2026-01-08 16:31:45 - INFO - [2/10] Creating Lambda RAG IAM role
+2026-01-08 16:31:45 - WARNING - IAM role already exists: role-lambda-rag-for-mcp-us-west-2
+2026-01-08 16:31:47 - INFO - [2/10] Creating AgentCore Memory IAM role
+2026-01-08 16:31:47 - WARNING - IAM role already exists: role-agentcore-memory-for-mcp-us-west-2
+2026-01-08 16:31:47 - INFO - [3/10] Creating Secrets Manager secrets
+2026-01-08 16:31:47 - INFO - Please enter API keys when prompted (press Enter to skip and leave empty):
+2026-01-08 16:31:48 - WARNING -   Secret already exists: openweathermap-mcp
+2026-01-08 16:31:48 - WARNING -   Secret already exists: langsmithapikey-mcp
+2026-01-08 16:31:48 - WARNING -   Secret already exists: tavilyapikey-mcp
+2026-01-08 16:31:49 - WARNING -   Secret already exists: perplexityapikey-mcp
+2026-01-08 16:31:49 - WARNING -   Secret already exists: firecrawlapikey-mcp
+2026-01-08 16:31:49 - WARNING -   Secret already exists: novaactapikey-mcp
+2026-01-08 16:31:49 - WARNING -   Secret already exists: notionapikey-mcp
+2026-01-08 16:31:49 - INFO - ✓ Created 7 secrets
+2026-01-08 16:31:49 - INFO - [4/10] Creating OpenSearch Serverless collection
+2026-01-08 16:31:50 - WARNING - OpenSearch collection already exists: mcp
+2026-01-08 16:31:50 - INFO - OpenSearch collection created: {'arn': 'arn:aws:aoss:us-west-2:262976740991:collection/tigdq37vllpeex4bjlwa', 'endpoint': 'https://tigdq37vllpeex4bjlwa.us-west-2.aoss.amazonaws.com'}
+2026-01-08 16:31:50 - INFO - [4.5/10] Creating Knowledge Base with OpenSearch collection
+2026-01-08 16:31:50 - INFO -   Creating vector index in OpenSearch collection...
+2026-01-08 16:31:50 - INFO - Found credentials in shared credentials file: ~/.aws/credentials
+2026-01-08 16:31:51 - INFO -   Checking if Knowledge Base already exists...
+2026-01-08 16:31:52 - INFO -   Knowledge Base does not exist. Creating new one...
+2026-01-08 16:31:53 - INFO - ✓ Knowledge Base created: K48GNRVUMW
+2026-01-08 16:31:53 - INFO -   Waiting for Knowledge Base to be active...
+2026-01-08 16:32:03 - INFO -   Knowledge Base is now active
+2026-01-08 16:32:03 - INFO -   Creating data source...
+2026-01-08 16:32:03 - INFO -   ✓ Data source created: HPJ3Z2UK7T
+2026-01-08 16:32:03 - INFO - [5/10] Creating VPC and networking resources
+2026-01-08 16:32:04 - INFO - Using CIDR block: 10.24.0.0/16
+2026-01-08 16:32:04 - WARNING - VPC already exists: vpc-079e81539916b1b44
+2026-01-08 16:32:07 - INFO -   Checking/creating SSM VPC endpoints for existing VPC...
+2026-01-08 16:32:07 - INFO - [6/10] Creating Application Load Balancer
+2026-01-08 16:32:08 - WARNING - ALB already exists: alb-for-mcp-1287906029.us-west-2.elb.amazonaws.com
+2026-01-08 16:32:08 - INFO - [7/10] Creating CloudFront distribution
+2026-01-08 16:32:09 - WARNING - CloudFront distribution already exists: d2vjerqpw1g8cb.cloudfront.net
+2026-01-08 16:32:09 - INFO - [8/10] Creating EC2 instance
+2026-01-08 16:32:09 - WARNING - EC2 instance already exists: i-0f76edd676da2f3a2
+2026-01-08 16:32:09 - INFO - [9/10] Creating ALB target group and listener
+2026-01-08 16:32:10 - WARNING -   Target group already exists: arn:aws:elasticloadbalancing:us-west-2:262976740991:targetgroup/TG-for-mcp/f347402af784dfde
+2026-01-08 16:32:10 - WARNING -   EC2 instance i-0f76edd676da2f3a2 is already registered in target group
+2026-01-08 16:32:10 - WARNING -   Listener already exists on port 80: arn:aws:elasticloadbalancing:us-west-2:262976740991:listener/app/alb-for-mcp/3de8b8918c077709/34557d6c1fdae900
+2026-01-08 16:32:10 - WARNING -   Rule with Priority 10 for custom header already exists: arn:aws:elasticloadbalancing:us-west-2:262976740991:listener-rule/app/alb-for-mcp/3de8b8918c077709/34557d6c1fdae900/9f064e6d30f39fe8
+2026-01-08 16:32:10 - INFO - ✓ ALB target group and listener created
+2026-01-08 16:32:10 - INFO -   Target group: arn:aws:elasticloadbalancing:us-west-2:262976740991:targetgroup/TG-for-mcp/f347402af784dfde
+2026-01-08 16:32:10 - INFO -   Listener: arn:aws:elasticloadbalancing:us-west-2:262976740991:listener/app/alb-for-mcp/3de8b8918c077709/34557d6c1fdae900
+2026-01-08 16:32:10 - INFO - [10/10] Checking if application is ready at https://d2vjerqpw1g8cb.cloudfront.net
+2026-01-08 16:32:10 - INFO -   Maximum 120 attempts, 10 seconds between attempts (up to 20 minutes)
+2026-01-08 16:32:10 - INFO - ✓ Application is ready! Status code: 200
+2026-01-08 16:32:10 - INFO -   Total attempts: 1/120, elapsed time: 0.0 minutes
+2026-01-08 16:32:10 - INFO - 
+2026-01-08 16:32:10 - INFO - ============================================================
+2026-01-08 16:32:10 - INFO - Infrastructure Deployment Completed Successfully!
+2026-01-08 16:32:10 - INFO - ============================================================
+2026-01-08 16:32:10 - INFO - Summary:
+2026-01-08 16:32:10 - INFO -   S3 Bucket: storage-for-mcp-262976740991-us-west-2
+2026-01-08 16:32:10 - INFO -   VPC ID: vpc-079e81539916b1b44
+2026-01-08 16:32:10 - INFO -   Public Subnets: subnet-0674c755905430e3b, subnet-0e9babef3539b7ddc
+2026-01-08 16:32:10 - INFO -   Private Subnets: subnet-07a63a98f79c49b05, subnet-06305a576c93aac10
+2026-01-08 16:32:10 - INFO -   ALB DNS: http://alb-for-mcp-1287906029.us-west-2.elb.amazonaws.com/
+2026-01-08 16:32:10 - INFO -   CloudFront Domain: https://d2vjerqpw1g8cb.cloudfront.net
+2026-01-08 16:32:10 - INFO -   EC2 Instance ID: i-0f76edd676da2f3a2 (deployed in private subnet)
+2026-01-08 16:32:10 - INFO -   OpenSearch Endpoint: https://tigdq37vllpeex4bjlwa.us-west-2.aoss.amazonaws.com
+2026-01-08 16:32:10 - INFO -   Knowledge Base ID: K48GNRVUMW
+2026-01-08 16:32:10 - INFO -   Knowledge Base Role: arn:aws:iam::262976740991:role/role-knowledge-base-for-mcp-us-west-2
+2026-01-08 16:32:10 - INFO -   AgentCore Memory Role: arn:aws:iam::262976740991:role/role-agentcore-memory-for-mcp-us-west-2
+2026-01-08 16:32:10 - INFO - 
+2026-01-08 16:32:10 - INFO - Total deployment time: 0.60 minutes
+2026-01-08 16:32:10 - INFO - ============================================================
+2026-01-08 16:32:10 - INFO - Note: CloudFront distribution may take 15-20 minutes to fully deploy
+2026-01-08 16:32:10 - INFO - Note: EC2 instance user data script will install and start the application
+2026-01-08 16:32:10 - INFO - ============================================================
+2026-01-08 16:32:10 - INFO - OpenSearch Collection ARN: arn:aws:aoss:us-west-2:262976740991:collection/tigdq37vllpeex4bjlwa
+2026-01-08 16:32:10 - INFO - OpenSearch Collection Endpoint: https://tigdq37vllpeex4bjlwa.us-west-2.aoss.amazonaws.com
+2026-01-08 16:32:10 - INFO - ✓ Updated application/config.json
+2026-01-08 16:32:10 - INFO - ============================================================
+2026-01-08 16:32:10 - INFO - 
+2026-01-08 16:32:10 - INFO - ============================================================
+2026-01-08 16:32:10 - INFO -   IMPORTANT: CloudFront Domain Address
+2026-01-08 16:32:10 - INFO - ============================================================
+2026-01-08 16:32:10 - INFO -  CloudFront URL: https://d2vjerqpw1g8cb.cloudfront.net
+2026-01-08 16:32:10 - INFO - 
+2026-01-08 16:32:10 - INFO - Note: CloudFront distribution and agent application on EC2 instance may take 15-20 minutes to fully deploy
+2026-01-08 16:32:10 - INFO -       Once deployed, you can access your application at the URL above
+2026-01-08 16:32:10 - INFO - ============================================================
+2026-01-08 16:32:10 - INFO - 
