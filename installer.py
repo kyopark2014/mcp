@@ -2924,7 +2924,7 @@ chown -R ssm-user:ssm-user /home/ssm-user/{git_name}
 # Build and run docker with volume mount for config.json
 cd /home/ssm-user/{git_name}
 docker build -f Dockerfile -t streamlit-app .
-docker run -d --restart=always -p 8501:8501 -v $(pwd)/application/config.json:/app/application/config.json --name mcp-app streamlit-app
+docker run -d --restart=always -p 8501:8501 -v $(pwd)/application/config.json:/app/application/config.json --name app streamlit-app
 
 # Make update.sh executable for manual execution via SSM
 chmod a+rx update.sh
@@ -3056,7 +3056,12 @@ def create_ec2_instance(vpc_info: Dict[str, str], ec2_role_arn: str,
             {"Name": "state", "Values": ["available"]}
         ]
     )
-    latest_ami = sorted(amis["Images"], key=lambda x: x["CreationDate"], reverse=True)[0]
+    # Filter out minimal AMIs
+    filtered_amis = [ami for ami in amis["Images"] if "minimal" not in ami["Name"].lower()]
+    if not filtered_amis:
+        # Fallback to all AMIs if no non-minimal found
+        filtered_amis = amis["Images"]
+    latest_ami = sorted(filtered_amis, key=lambda x: x["CreationDate"], reverse=True)[0]
     ami_id = latest_ami["ImageId"]
     logger.debug(f"Using AMI: {ami_id}")
     
