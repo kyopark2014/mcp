@@ -638,7 +638,7 @@ sudo docker logs [container ID]
 
 실제 실행시 결과는 아래와 같습니다.
 
-<img width="1695" height="421" alt="noname" src="https://github.com/user-attachments/assets/d4dda1ec-b370-4ea0-afac-15d175228ace" />
+<img width="700" alt="noname" src="https://github.com/user-attachments/assets/d4dda1ec-b370-4ea0-afac-15d175228ace" />
 
 
 ### Local에서 실행하기
