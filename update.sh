@@ -59,9 +59,13 @@ echo "Docker image built successfully"
 echo ""
 echo "Starting Docker container..."
 
-# Stop and remove existing container if it exists
-sudo docker stop agent-container 2>/dev/null || true
-sudo docker rm agent-container 2>/dev/null || true
+# Stop all running containers
+echo "Stopping all running Docker containers..."
+sudo docker stop $(sudo docker ps -q) 2>/dev/null || true
+
+# Remove all containers
+echo "Removing all Docker containers..."
+sudo docker rm $(sudo docker ps -aq) 2>/dev/null || true
 
 # Run Docker container
 sudo docker run -d \

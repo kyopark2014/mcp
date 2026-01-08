@@ -12,7 +12,7 @@ from typing import Dict, List, Optional
 from botocore.exceptions import ClientError
 
 # Configuration
-project_name = "mcp" # at least 3 characters
+project_name = "lgm"
 region = "us-west-2"
 
 sts_client = boto3.client("sts", region_name=region)

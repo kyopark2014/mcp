@@ -18,9 +18,9 @@ import urllib.request
 import urllib.error
 
 # Configuration
-project_name = "mcp" # at least 3 characters
+project_name = "lgm"
 region = "us-west-2"
-git_name = "mcp"
+git_name = "lgm-project"
 
 sts_client = boto3.client("sts", region_name=region)
 account_id = sts_client.get_caller_identity()["Account"]
@@ -661,52 +661,12 @@ def create_secrets() -> Dict[str, str]:
                 "weather_api_key": ""
             }
         },
-        "langsmith": {
-            "name": f"langsmithapikey-{project_name}",
-            "description": "secret for lamgsmith api key",
-            "secret_value": {
-                "langchain_project": project_name,
-                "langsmith_api_key": ""
-            }
-        },
         "tavily": {
             "name": f"tavilyapikey-{project_name}",
             "description": "secret for tavily api key",
             "secret_value": {
                 "project_name": project_name,
                 "tavily_api_key": ""
-            }
-        },
-        "perplexity": {
-            "name": f"perplexityapikey-{project_name}",
-            "description": "secret for perflexity api key",
-            "secret_value": {
-                "project_name": project_name,
-                "perplexity_api_key": ""
-            }
-        },
-        "firecrawl": {
-            "name": f"firecrawlapikey-{project_name}",
-            "description": "secret for firecrawl api key",
-            "secret_value": {
-                "project_name": project_name,
-                "firecrawl_api_key": ""
-            }
-        },
-        "nova_act": {
-            "name": f"novaactapikey-{project_name}",
-            "description": "secret for nova act api key",
-            "secret_value": {
-                "project_name": project_name,
-                "nova_act_api_key": ""
-            }
-        },
-        "notion": {
-            "name": f"notionapikey-{project_name}",
-            "description": "secret for notion api key",
-            "secret_value": {
-                "project_name": project_name,
-                "notion_api_key": ""
             }
         }
     }
@@ -3158,8 +3118,7 @@ def run_setup_script_via_ssm(instance_id: str, environment: Dict[str, str], git_
 
 def create_ec2_instance(vpc_info: Dict[str, str], ec2_role_arn: str, 
                        knowledge_base_role_arn: str, opensearch_info: Dict[str, str],
-                       s3_bucket_name: str, cloudfront_domain: str,
-                       agentcore_memory_role_arn: str, knowledge_base_id: str) -> str:
+                       s3_bucket_name: str, cloudfront_domain: str, knowledge_base_id: str) -> str:
     """Create EC2 instance."""
     logger.info("[8/10] Creating EC2 instance")
     
@@ -3221,8 +3180,7 @@ def create_ec2_instance(vpc_info: Dict[str, str], ec2_role_arn: str,
         "opensearch_url": opensearch_info["endpoint"],
         "s3_bucket": s3_bucket_name,
         "s3_arn": f"arn:aws:s3:::{s3_bucket_name}",
-        "sharing_url": f"https://{cloudfront_domain}",
-        "agentcore_memory_role": agentcore_memory_role_arn
+        "sharing_url": f"https://{cloudfront_domain}"
     }
         
     user_data_script = get_setup_script(environment, git_name)
@@ -3780,7 +3738,6 @@ def main():
         knowledge_base_role_arn = create_knowledge_base_role()
         agent_role_arn = create_agent_role()
         ec2_role_arn = create_ec2_role(knowledge_base_role_arn)
-        agentcore_memory_role_arn = create_agentcore_memory_role()
         logger.info(f"IAM roles created...")
         
         # 3. Create secrets
@@ -3811,7 +3768,7 @@ def main():
         instance_id = create_ec2_instance(
             vpc_info, ec2_role_arn, knowledge_base_role_arn,
             opensearch_info, s3_bucket_name, cloudfront_info["domain"],
-            agentcore_memory_role_arn, knowledge_base_id
+            knowledge_base_id
         )
         logger.info(f"EC2 instance created...")
         
@@ -3840,7 +3797,6 @@ def main():
         logger.info(f"  OpenSearch Endpoint: {opensearch_info['endpoint']}")
         logger.info(f"  Knowledge Base ID: {knowledge_base_id}")
         logger.info(f"  Knowledge Base Role: {knowledge_base_role_arn}")
-        logger.info(f"  AgentCore Memory Role: {agentcore_memory_role_arn}")
         logger.info("")
         logger.info(f"Total deployment time: {elapsed_time/60:.2f} minutes")
         logger.info("="*60)
@@ -3872,8 +3828,7 @@ def main():
             "opensearch_url": opensearch_info["endpoint"],
             "s3_bucket": s3_bucket_name,
             "s3_arn": f"arn:aws:s3:::{s3_bucket_name}",
-            "sharing_url": f"https://{cloudfront_info['domain']}",
-            "agentcore_memory_role": agentcore_memory_role_arn
+            "sharing_url": f"https://{cloudfront_info['domain']}"
         })
         
         # Log the OpenSearch collection ARN for verification
