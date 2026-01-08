@@ -284,67 +284,6 @@ asyncio.run(mcp_agent(query, st))
 }
 ```
 
-### EC2에서 실행하기
-
-필요한 인프라를 python을 이용해 설치합니다. Secret에 보관되는 API에 대한 Credential을 입력하여야 합니다. 없다면 엔터키를 눌러서 넘어갑니다.
-
-```text
-python installer.py
-```
-
-설치가 완료되면 CloudFront로 접속하여 동작을 확인합니다. 
-
-인프라가 더이상 필요없을때에는 uninstaller.py를 이용해 제거합니다.
-
-```text
-python uninstaller.py
-```
-
-
-### EC2 업데이트
-
-Console에서 EC2의 Session Manager를 이용해 접속합니다. 아래 명령어로 업데이트 합니다.
-
-```text
-cd ~/mcp && sudo ./update.sh
-```
-
-### Local에서 실행하기
-
-venv로 환경을 구성하면 편리합니다. 아래와 같이 환경을 설정합니다.
-
-```text
-python -m venv .venv
-source .venv/bin/activate
-```
-
-이후 다운로드 받은 github 폴더로 이동한 후에 아래와 같이 필요한 패키지를 추가로 설치 합니다.
-
-```text
-pip install -r requirements.txt
-```
-
-[deployment.md](./deployment.md)에 따라 AWS CDK로 Lambda, Knowledge base, Opensearch Serverless와 보안에 필요한 IAM Role을 설치합니다. 이후 아래와 같은 명령어로 streamlit을 실행합니다. 
-
-```text
-streamlit run application/app.py
-```
-
-
-### MCP Inspector
-
-Development Mode에서 mcp server를 테스트 하기 위해 MCP inspector를 이용할 수 있습니다. 아래와 같이 cli를 설치합니다. 
-
-```text
-pip install 'mcp[cli]'
-```
-
-이후 아래와 같이 실행하면 쉽게 mcp-server.py의 동작을 테스트 할 수 있습니다. 실행시 http://localhost:5173 와 같은 URL을 제공합니다.
-
-```text
-mcp dev mcp-server.py
-```
-
 ### AWS Cost Analysis
 
 MCP tool로서 아래와 같이 AWS cost 정보를 가져와서 분석할 수 있습니다.
@@ -650,6 +589,95 @@ if isinstance(response, dict):
 ```text
 aws bedrock list-foundation-models --region=us-west-2 --by-provider anthropic --query "modelSummaries[*].modelId"
 ```
+
+## 배포하기
+
+### EC2에서 실행하기
+
+아래와 같이 필요한 인프라를 python을 이용해 설치합니다. 이때 생성된 인프라의 정보를 application/config.json 파일도 생성하거나 업데이트합니다. Secret에 보관되는 API에 대한 Credential을 입력하여야 합니다. 없다면 엔터키를 눌러서 넘어갑니다.
+
+```text
+python installer.py
+```
+
+API 구현에 필요한 credential은 secret으로 관리합니다. 따라서 설치시 필요한 credential 입력이 필요한데 아래와 같은 방식을 활용하여 미리 credential을 준비합니다. 
+
+- 일반 인터넷 검색: [Tavily Search](https://app.tavily.com/sign-in)에 접속하여 가입 후 API Key를 발급합니다. 이것은 tvly-로 시작합니다.  
+- 날씨 검색: [openweathermap](https://home.openweathermap.org/api_keys)에 접속하여 API Key를 발급합니다.
+
+설치가 완료되면 CloudFront로 접속하여 동작을 확인합니다. 또한, 인프라가 더이상 필요없을 때에는 uninstaller.py를 이용해 제거합니다.
+
+```text
+python uninstaller.py
+```
+
+
+### EC2 업데이트
+
+Console에서 EC2의 Session Manager를 이용해 접속합니다. 아래 명령어로 업데이트 합니다.
+
+```text
+cd ~/mcp && sudo ./update.sh
+```
+
+### 실행 로그 확인
+
+Console에서 EC2의 Session Manager를 이용해 접속합니다. 
+
+먼저 현재 docker container ID를 확인합니다.
+
+```text
+sudo docker ps
+```
+
+이후 아래와 같이 로그를 확인합니다.
+
+```text
+sudo docker logs [container ID]
+```
+
+실제 실행시 결과는 아래와 같습니다.
+
+<img width="1695" height="421" alt="noname" src="https://github.com/user-attachments/assets/d4dda1ec-b370-4ea0-afac-15d175228ace" />
+
+
+### Local에서 실행하기
+
+venv로 환경을 구성하면 편리합니다. 아래와 같이 환경을 설정합니다.
+
+```text
+python -m venv .venv
+source .venv/bin/activate
+```
+
+이후 다운로드 받은 github 폴더로 이동한 후에 아래와 같이 필요한 패키지를 추가로 설치 합니다.
+
+```text
+pip install -r requirements.txt
+```
+
+[deployment.md](./deployment.md)에 따라 AWS CDK로 Lambda, Knowledge base, Opensearch Serverless와 보안에 필요한 IAM Role을 설치합니다. 이후 아래와 같은 명령어로 streamlit을 실행합니다. 
+
+```text
+streamlit run application/app.py
+```
+
+
+### MCP Inspector
+
+Development Mode에서 mcp server를 테스트 하기 위해 MCP inspector를 이용할 수 있습니다. 아래와 같이 cli를 설치합니다. 
+
+```text
+pip install 'mcp[cli]'
+```
+
+이후 아래와 같이 실행하면 쉽게 mcp-server.py의 동작을 테스트 할 수 있습니다. 실행시 http://localhost:5173 와 같은 URL을 제공합니다.
+
+```text
+mcp dev mcp-server.py
+```
+
+
 
 ## 실행 결과
 
