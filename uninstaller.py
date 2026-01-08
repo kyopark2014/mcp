@@ -12,7 +12,7 @@ from typing import Dict, List, Optional
 from botocore.exceptions import ClientError
 
 # Configuration
-project_name = "mcp"
+project_name = "mcp" # at least 3 characters
 region = "us-west-2"
 
 sts_client = boto3.client("sts", region_name=region)
@@ -513,8 +513,8 @@ def delete_opensearch_collection():
         
         # Delete policies
         policies = [
-            ("network", f"network-{project_name}-{region}"),
-            ("encryption", f"encription-{project_name}-{region}")
+            ("network", f"net-{project_name}-{region}"),
+            ("encryption", f"enc-{project_name}-{region}")
         ]
         
         for policy_type, policy_name in policies:

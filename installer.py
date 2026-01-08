@@ -18,7 +18,7 @@ import urllib.request
 import urllib.error
 
 # Configuration
-project_name = "mcp"
+project_name = "mcp" # at least 3 characters
 region = "us-west-2"
 git_name = "mcp"
 
@@ -776,8 +776,8 @@ def create_opensearch_collection(ec2_role_arn: str = None, knowledge_base_role_a
     logger.info("[4/10] Creating OpenSearch Serverless collection")
     
     collection_name = vector_index_name
-    enc_policy_name = f"encription-{project_name}-{region}"
-    net_policy_name = f"network-{project_name}-{region}"
+    enc_policy_name = f"enc-{project_name}-{region}"
+    net_policy_name = f"net-{project_name}-{region}"
     data_policy_name = f"data-{project_name}"
     
     # Check if collection already exists first
@@ -791,7 +791,37 @@ def create_opensearch_collection(ec2_role_arn: str = None, knowledge_base_role_a
                 
                 # Get collection endpoint
                 collection_details = opensearch_client.batch_get_collection(names=[collection_name])
-                collection_endpoint = collection_details["collectionDetails"][0].get("collectionEndpoint", "")
+                collection_detail = collection_details["collectionDetails"][0]
+                collection_endpoint = collection_detail.get("collectionEndpoint")
+                
+                # If endpoint is not available, wait for collection to be ready
+                if not collection_endpoint:
+                    logger.info("  Collection endpoint not yet available, waiting for collection to be ready...")
+                    wait_count = 0
+                    while True:
+                        response = opensearch_client.batch_get_collection(names=[collection_name])
+                        collection_detail = response["collectionDetails"][0]
+                        status = collection_detail.get("status")
+                        wait_count += 1
+                        if wait_count % 6 == 0:  # Log every minute
+                            logger.debug(f"  Collection status: {status} (waited {wait_count * 10} seconds)")
+                        
+                        if "collectionEndpoint" in collection_detail and collection_detail["collectionEndpoint"]:
+                            collection_endpoint = collection_detail["collectionEndpoint"]
+                            if status == "ACTIVE":
+                                break
+                        elif status == "ACTIVE":
+                            # If active but no endpoint, try one more time after a short wait
+                            time.sleep(10)
+                            response = opensearch_client.batch_get_collection(names=[collection_name])
+                            collection_detail = response["collectionDetails"][0]
+                            collection_endpoint = collection_detail.get("collectionEndpoint")
+                            if collection_endpoint:
+                                break
+                        
+                        if wait_count > 60:  # Timeout after 10 minutes
+                            raise Exception(f"Timeout waiting for collection endpoint. Collection status: {status}")
+                        time.sleep(10)
                 
                 # Update data access policy to include roles if needed
                 try:
@@ -1057,11 +1087,41 @@ def create_opensearch_collection(ec2_role_arn: str = None, knowledge_base_role_a
     except ClientError as e:
         if e.response["Error"]["Code"] == "ConflictException":
             logger.warning(f"OpenSearch collection already exists: {collection_name}")
-            response = opensearch_client.batch_get_collection(names=[collection_name])
-            collection_detail = response["collectionDetails"][0]
+            # Wait for collection endpoint to be available
+            logger.info("  Waiting for collection endpoint to be available...")
+            wait_count = 0
+            collection_endpoint = None
+            while True:
+                response = opensearch_client.batch_get_collection(names=[collection_name])
+                collection_detail = response["collectionDetails"][0]
+                status = collection_detail.get("status")
+                wait_count += 1
+                if wait_count % 6 == 0:  # Log every minute
+                    logger.debug(f"  Collection status: {status} (waited {wait_count * 10} seconds)")
+                
+                if "collectionEndpoint" in collection_detail and collection_detail["collectionEndpoint"]:
+                    collection_endpoint = collection_detail["collectionEndpoint"]
+                    if status == "ACTIVE":
+                        break
+                elif status == "ACTIVE":
+                    # If active but no endpoint, try one more time after a short wait
+                    time.sleep(10)
+                    response = opensearch_client.batch_get_collection(names=[collection_name])
+                    collection_detail = response["collectionDetails"][0]
+                    collection_endpoint = collection_detail.get("collectionEndpoint")
+                    if collection_endpoint:
+                        break
+                
+                if wait_count > 60:  # Timeout after 10 minutes
+                    raise Exception(f"Timeout waiting for collection endpoint. Collection status: {status}")
+                time.sleep(10)
+            
+            if not collection_endpoint:
+                raise Exception("Collection endpoint is not available even after waiting")
+            
             return {
                 "arn": collection_detail["arn"],
-                "endpoint": collection_detail.get("collectionEndpoint", "")
+                "endpoint": collection_endpoint
             }
         logger.error(f"Failed to create OpenSearch collection: {e}")
         raise
@@ -1213,6 +1273,32 @@ def get_or_create_nat_gateway(vpc_id: str, public_subnet_id: str) -> str:
     return nat_gateway_id
 
 
+def wait_for_subnet_available(subnet_id: str, max_wait_time: int = 300) -> bool:
+    """Wait for subnet to become available."""
+    logger.debug(f"  Waiting for subnet {subnet_id} to become available...")
+    start_time = time.time()
+    while time.time() - start_time < max_wait_time:
+        try:
+            response = ec2_client.describe_subnets(SubnetIds=[subnet_id])
+            if response["Subnets"]:
+                state = response["Subnets"][0]["State"]
+                if state == "available":
+                    logger.debug(f"  Subnet {subnet_id} is now available")
+                    return True
+                elif state == "pending":
+                    logger.debug(f"  Subnet {subnet_id} is still pending, waiting...")
+                    time.sleep(5)
+                else:
+                    logger.warning(f"  Subnet {subnet_id} is in unexpected state: {state}")
+                    return False
+        except ClientError as e:
+            logger.warning(f"  Error checking subnet status: {e}")
+            time.sleep(5)
+    
+    logger.warning(f"  Timeout waiting for subnet {subnet_id} to become available")
+    return False
+
+
 def ensure_private_subnets(vpc_id: str, public_subnets: List[str], existing_subnets: List[Dict] = None) -> List[str]:
     """Ensure private subnets exist in VPC, creating them if necessary."""
     private_subnets = []
@@ -1319,8 +1405,14 @@ def ensure_private_subnets(vpc_id: str, public_subnets: List[str], existing_subn
                     ]
                 )
                 new_subnet_id = subnet_response["Subnet"]["SubnetId"]
-                private_subnets.append(new_subnet_id)
                 logger.info(f"  Created private subnet: {new_subnet_id} in {az} with CIDR {subnet_cidr}")
+                
+                # Wait for subnet to become available
+                if wait_for_subnet_available(new_subnet_id):
+                    private_subnets.append(new_subnet_id)
+                else:
+                    logger.warning(f"  Subnet {new_subnet_id} did not become available in time, but continuing...")
+                    private_subnets.append(new_subnet_id)  # Still add it, might work anyway
                 
                 # Find or create private route table
                 route_tables = ec2_client.describe_route_tables(
@@ -1433,6 +1525,32 @@ def create_vpc() -> Dict[str, str]:
             # If no private subnets found, create them automatically
             if not private_subnets:
                 private_subnets = ensure_private_subnets(vpc_id, public_subnets, subnets["Subnets"])
+            
+            # Verify private subnets are available (filter out non-available ones)
+            available_private_subnets = []
+            for subnet_id in private_subnets:
+                try:
+                    subnet_detail = ec2_client.describe_subnets(SubnetIds=[subnet_id])
+                    if subnet_detail["Subnets"] and subnet_detail["Subnets"][0]["State"] == "available":
+                        available_private_subnets.append(subnet_id)
+                    else:
+                        logger.warning(f"  Private subnet {subnet_id} is not available, waiting...")
+                        if wait_for_subnet_available(subnet_id):
+                            available_private_subnets.append(subnet_id)
+                except Exception as e:
+                    logger.warning(f"  Could not verify subnet {subnet_id}: {e}")
+            
+            if available_private_subnets:
+                private_subnets = available_private_subnets
+            elif private_subnets:
+                # If we have subnets but they're not available yet, wait a bit
+                logger.info("  Waiting for private subnets to become available...")
+                time.sleep(10)
+                for subnet_id in private_subnets:
+                    if wait_for_subnet_available(subnet_id, max_wait_time=60):
+                        available_private_subnets.append(subnet_id)
+                if available_private_subnets:
+                    private_subnets = available_private_subnets
             
             # Check if we need to create additional public subnets for ALB
             if len(public_subnets) < 2:
@@ -1802,6 +1920,18 @@ def create_vpc() -> Dict[str, str]:
                     if public_subnets:
                         private_subnets = ensure_private_subnets(vpc_id, public_subnets)
                         logger.info(f"  ✓ Successfully created {len(private_subnets)} private subnet(s)")
+                        
+                        # Verify created subnets are available
+                        available_private_subnets = []
+                        for subnet_id in private_subnets:
+                            if wait_for_subnet_available(subnet_id, max_wait_time=120):
+                                available_private_subnets.append(subnet_id)
+                        
+                        if available_private_subnets:
+                            private_subnets = available_private_subnets
+                            logger.info(f"  ✓ Verified {len(private_subnets)} private subnet(s) are available")
+                        else:
+                            logger.warning(f"  Created {len(private_subnets)} private subnet(s) but none are available yet")
                     else:
                         logger.error("  Cannot create private subnets without public subnets for NAT Gateway")
                 except Exception as e:
@@ -1907,8 +2037,15 @@ def create_vpc() -> Dict[str, str]:
                 }
             ]
         )
-        private_subnets.append(subnet_response["Subnet"]["SubnetId"])
-        logger.debug(f"Created private subnet: {subnet_response['Subnet']['SubnetId']} in {az}")
+        new_subnet_id = subnet_response["Subnet"]["SubnetId"]
+        logger.debug(f"Created private subnet: {new_subnet_id} in {az}")
+        
+        # Wait for subnet to become available
+        if wait_for_subnet_available(new_subnet_id):
+            private_subnets.append(new_subnet_id)
+        else:
+            logger.warning(f"  Subnet {new_subnet_id} did not become available in time, but continuing...")
+            private_subnets.append(new_subnet_id)  # Still add it, might work anyway
     
     # Create route tables
     logger.debug("Creating route tables")
@@ -2546,6 +2683,16 @@ def delete_knowledge_base(knowledge_base_id: str) -> None:
 def create_vector_index_in_opensearch(collection_endpoint: str, index_name: str) -> bool:
     """Create vector index in OpenSearch Serverless collection."""
     try:
+        # Validate collection_endpoint
+        if not collection_endpoint or not collection_endpoint.strip():
+            logger.error(f"  Invalid collection endpoint: '{collection_endpoint}'. Collection endpoint is required.")
+            return False
+        
+        # Ensure endpoint has proper scheme
+        if not collection_endpoint.startswith(('http://', 'https://')):
+            logger.error(f"  Invalid collection endpoint format: '{collection_endpoint}'. Must start with http:// or https://")
+            return False
+        
         # Try to import required packages, install if missing
         try:
             import requests
@@ -2640,7 +2787,10 @@ def create_knowledge_base_with_opensearch(opensearch_info: Dict[str, str], knowl
         raise Exception("Failed to create vector index in OpenSearch collection")
     
     bedrock_agent_client = boto3.client("bedrock-agent", region_name=region)
-    parsing_model_arn = f"arn:aws:bedrock:{region}:{account_id}:inference-profile/us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+    if region == "ap-northeast-2":
+        parsing_model_arn = f"arn:aws:bedrock:{region}:{account_id}:inference-profile/apac.anthropic.claude-sonnet-4-5-20250929-v1:0"
+    else:
+        parsing_model_arn = f"arn:aws:bedrock:{region}:{account_id}:inference-profile/us.anthropic.claude-sonnet-4-5-20250929-v1:0"    
     
     # Check if Knowledge Base already exists
     try:
@@ -2883,7 +3033,7 @@ def create_cloudfront_distribution(alb_info: Dict[str, str], s3_bucket_name: str
         raise
 
 
-def get_setup_script(environment: Dict[str, str], git_name: str = "mcp") -> str:
+def get_setup_script(environment: Dict[str, str], git_name: str) -> str:
     """Generate setup script for EC2 instance."""
     return f"""#!/bin/bash
 exec > >(tee /var/log/user-data.log) 2>&1
@@ -3052,16 +3202,28 @@ def create_ec2_instance(vpc_info: Dict[str, str], ec2_role_arn: str,
     amis = ec2_client.describe_images(
         Owners=["amazon"],
         Filters=[
-            {"Name": "name", "Values": ["al2023-ami-*-x86_64"]},
+            {"Name": "name", "Values": ["al2023-ami-ecs-hvm-2023*-x86_64"]},
             {"Name": "state", "Values": ["available"]}
         ]
     )
-    # Filter out minimal AMIs
-    filtered_amis = [ami for ami in amis["Images"] if "minimal" not in ami["Name"].lower()]
-    if not filtered_amis:
-        # Fallback to all AMIs if no non-minimal found
-        filtered_amis = amis["Images"]
-    latest_ami = sorted(filtered_amis, key=lambda x: x["CreationDate"], reverse=True)[0]
+    if not amis["Images"]:
+        # Fallback to regular Amazon Linux 2023 AMI if ECS optimized not found
+        logger.warning("ECS optimized AMI not found, falling back to regular Amazon Linux 2023")
+        amis = ec2_client.describe_images(
+            Owners=["amazon"],
+            Filters=[
+                {"Name": "name", "Values": ["al2023-ami-2023*-x86_64"]},
+                {"Name": "state", "Values": ["available"]}
+            ]
+        )
+        # Filter out minimal AMIs
+        filtered_amis = [ami for ami in amis["Images"] if "minimal" not in ami["Name"].lower()]
+        if not filtered_amis:
+            filtered_amis = amis["Images"]
+        latest_ami = sorted(filtered_amis, key=lambda x: x["CreationDate"], reverse=True)[0]
+    else:
+        latest_ami = sorted(amis["Images"], key=lambda x: x["CreationDate"], reverse=True)[0]
+    
     ami_id = latest_ami["ImageId"]
     logger.debug(f"Using AMI: {ami_id}")
     
@@ -3085,12 +3247,88 @@ def create_ec2_instance(vpc_info: Dict[str, str], ec2_role_arn: str,
     # Get instance profile name
     instance_profile_name = f"instance-profile-{project_name}-{region}"
     
-    # Validate VPC info
-    if not vpc_info.get("private_subnets"):
+    # Validate VPC info and verify private subnets are available
+    private_subnets = vpc_info.get("private_subnets", [])
+    if not private_subnets:
+        # Try to refresh subnet information from AWS
+        logger.warning("  No private subnets in vpc_info, attempting to refresh from AWS...")
+        try:
+            vpc_id = vpc_info.get("vpc_id")
+            if vpc_id:
+                subnets_response = ec2_client.describe_subnets(
+                    Filters=[{"Name": "vpc-id", "Values": [vpc_id]}]
+                )
+                private_subnets = []
+                for subnet in subnets_response["Subnets"]:
+                    subnet_name = ""
+                    for tag in subnet.get("Tags", []):
+                        if tag["Key"] == "Name":
+                            subnet_name = tag["Value"]
+                            break
+                    
+                    # Check if it's a private subnet
+                    if "private" in subnet_name.lower():
+                        if subnet["State"] == "available":
+                            private_subnets.append(subnet["SubnetId"])
+                    elif "public" not in subnet_name.lower():
+                        # Check route table to determine if private
+                        try:
+                            route_tables = ec2_client.describe_route_tables(
+                                Filters=[{"Name": "association.subnet-id", "Values": [subnet["SubnetId"]]}]
+                            )
+                            is_public = False
+                            for rt in route_tables["RouteTables"]:
+                                for route in rt["Routes"]:
+                                    if route.get("GatewayId", "").startswith("igw-"):
+                                        is_public = True
+                                        break
+                                if is_public:
+                                    break
+                            
+                            if not is_public and subnet["State"] == "available":
+                                private_subnets.append(subnet["SubnetId"])
+                        except Exception:
+                            pass
+                
+                if private_subnets:
+                    logger.info(f"  Found {len(private_subnets)} available private subnet(s) after refresh")
+                    vpc_info["private_subnets"] = private_subnets
+        except Exception as e:
+            logger.warning(f"  Failed to refresh subnet information: {e}")
+    
+    # Final validation
+    if not private_subnets:
         raise ValueError(
             f"No private subnets found in VPC {vpc_info.get('vpc_id', 'unknown')}. "
             "Please ensure the VPC has at least one private subnet for EC2 deployment."
         )
+    
+    # Verify at least one subnet is available
+    available_subnets = []
+    for subnet_id in private_subnets:
+        try:
+            response = ec2_client.describe_subnets(SubnetIds=[subnet_id])
+            if response["Subnets"] and response["Subnets"][0]["State"] == "available":
+                available_subnets.append(subnet_id)
+        except Exception as e:
+            logger.warning(f"  Could not verify subnet {subnet_id}: {e}")
+    
+    if not available_subnets:
+        # Wait a bit and retry
+        logger.info("  Waiting for private subnets to become available...")
+        time.sleep(10)
+        for subnet_id in private_subnets:
+            if wait_for_subnet_available(subnet_id, max_wait_time=60):
+                available_subnets.append(subnet_id)
+    
+    if not available_subnets:
+        raise ValueError(
+            f"No available private subnets found in VPC {vpc_info.get('vpc_id', 'unknown')}. "
+            "Please ensure the VPC has at least one available private subnet for EC2 deployment."
+        )
+    
+    # Update vpc_info with available subnets
+    vpc_info["private_subnets"] = available_subnets
     
     if not vpc_info.get("ec2_sg_id"):
         raise ValueError(
