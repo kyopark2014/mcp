@@ -130,13 +130,12 @@ debug_mode = "Enable"
 multi_region = "Disable"
 
 reasoning_mode = 'Disable'
-grading_mode = 'Disable'
 agent_type = 'langgraph'
 enable_memory = 'Disable'
 user_id = agent_type # for testing
 
-def update(modelName, debugMode, multiRegion, reasoningMode, gradingMode, agentType, memoryMode):    
-    global model_name, model_id, model_type, debug_mode, multi_region, reasoning_mode, grading_mode, enable_memory
+def update(modelName, debugMode, multiRegion, reasoningMode, agentType, memoryMode):    
+    global model_name, model_id, model_type, debug_mode, multi_region, reasoning_mode, enable_memory
     global models, user_id, agent_type
 
     # load mcp.env    
@@ -163,11 +162,6 @@ def update(modelName, debugMode, multiRegion, reasoningMode, gradingMode, agentT
         logger.info(f"multi_region: {multi_region}")
         mcp_env['multi_region'] = multi_region
 
-    if grading_mode != gradingMode:
-        grading_mode = gradingMode
-        logger.info(f"grading_mode: {grading_mode}")            
-        mcp_env['grading_mode'] = grading_mode
-
     if agent_type != agentType:
         agent_type = agentType
         logger.info(f"agent_type: {agent_type}")
@@ -189,7 +183,6 @@ def update_mcp_env():
     mcp_env = utils.load_mcp_env()
     
     mcp_env['multi_region'] = multi_region
-    mcp_env['grading_mode'] = grading_mode
     user_id = agent_type
     mcp_env['user_id'] = user_id
 
@@ -1589,9 +1582,8 @@ def retrieve(query):
                 uri = location["s3Location"]["uri"] if location["s3Location"]["uri"] is not None else ""
                 
                 name = uri.split("/")[-1]
-                # encoded_name = parse.quote(name)                
-                # url = f"{path}/{doc_prefix}{encoded_name}"
-                url = uri # TODO: add path and doc_prefix
+                encoded_name = parse.quote(name)                
+                url = f"{path}/{doc_prefix}{encoded_name}"
                 
             elif "webLocation" in location:
                 url = location["webLocation"]["url"] if location["webLocation"]["url"] is not None else ""
@@ -1651,13 +1643,13 @@ def run_rag_with_knowledge_base(query, st):
         logger.info(f"error message: {err_msg}")                    
         raise Exception ("Not able to request to LLM")
     
-    # if relevant_docs:
-    #     ref = "\n\n### Reference\n"
-    #     for i, doc in enumerate(relevant_docs):
-    #         page_content = doc["contents"][:100].replace("\n", "")
-    #         ref += f"{i+1}. [{doc["reference"]['title']}]({doc["reference"]['url']}), {page_content}...\n"    
-    #     logger.info(f"ref: {ref}")
-    #     msg += ref
+    if relevant_docs:
+        ref = "\n\n### Reference\n"
+        for i, doc in enumerate(relevant_docs):
+            page_content = doc["contents"][:100].replace("\n", "")
+            ref += f"{i+1}. [{doc["reference"]['title']}]({doc["reference"]['url']}), {page_content}...\n"    
+        logger.info(f"ref: {ref}")
+        msg += ref
     
     return msg, reference_docs
    

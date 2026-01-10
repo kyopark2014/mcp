@@ -368,11 +368,6 @@ with st.sidebar:
         reasoningMode = 'Enable' if select_reasoning else 'Disable'
         # logger.info(f"reasoningMode: {reasoningMode}")
 
-    # RAG grading
-    select_grading = st.checkbox('Grading', value=False)
-    gradingMode = 'Enable' if select_grading else 'Disable'
-    # logger.info(f"gradingMode: {gradingMode}")
-
     uploaded_file = None
     if mode=='이미지 분석':
         st.subheader("🌇 이미지 업로드")
@@ -381,7 +376,7 @@ with st.sidebar:
         st.subheader("📋 문서 업로드")
         uploaded_file = st.file_uploader("RAG를 위한 파일을 선택합니다.", type=["pdf", "txt", "py", "md", "csv", "json"], key=chat.fileId)
 
-    chat.update(modelName, debugMode, multiRegion, reasoningMode, gradingMode, agentType, memoryMode)    
+    chat.update(modelName, debugMode, multiRegion, reasoningMode, agentType, memoryMode)    
 
     st.success(f"Connected to {modelName}", icon="💚")
     clear_button = st.button("대화 초기화", key="clear")
