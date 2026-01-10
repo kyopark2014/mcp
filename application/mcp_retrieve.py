@@ -25,12 +25,29 @@ def load_config():
 
 config = load_config()
 
-bedrock_region = config['region']
-projectName = config['projectName']
-knowledge_base_id = config['knowledge_base_id']
+bedrock_region = config.get('region', 'us-west-2')
+projectName = config.get('projectName', 'es')
+knowledge_base_id = config.get('knowledge_base_id', '')
 number_of_results = 5
 
-bedrock_agent_runtime_client = boto3.client("bedrock-agent-runtime", region_name=bedrock_region)
+doc_prefix = "docs/"
+path = config.get('sharing_url', '')
+
+aws_access_key = config.get('aws', {}).get('access_key_id')
+aws_secret_key = config.get('aws', {}).get('secret_access_key')
+aws_session_token = config.get('aws', {}).get('session_token')
+
+if aws_access_key and aws_secret_key:
+    bedrock_agent_runtime_client = boto3.client(
+        "bedrock-agent-runtime", 
+        region_name=bedrock_region,
+        aws_access_key_id=aws_access_key,
+        aws_secret_access_key=aws_secret_key,
+        aws_session_token=aws_session_token,
+    )
+else:
+    bedrock_agent_runtime_client = boto3.client(
+        "bedrock-agent-runtime", region_name=bedrock_region)
 
 def retrieve(query):
     response = bedrock_agent_runtime_client.retrieve(
@@ -59,9 +76,8 @@ def retrieve(query):
                 uri = location["s3Location"]["uri"] if location["s3Location"]["uri"] is not None else ""
                 
                 name = uri.split("/")[-1]
-                # encoded_name = parse.quote(name)                
-                # url = f"{path}/{doc_prefix}{encoded_name}"
-                url = uri # TODO: add path and doc_prefix
+                encoded_name = parse.quote(name)                
+                url = f"{path}/{doc_prefix}{encoded_name}"
                 
             elif "webLocation" in location:
                 url = location["webLocation"]["url"] if location["webLocation"]["url"] is not None else ""

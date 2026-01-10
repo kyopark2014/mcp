@@ -347,8 +347,8 @@ def load_config(mcp_type):
         mcp_type = 'aws_cloudwatch'
     elif mcp_type == "aws storage":
         mcp_type = 'aws_storage'
-    elif mcp_type == "knowledge base":
-        mcp_type = 'knowledge_base_lambda'
+    # elif mcp_type == "knowledge base":
+    #     mcp_type = 'knowledge_base_lambda'
     elif mcp_type == "repl coder":
         mcp_type = 'repl_coder'
     elif mcp_type == "agentcore coder":
@@ -618,17 +618,17 @@ def load_config(mcp_type):
             }
         }
         
-    elif mcp_type == "knowledge_base_lambda":
-        return {
-            "mcpServers": {
-                "knowledge_base_lambda": {
-                    "command": "python",
-                    "args": [
-                        f"{workingDir}/mcp_server_lambda_knowledge_base.py"
-                    ]
-                }
-            }
-        }    
+    # elif mcp_type == "knowledge_base_lambda":
+    #     return {
+    #         "mcpServers": {
+    #             "knowledge_base_lambda": {
+    #                 "command": "python",
+    #                 "args": [
+    #                     f"{workingDir}/mcp_server_lambda_knowledge_base.py"
+    #                 ]
+    #             }
+    #         }
+    #     }    
     
     elif mcp_type == "repl_coder":
         return {

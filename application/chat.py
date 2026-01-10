@@ -1705,36 +1705,9 @@ def get_tool_info(tool_name, tool_content):
     tool_references = []    
     urls = []
     content = ""
-
-    # tavily
-    if isinstance(tool_content, str) and "Title:" in tool_content and "URL:" in tool_content and "Content:" in tool_content:
-        logger.info("Tavily parsing...")
-        items = tool_content.split("\n\n")
-        for i, item in enumerate(items):
-            # logger.info(f"item[{i}]: {item}")
-            if "Title:" in item and "URL:" in item and "Content:" in item:
-                try:
-                    title_part = item.split("Title:")[1].split("URL:")[0].strip()
-                    url_part = item.split("URL:")[1].split("Content:")[0].strip()
-                    content_part = item.split("Content:")[1].strip().replace("\n", "")
-                    
-                    logger.info(f"title_part: {title_part}")
-                    logger.info(f"url_part: {url_part}")
-                    logger.info(f"content_part: {content_part}")
-
-                    content += f"{content_part}\n\n"
-                    
-                    tool_references.append({
-                        "url": url_part,
-                        "title": title_part,
-                        "content": content_part[:100] + "..." if len(content_part) > 100 else content_part
-                    })
-                except Exception as e:
-                    logger.info(f"Parsing error: {str(e)}")
-                    continue                
-
+    
     # OpenSearch
-    elif tool_name == "SearchIndexTool": 
+    if tool_name == "SearchIndexTool": 
         if ":" in tool_content:
             extracted_json_data = tool_content.split(":", 1)[1].strip()
             try:
@@ -1769,82 +1742,10 @@ def get_tool_info(tool_name, tool_content):
                 
         logger.info(f"content: {content}")
         
-    # Knowledge Base
-    elif tool_name == "QueryKnowledgeBases": 
-        try:
-            # Handle case where tool_content contains multiple JSON objects
-            if tool_content.strip().startswith('{'):
-                # Parse each JSON object individually
-                json_objects = []
-                current_pos = 0
-                brace_count = 0
-                start_pos = -1
-                
-                for i, char in enumerate(tool_content):
-                    if char == '{':
-                        if brace_count == 0:
-                            start_pos = i
-                        brace_count += 1
-                    elif char == '}':
-                        brace_count -= 1
-                        if brace_count == 0 and start_pos != -1:
-                            try:
-                                json_obj = json.loads(tool_content[start_pos:i+1])
-                                # logger.info(f"json_obj: {json_obj}")
-                                json_objects.append(json_obj)
-                            except json.JSONDecodeError:
-                                logger.info(f"JSON parsing error: {tool_content[start_pos:i+1][:100]}")
-                            start_pos = -1
-                
-                json_data = json_objects
-            else:
-                # Try original method
-                json_data = json.loads(tool_content)                
-            # logger.info(f"json_data: {json_data}")
-
-            # Build content
-            if isinstance(json_data, list):
-                for item in json_data:
-                    if isinstance(item, dict) and "content" in item:
-                        content_text = item["content"].get("text", "")
-                        content += content_text + "\n\n"
-
-                        uri = "" 
-                        if "location" in item:
-                            if "s3Location" in item["location"]:
-                                uri = item["location"]["s3Location"]["uri"]
-                                # logger.info(f"uri (list): {uri}")
-                                ext = uri.split(".")[-1]
-
-                                # if ext is an image 
-                                url = sharing_url + "/" + s3_prefix + "/" + uri.split("/")[-1]
-                                if ext in ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "ico", "webp"]:
-                                    url = sharing_url + "/" + capture_prefix + "/" + uri.split("/")[-1]
-                                logger.info(f"url: {url}")
-                                
-                                tool_references.append({
-                                    "url": url, 
-                                    "title": uri.split("/")[-1],
-                                    "content": content_text[:100] + "..." if len(content_text) > 100 else content_text
-                                })          
-                
-        except json.JSONDecodeError as e:
-            logger.info(f"JSON parsing error: {e}")
-            json_data = {}
-            content = tool_content  # Use original content if parsing fails
-
-        logger.info(f"content: {content}")
-        logger.info(f"tool_references: {tool_references}")
-
     # aws document
     elif tool_name == "search_documentation":
         try:
-            if isinstance(tool_content, dict):
-                json_data = tool_content
-            elif isinstance(tool_content, list):
-                json_data = tool_content
-            else:
-                json_data = json.loads(tool_content)
+            json_data = json.loads(tool_content)
             for item in json_data:
                 logger.info(f"item: {item}")
                 
@@ -1874,32 +1775,6 @@ def get_tool_info(tool_name, tool_content):
         logger.info(f"content: {content}")
         logger.info(f"tool_references: {tool_references}")
             
-    # ArXiv
-    elif tool_name == "search_papers" and "papers" in tool_content:
-        try:
-            json_data = json.loads(tool_content)
-
-            papers = json_data['papers']
-            for paper in papers:
-                url = paper['url']
-                title = paper['title']
-                abstract = paper['abstract'].replace("\n", "")
-                content_text = abstract[:100] + "..." if len(abstract) > 100 else abstract
-                content += f"{content_text}\n\n"
-                logger.info(f"url: {url}, title: {title}, content: {content_text}")
-
-                tool_references.append({
-                    "url": url,
-                    "title": title,
-                    "content": content_text
-                })
-        except json.JSONDecodeError:
-            logger.info(f"JSON parsing error: {tool_content}")
-            pass
-
-        logger.info(f"content: {content}")
-        logger.info(f"tool_references: {tool_references}")
-
     # aws-knowledge
     elif tool_name == "aws___read_documentation":
         logger.info(f"#### {tool_name} ####")
@@ -1911,20 +1786,7 @@ def get_tool_info(tool_name, tool_content):
             json_data = json.loads(tool_content)
         
         logger.info(f"json_data: {json_data}")
-
-        if "content" in json_data:
-            content = json_data["content"]
-            logger.info(f"content: {content}")
-            if "result" in content:
-                result = content["result"]
-                logger.info(f"result: {result}")
-                
-        payload = {}
-        if "response" in json_data:
-            payload = json_data["response"]["payload"]
-        elif "content" in json_data:
-            payload = json_data
-
+        payload = json_data["response"]["payload"]
         if "content" in payload:
             payload_content = payload["content"]
             if "result" in payload_content:
@@ -2001,7 +1863,22 @@ def get_tool_info(tool_name, tool_content):
                     for url in path:
                         urls.append(url)
                 else:
-                    urls.append(path)            
+                    urls.append(path)
+            elif isinstance(json_data, list):  # Parse JSON from text field when json_data is a list
+                for item in json_data:
+                    if isinstance(item, dict) and "text" in item:
+                        try:
+                            text_json = json.loads(item["text"])
+                            if isinstance(text_json, dict) and "path" in text_json:
+                                path = text_json["path"]
+                                if isinstance(path, list):
+                                    for url in path:
+                                        urls.append(url)
+                                else:
+                                    urls.append(path)
+                        except (json.JSONDecodeError, TypeError):
+                            pass            
+
 
             if isinstance(json_data, dict):
                 for item in json_data:
@@ -2015,11 +1892,40 @@ def get_tool_info(tool_name, tool_content):
                             "title": title,
                             "content": content_text
                         })
-            else:
-                logger.info(f"json_data is not a dict: {json_data}")
-
+            elif isinstance(json_data, list):
+                logger.info(f"json_data is a list: {json_data}")
                 for item in json_data:
-                    if "reference" in item and "contents" in item:
+                    if isinstance(item, dict) and "text" in item:
+                        try:
+                            # text 필드 안의 JSON 문자열 파싱
+                            text_json = json.loads(item["text"])
+                            if isinstance(text_json, list):
+                                # 파싱된 JSON이 리스트인 경우
+                                for ref_item in text_json:
+                                    if isinstance(ref_item, dict) and "reference" in ref_item and "contents" in ref_item:
+                                        url = ref_item["reference"]["url"]
+                                        title = ref_item["reference"]["title"]
+                                        content_text = ref_item["contents"][:100] + "..." if len(ref_item["contents"]) > 100 else ref_item["contents"]
+                                        tool_references.append({
+                                            "url": url,
+                                            "title": title,
+                                            "content": content_text
+                                        })
+                            elif isinstance(text_json, dict) and "reference" in text_json and "contents" in text_json:
+                                # 파싱된 JSON이 딕셔너리인 경우
+                                url = text_json["reference"]["url"]
+                                title = text_json["reference"]["title"]
+                                content_text = text_json["contents"][:100] + "..." if len(text_json["contents"]) > 100 else text_json["contents"]
+                                tool_references.append({
+                                    "url": url,
+                                    "title": title,
+                                    "content": content_text
+                                })
+                        except (json.JSONDecodeError, TypeError) as e:
+                            logger.warning(f"Failed to parse text JSON: {e}")
+                            pass
+                    elif isinstance(item, dict) and "reference" in item and "contents" in item:
+                        # 리스트 항목이 직접 reference를 가지고 있는 경우
                         url = item["reference"]["url"]
                         title = item["reference"]["title"]
                         content_text = item["contents"][:100] + "..." if len(item["contents"]) > 100 else item["contents"]
@@ -2035,7 +1941,6 @@ def get_tool_info(tool_name, tool_content):
             pass
 
     return content, urls, tool_references
-
 
 memory_id = actor_id = session_id = None
 def initiate_memory():

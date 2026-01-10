@@ -205,7 +205,7 @@ with st.sidebar:
         if environment == "user":        
             mcp_options = [
                 "basic", "short-term memory", "long-term memory", "outlook", "trade_info",
-                "knowledge base", "kb-retriever (local)", "kb-retriever (runtime)", "agentcore gateway", 
+                "kb-retriever (local)", "kb-retriever (runtime)", "agentcore gateway", 
                 "use-aws (local)", "use-aws (runtime)", 
                 "aws-knowledge", "aws-api", "aws document", "aws cost", "aws cli", "aws ccapi",
                 "aws cloudwatch", "aws storage", "image generation", "aws diagram",
@@ -218,7 +218,7 @@ with st.sidebar:
         else:
             mcp_options = [ 
                 "basic", "short-term memory", "long-term memory", "outlook", "trade_info",
-                "knowledge base", "kb-retriever (local)", "kb-retriever (runtime)", "agentcore gateway", 
+                "kb-retriever (local)", "kb-retriever (runtime)", "agentcore gateway", 
                 "use-aws (local)", "use-aws (runtime)", 
                 "aws-knowledge", "aws-api", "aws document", "aws cost", "aws cli", "aws ccapi",
                 "aws cloudwatch", "aws storage", "image generation", "aws diagram",
