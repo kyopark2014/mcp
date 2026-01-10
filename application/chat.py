@@ -20,6 +20,7 @@ from io import BytesIO
 from PIL import Image
 from langchain_aws import ChatBedrock
 from botocore.config import Config
+from botocore.exceptions import ClientError
 from langchain_core.prompts import MessagesPlaceholder, ChatPromptTemplate
 from langchain_core.documents import Document
 
@@ -72,6 +73,9 @@ logger = logging.getLogger("chat")
 
 reasoning_mode = 'Disable'
 debug_messages = []  # List to store debug messages
+
+workingDir = os.path.dirname(os.path.abspath(__file__))
+config_path = os.path.join(workingDir, "config.json")
 
 config = utils.load_config()
 logger.info(f"config: {config}")
@@ -1540,9 +1544,6 @@ def get_knowledge_base_id():
             logger.info(f"knowledge_base_id: {knowledge_base_id}")
 
             config['knowledge_base_id'] = knowledge_base_id
-
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            config_path = os.path.join(script_dir, "../config.json")
             with open(config_path, 'w', encoding='utf-8') as f:
                 json.dump(config, f, ensure_ascii=False, indent=4)
 
@@ -1556,13 +1557,66 @@ if not knowledge_base_id:
 number_of_results = 4
 
 def retrieve(query):
-    response = bedrock_agent_runtime_client.retrieve(
-        retrievalQuery={"text": query},
-        knowledgeBaseId=knowledge_base_id,
-            retrievalConfiguration={
-                "vectorSearchConfiguration": {"numberOfResults": number_of_results},
-            },
-        )
+    global knowledge_base_id
+    
+    try:
+        response = bedrock_agent_runtime_client.retrieve(
+            retrievalQuery={"text": query},
+            knowledgeBaseId=knowledge_base_id,
+                retrievalConfiguration={
+                    "vectorSearchConfiguration": {"numberOfResults": number_of_results},
+                },
+            )
+    except ClientError as e:
+        error_code = e.response.get("Error", {}).get("Code", "")
+        
+        # Update knowledge_base_id only when ResourceNotFoundException occurs
+        if error_code == "ResourceNotFoundException":
+            logger.warning(f"ResourceNotFoundException occurred: {e}")
+            logger.info("Attempting to update knowledge_base_id...")
+            
+            bedrock_agent_client = boto3.client("bedrock-agent", region_name=bedrock_region)
+            knowledge_base_list = bedrock_agent_client.list_knowledge_bases()
+            
+            updated = False
+            for knowledge_base in knowledge_base_list.get("knowledgeBaseSummaries", []):
+                if knowledge_base["name"] == projectName:
+                    new_knowledge_base_id = knowledge_base["knowledgeBaseId"]
+                    knowledge_base_id = new_knowledge_base_id
+
+                    config['knowledge_base_id'] = new_knowledge_base_id
+                    with open(config_path, "w", encoding="utf-8") as f:
+                        json.dump(config, f, ensure_ascii=False, indent=4)
+                    
+                    logger.info(f"Updated knowledge_base_id to: {new_knowledge_base_id}")
+                    updated = True
+                    break
+            
+            if updated:
+                # Retry after updating knowledge_base_id
+                try:
+                    response = bedrock_agent_runtime_client.retrieve(
+                        retrievalQuery={"text": query},
+                        knowledgeBaseId=knowledge_base_id,
+                        retrievalConfiguration={
+                            "vectorSearchConfiguration": {"numberOfResults": number_of_results},
+                        },
+                    )
+                    logger.info("Retry successful after updating knowledge_base_id")
+                except Exception as retry_error:
+                    logger.error(f"Retry failed after updating knowledge_base_id: {retry_error}")
+                    raise
+            else:
+                logger.error(f"Could not find knowledge base with name: {projectName_local}")
+                raise
+        else:
+            # Re-raise other errors that are not ResourceNotFoundException
+            logger.error(f"Error retrieving: {e}")
+            raise
+    except Exception as e:
+        # Re-raise other exceptions that are not ClientError
+        logger.error(f"Unexpected error retrieving: {e}")
+        raise
     
     # logger.info(f"response: {response}")
     retrieval_results = response.get("retrievalResults", [])
