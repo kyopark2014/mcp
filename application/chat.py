@@ -1799,8 +1799,35 @@ def get_tool_info(tool_name, tool_content):
     # aws document
     elif tool_name == "search_documentation":
         try:
-            json_data = json.loads(tool_content)
-            for item in json_data:
+            # tool_content가 리스트인 경우 처리 (예: [{'type': 'text', 'text': '...'}])
+            if isinstance(tool_content, list):
+                # 리스트의 첫 번째 항목에서 text 필드 추출
+                if len(tool_content) > 0 and isinstance(tool_content[0], dict) and 'text' in tool_content[0]:
+                    tool_content = tool_content[0]['text']
+                else:
+                    logger.info(f"Unexpected list format: {tool_content}")
+                    return content, urls, tool_references
+            
+            # tool_content가 문자열인 경우 JSON 파싱
+            if isinstance(tool_content, str):
+                json_data = json.loads(tool_content)
+            elif isinstance(tool_content, dict):
+                json_data = tool_content
+            else:
+                logger.info(f"Unexpected tool_content type: {type(tool_content)}")
+                return content, urls, tool_references
+            
+            # search_results 배열에서 결과 추출
+            search_results = json_data.get('search_results', [])
+            if not search_results:
+                # search_results가 없으면 json_data 자체가 배열일 수 있음
+                if isinstance(json_data, list):
+                    search_results = json_data
+                else:
+                    logger.info(f"No search_results found in JSON data")
+                    return content, urls, tool_references
+            
+            for item in search_results:
                 logger.info(f"item: {item}")
                 
                 if isinstance(item, str):
@@ -1813,7 +1840,7 @@ def get_tool_info(tool_name, tool_content):
                 if isinstance(item, dict) and 'url' in item and 'title' in item:
                     url = item['url']
                     title = item['title']
-                    content_text = item['context'][:100] + "..." if len(item['context']) > 100 else item['context']
+                    content_text = item.get('context', '')[:100] + "..." if len(item.get('context', '')) > 100 else item.get('context', '')
                     tool_references.append({
                         "url": url,
                         "title": title,
@@ -1822,8 +1849,11 @@ def get_tool_info(tool_name, tool_content):
                 else:
                     logger.info(f"Invalid item format: {item}")
                     
-        except json.JSONDecodeError:
-            logger.info(f"JSON parsing error: {tool_content}")
+        except json.JSONDecodeError as e:
+            logger.info(f"JSON parsing error: {e}, tool_content: {tool_content}")
+            pass
+        except Exception as e:
+            logger.info(f"Unexpected error in search_documentation: {e}, tool_content type: {type(tool_content)}")
             pass
 
         logger.info(f"content: {content}")
