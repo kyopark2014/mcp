@@ -33,8 +33,8 @@ def load_config():
 
 config = load_config()
 
-region = config.get("region", "us-west-2")
-projectName = config.get("projectName", "mcp")
+region = config.get("region", "ap-northeast-2")
+projectName = config.get("projectName", "es")
 
 s3_prefix = "docs"
 s3_image_prefix = "images"
@@ -44,7 +44,7 @@ path = config.get('sharing_url', '')
 
 repl = PythonAstREPLTool()
 
-def repl_coder(code):
+def repl_coder(code: str):
     """
     Use this to execute python code and do math. 
     If you want to see the output of a value, you should print it out with `print(...)`. This is visible to the user.
@@ -132,7 +132,7 @@ def generate_short_uuid(length=8):
     full_uuid = uuid.uuid4().hex
     return full_uuid[:length]
 
-def repl_drawer(code):
+def repl_drawer(code: str):
     """
     Execute a Python script for draw a graph.
     Since Python runtime cannot use external APIs, necessary data must be included in the code.

@@ -211,7 +211,7 @@ with st.sidebar:
                 "aws cloudwatch", "aws storage", "image generation", "aws diagram",
                 "repl coder","agentcore coder", 
                 "tavily-search", "tavily", "perplexity", "ArXiv", "wikipedia", "notion",
-                "filesystem", "terminal", "text editor", "github",
+                "filesystem", "terminal (MAC)", "terminal (linux)", "text editor", "github",
                 "context7", "puppeteer", "agentcore-browser", "playwright", "firecrawl", "obsidian", "airbnb", 
                 "pubmed", "chembl", "clinicaltrial", "arxiv-manual", "사용자 설정"
             ]
@@ -224,7 +224,7 @@ with st.sidebar:
                 "aws cloudwatch", "aws storage", "image generation", "aws diagram",
                 "repl coder", "agentcore coder", 
                 "tavily-search", "tavily", "ArXiv", "wikipedia", "notion",
-                "filesystem", "terminal", "text editor", "github",
+                "filesystem", "terminal (MAC)", "terminal (linux)", "text editor", "github",
                 "agentcore-browser", "playwright", "airbnb",
                 "pubmed", "chembl", "clinicaltrial", "arxiv-manual", "사용자 설정"
             ]

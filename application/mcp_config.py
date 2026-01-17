@@ -704,7 +704,7 @@ def load_config(mcp_type):
             }
         }      
     
-    elif mcp_type == "terminal":
+    elif mcp_type == "terminal (MAC)":
         return {
             "mcpServers": {
                 "iterm-mcp": {
@@ -717,15 +717,30 @@ def load_config(mcp_type):
             }
         }
     
+    elif mcp_type == "terminal (linux)":
+        return {
+            "mcpServers": {
+                "terminal-mcp": {
+                    "command": "npx",
+                    "args": [
+                        "-y",
+                        "terminal-mcp"
+                    ]
+                }
+            }
+        }    
+    
     elif mcp_type == "filesystem":
         parent_dir = os.path.dirname(workingDir)
+        contents_dir = os.path.join(parent_dir, "contents")
         return {
             "mcpServers": {
                 "filesystem": {
                     "command": "npx",
                     "args": [
                         "@modelcontextprotocol/server-filesystem",
-                        parent_dir  
+                        f"{workingDir}",
+                        f"{contents_dir}"
                     ]
                 }
             }

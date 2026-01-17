@@ -80,7 +80,7 @@ def get_code_interpreter_sessionId():
 
     return sessionId
 
-def agentcore_coder(code):
+def agentcore_coder(code: str):
     """
     Use this to execute python code and do math. 
     If you want to see the output of a value, you should print it out with `print(...)`. This is visible to the user.
@@ -214,7 +214,7 @@ def generate_short_uuid(length=8):
     full_uuid = uuid.uuid4().hex
     return full_uuid[:length]
 
-def agentcore_drawer(code):
+def agentcore_drawer(code: str):
     """
     Execute a Python script for draw a graph.
     Since Python runtime cannot use external APIs, necessary data must be included in the code.
