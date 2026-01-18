@@ -66,13 +66,23 @@ def resolve_ticker(subject: str) -> str:
     """Resolve input into a yfinance-style ticker.
 
     Order of resolution:
-    1) Exact company name match in SUBJECT_TO_TICKER
+    1) Exact company name match in SUBJECT_TO_TICKER (with/without spaces)
     2) Already a yfinance-style ticker (e.g., 035420.KS / 000660.KQ)
     3) Fallback: search via search_ticker_candidates and use the first match
     """
-    # 1) Company name -> ticker mapping
+    # 1) Company name -> ticker mapping (exact match)
     if subject in SUBJECT_TO_TICKER:
         return SUBJECT_TO_TICKER[subject]
+    
+    # 1-2) Try matching without spaces (e.g., "LG 에너지솔루션" -> "LG에너지솔루션")
+    subject_no_space = subject.replace(" ", "")
+    if subject_no_space in SUBJECT_TO_TICKER:
+        return SUBJECT_TO_TICKER[subject_no_space]
+    
+    # 1-3) Try matching with normalized keys (remove spaces from both)
+    for key, ticker in SUBJECT_TO_TICKER.items():
+        if key.replace(" ", "") == subject_no_space:
+            return ticker
 
     # 2) If it's already a yfinance-style ticker, accept as-is
     s = (subject or "").strip().upper()

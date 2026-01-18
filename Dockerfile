@@ -57,7 +57,7 @@ RUN pip install opensearch-py wikipedia aioboto3 requests
 RUN pip install uv kaleido diagrams graphviz
 RUN pip install sarif-om==1.0.4 arxiv==2.2.0 chembl-webresource-client==0.10.9 pytrials==1.0.0
 RUN pip install strands-agents strands-agents-tools reportlab arize-phoenix colorama
-RUN pip install rich==13.9.0 bedrock-agentcore claude-agent-sdk nest-asyncio
+RUN pip install rich==13.9.0 bedrock-agentcore claude-agent-sdk nest-asyncio finance-datareader
 
 RUN mkdir -p /root/.streamlit
 COPY config.toml /root/.streamlit/
