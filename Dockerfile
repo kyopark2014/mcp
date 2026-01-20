@@ -46,6 +46,9 @@ RUN wget -q -O /tmp/google-chrome-key.pub https://dl-ssl.google.com/linux/linux_
     && apt-get install -y google-chrome-stable \
     && rm -rf /var/lib/apt/lists/* /tmp/google-chrome-key.pub
 
+RUN npm install -g @modelcontextprotocol/server-filesystem
+RUN pip install terminal-control-mcp
+
 # Install Python packages
 RUN pip install streamlit streamlit-chat
 RUN pip install pandas numpy
