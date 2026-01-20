@@ -79,16 +79,7 @@ async def call_model(state: State, config):
 
     try:
         messages = []
-        # Track tool_call_ids to ensure all tool_use blocks have corresponding tool_result blocks
-        tool_call_ids_with_responses = set()
-        
-        # First pass: collect all tool_call_ids that have corresponding ToolMessages
-        for i, msg in enumerate(state["messages"]):
-            if isinstance(msg, ToolMessage):
-                tool_call_ids_with_responses.add(msg.tool_call_id)
-        
-        # Second pass: process messages and filter out tool_calls without responses
-        for i, msg in enumerate(state["messages"]):
+        for msg in state["messages"]:
             if isinstance(msg, ToolMessage):
                 content = msg.content
                 if isinstance(content, list):
@@ -113,29 +104,6 @@ async def call_model(state: State, config):
                     tool_call_id=msg.tool_call_id
                 )
                 messages.append(tool_msg)
-            elif isinstance(msg, AIMessage):
-                # Check if this AIMessage has tool_calls
-                if msg.tool_calls:
-                    # Filter tool_calls to only include those with corresponding ToolMessages
-                    # Collect all tool_call_ids from this AIMessage
-                    current_tool_call_ids = {tc.get('id') for tc in msg.tool_calls if tc.get('id')}
-                    
-                    # Check if all tool_calls have corresponding ToolMessages
-                    has_all_responses = all(tid in tool_call_ids_with_responses for tid in current_tool_call_ids)
-                    
-                    # If not all tool_calls have responses, remove tool_calls to avoid Bedrock validation error
-                    if not has_all_responses:
-                        logger.warning(f"AIMessage has tool_calls without corresponding ToolMessages, removing tool_calls for Bedrock compatibility")
-                        # Create a new AIMessage without tool_calls
-                        clean_msg = AIMessage(
-                            content=msg.content,
-                            id=msg.id if hasattr(msg, 'id') else None
-                        )
-                        messages.append(clean_msg)
-                    else:
-                        messages.append(msg)
-                else:
-                    messages.append(msg)
             else:
                 messages.append(msg)
         
