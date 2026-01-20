@@ -733,9 +733,9 @@ def load_config(mcp_type):
         return {
             "mcpServers": {
                 "filesystem": {
-                    "command": "npx",
+                    "command": "mcp-server-filesystem",
                     "args": [
-                        "@modelcontextprotocol/server-filesystem",
+                        f"{parent_dir}",
                         f"{workingDir}",
                         f"{contents_dir}"
                     ]
