@@ -2,12 +2,13 @@ FROM --platform=linux/amd64 python:3.13-slim
 
 WORKDIR /app
 
-# Install npm 
+# Install npm and graphviz
 RUN apt-get update && apt-get install -y \
     curl \
     gnupg \
     unzip \
     wget \
+    graphviz \
     && rm -rf /var/lib/apt/lists/*
 
 # Install AWS CLI
