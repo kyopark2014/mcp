@@ -1,38 +1,21 @@
 FROM --platform=linux/amd64 python:3.13-slim
 
+WORKDIR /app
+
+# Install npm 
 RUN apt-get update && apt-get install -y \
     curl \
     gnupg \
     unzip \
-    build-essential \
-    gcc \
-    python3-dev \
-    graphviz \
-    graphviz-dev \
-    pkg-config \
-    terminator \
     wget \
     && rm -rf /var/lib/apt/lists/*
-
-# Install Node.js
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get update \
-    && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install npm and Playwright
-RUN npm install -g npm@latest 
-RUN npm install -g @playwright/mcp@0.0.27
-
-# Install Claude Code
-RUN curl -fsSL https://claude.ai/install.sh | bash
 
 # Install AWS CLI
 RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" \
     && unzip awscliv2.zip \
     && ./aws/install \
     && rm -rf aws awscliv2.zip
- 
+
 # AWS credentials will be passed at build time via ARG
 ARG AWS_ACCESS_KEY_ID
 ARG AWS_SECRET_ACCESS_KEY
@@ -59,7 +42,16 @@ RUN echo "[default]" > /root/.aws/config && \
     echo "output = json" >> /root/.aws/config && \
     chmod 600 /root/.aws/config
 
-WORKDIR /app
+# Install Node.js
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get update \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN npm install -g npm@latest 
+
+# Install Playwright
+RUN npm install -g @playwright/mcp@0.0.27
 
 # Install Chrome and Playwright dependencies
 RUN apt-get update && apt-get install -y \
@@ -86,6 +78,13 @@ RUN wget -q -O /tmp/google-chrome-key.pub https://dl-ssl.google.com/linux/linux_
     && apt-get install -y google-chrome-stable \
     && rm -rf /var/lib/apt/lists/* /tmp/google-chrome-key.pub
 
+# Install MCP packages globally
+RUN npm install -g @modelcontextprotocol/server-filesystem
+
+# Install terminal-control-mcp (Python-based terminal MCP server)
+RUN apt-get update && apt-get install -y tmux && apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN pip install terminal-control-mcp
+
 # Install Python packages
 RUN pip install streamlit streamlit-chat
 RUN pip install pandas numpy
@@ -97,7 +96,8 @@ RUN pip install opensearch-py wikipedia aioboto3 requests
 RUN pip install uv kaleido diagrams graphviz
 RUN pip install sarif-om==1.0.4 arxiv==2.2.0 chembl-webresource-client==0.10.9 pytrials==1.0.0
 RUN pip install strands-agents strands-agents-tools reportlab arize-phoenix colorama
-RUN pip install rich==13.9.0 bedrock-agentcore claude-agent-sdk nest-asyncio
+RUN pip install rich==13.9.0 bedrock-agentcore claude-agent-sdk nest-asyncio finance-datareader
+RUN pip install nova-act
 
 RUN mkdir -p /root/.streamlit
 COPY config.toml /root/.streamlit/
