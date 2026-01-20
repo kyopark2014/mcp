@@ -54,7 +54,7 @@ def setup_logging(log_level=logging.INFO):
         datefmt=date_format,
         handlers=[
             logging.StreamHandler(),
-            logging.FileHandler(f"installer_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+            # logging.FileHandler(f"installer_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
         ]
     )
     
@@ -621,6 +621,28 @@ def create_ec2_role(knowledge_base_role_arn: str) -> str:
                             "logs:GetQueryResults",
                             "logs:StartQuery",
                             "logs:StopQuery"
+                        ],
+                        "Resource": ["*"]
+                    }
+                ]
+            }
+        },
+        {
+            "name": f"eks-policy-for-{project_name}",
+            "document": {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "eks:ListClusters",
+                            "eks:DescribeCluster",
+                            "eks:ListNodegroups",
+                            "eks:DescribeNodegroup",
+                            "eks:ListFargateProfiles",
+                            "eks:DescribeFargateProfile",
+                            "eks:ListAddons",
+                            "eks:DescribeAddon"
                         ],
                         "Resource": ["*"]
                     }

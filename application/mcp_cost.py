@@ -24,6 +24,7 @@ logging.basicConfig(
 logger = logging.getLogger("mcp-cost")
 
 cost_data = {}
+daily_cost_data = None
 def normalize_service_name(service_name: str) -> str:
     """
     Normalize AWS service names to their official names
