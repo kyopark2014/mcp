@@ -722,7 +722,10 @@ def load_config(mcp_type):
             "mcpServers": {
                 "terminal-control": {
                     "command": "terminal-control-mcp",
-                    "args": []
+                    "args": [],
+                    "env": {
+                        "TERMINAL_CONTROL_SECURITY_LEVEL": "low"  # "off", "low", "medium", "high"
+                    }
                 }
             }
         }      
