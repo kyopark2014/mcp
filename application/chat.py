@@ -796,6 +796,9 @@ def general_conversation(query, st):
                 
     if memory_chain and hasattr(memory_chain, 'load_memory_variables'):
         history = memory_chain.load_memory_variables({})["chat_history"]
+        # Ensure history starts with a HumanMessage (Bedrock Converse API requirement)
+        if history and isinstance(history[0], AIMessage):
+            history = history[1:]
     else:
         history = []
 
