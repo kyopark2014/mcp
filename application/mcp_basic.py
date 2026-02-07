@@ -87,7 +87,10 @@ def get_chat(extended_thinking):
     modelId = profile['model_id']
     model_type = profile['model_type']
     if model_type == 'claude':
-        maxOutputTokens = 4096 # 4k
+        if 'sonnet-4-5' in modelId:
+            maxOutputTokens = 8192 # 8k for Sonnet 4.5
+        else:
+            maxOutputTokens = 4096 # 4k
     else:
         maxOutputTokens = 5120 # 5k
 

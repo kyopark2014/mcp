@@ -58,7 +58,10 @@ def get_model():
         STOP_SEQUENCE = "" 
 
     if chat.model_type == 'claude':
-        maxOutputTokens = 4096 # 4k
+        if 'sonnet-4-5' in chat.model_id:
+            maxOutputTokens = 8192 # 8k for Sonnet 4.5
+        else:
+            maxOutputTokens = 4096 # 4k
     else:
         maxOutputTokens = 5120 # 5k
 

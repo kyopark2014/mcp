@@ -327,7 +327,10 @@ def get_chat(extended_thinking):
     modelId = profile['model_id']
     model_type = profile['model_type']
     if model_type == 'claude':
-        maxOutputTokens = 4096 # 4k
+        if 'sonnet-4-5' in modelId:
+            maxOutputTokens = 8192 # 8k for Sonnet 4.5
+        else:
+            maxOutputTokens = 4096 # 4k
     else:
         maxOutputTokens = 5120 # 5k
     number_of_models = len(models)
@@ -602,7 +605,10 @@ def get_parallel_processing_chat(models, selected):
     bedrock_region =  profile['bedrock_region']
     modelId = profile['model_id']
     model_type = profile['model_type']
-    maxOutputTokens = 4096
+    if model_type == 'claude' and 'sonnet-4-5' in modelId:
+        maxOutputTokens = 8192 # 8k for Sonnet 4.5
+    else:
+        maxOutputTokens = 4096
     logger.info(f'selected_chat: {selected}, bedrock_region: {bedrock_region}, modelId: {modelId}, model_type: {model_type}')
 
     if profile['model_type'] == 'nova':
