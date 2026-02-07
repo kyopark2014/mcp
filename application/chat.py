@@ -125,7 +125,7 @@ MSG_LENGTH = 100
 
 doc_prefix = s3_prefix+'/'
 
-model_name = "Claude 3.5 Sonnet"
+model_name = "Claude 4.5 Sonnet"
 model_type = "claude"
 models = info.get_model_info(model_name)
 number_of_models = len(models)
@@ -605,7 +605,7 @@ def get_parallel_processing_chat(models, selected):
     bedrock_region =  profile['bedrock_region']
     modelId = profile['model_id']
     model_type = profile['model_type']
-    if model_type == 'claude' and 'sonnet-4-5' in modelId:
+    if model_type == 'claude' and '4.5' in model_name:
         maxOutputTokens = 8192 # 8k for Sonnet 4.5
     else:
         maxOutputTokens = 4096
