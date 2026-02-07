@@ -186,7 +186,7 @@ with st.sidebar:
     
     # radio selection
     mode = st.radio(
-        label="원하는 대화 형태를 선택하세요. ",options=["일상적인 대화", "RAG", "Agent", "Agent (Chat)", "Multi-agent Supervisor (Router)", "LangGraph Supervisor", "LangGraph Swarm", "Swarm Agent", "Agent with Plan", "번역하기", "문법 검토하기", "이미지 분석", "비용 분석"], index=2
+        label="원하는 대화 형태를 선택하세요. ",options=["일상적인 대화", "RAG", "Agent", "Agent (Chat)", "Multi-agent Supervisor (Router)", "LangGraph Supervisor", "LangGraph Swarm", "Swarm Agent", "Agent with Plan", "번역하기", "문법 검토하기", "이미지 분석", "비용 분석"], index=3
     )   
     st.info(mode_descriptions[mode][0])
     
@@ -229,7 +229,7 @@ with st.sidebar:
                 "pubmed", "chembl", "clinicaltrial", "arxiv-manual", "사용자 설정"
             ]
         mcp_selections = {}
-        default_selections = ["basic", "use-aws (local)", "tavily-search", "filesystem", "terminal"]
+        default_selections = ["tavily-search", "repl coder", "filesystem", "terminal"]
                 
         with st.expander("MCP 옵션 선택", expanded=True):            
             # Create two columns
@@ -343,7 +343,7 @@ with st.sidebar:
             "Nova Pro", 
             "Nova Lite", 
             "Nova Micro",            
-        ), index=0
+        ), index=1
     )
 
     # debug checkbox
