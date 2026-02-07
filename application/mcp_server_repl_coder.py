@@ -32,7 +32,7 @@ except Exception as e:
 ######################################
 
 @mcp.tool()
-def repl_coder(code: str = Field(default="", description="The complete Python code to execute")):
+def repl_coder(code: str):
     """
     Execute Python code to perform calculations or data processing. You MUST provide the 'code' parameter.
     
@@ -53,7 +53,7 @@ def repl_coder(code: str = Field(default="", description="The complete Python co
     return coder.repl_coder(code)
 
 @mcp.tool()
-def repl_drawer(code: str = Field(default="", description="The complete Python code to execute for drawing a graph")):
+def repl_drawer(code: str):
     """
     Execute a Python script to draw a graph. You MUST provide the 'code' parameter.
     

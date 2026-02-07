@@ -229,7 +229,7 @@ with st.sidebar:
                 "pubmed", "chembl", "clinicaltrial", "arxiv-manual", "사용자 설정"
             ]
         mcp_selections = {}
-        default_selections = ["tavily-search", "repl coder", "filesystem", "terminal"]
+        default_selections = ["tavily-search", "repl coder"]
                 
         with st.expander("MCP 옵션 선택", expanded=True):            
             # Create two columns
