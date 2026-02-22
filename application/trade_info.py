@@ -3,11 +3,16 @@ from __future__ import annotations
 import logging
 import sys
 import os
+import io
+import boto3
 import uuid
+import json
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.font_manager as fm
+
+from urllib import parse
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Optional, List, Tuple
 from matplotlib.patches import Rectangle
@@ -21,6 +26,28 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger("loader")
+
+script_dir = os.path.dirname(os.path.abspath(__file__))
+config_path = os.path.join(script_dir, "config.json")
+    
+def load_config():
+    config = None
+        
+    with open(config_path, "r", encoding="utf-8") as f:
+        config = json.load(f)
+    
+    return config
+
+config = load_config()
+
+region = config.get("region", "ap-northeast-2")
+projectName = config.get("projectName", "es")
+
+s3_prefix = "docs"
+s3_image_prefix = "images"
+model_name = "Claude 4.0 Sonnet"
+s3_bucket = config.get("s3_bucket")
+path = config.get('sharing_url', '')
 
 # Simple mapping: subject (company name) -> KRX ticker (yfinance format)
 # Add more companies here if needed.
@@ -58,9 +85,79 @@ SUBJECT_TO_TICKER: Dict[str, str] = {
     "한화오션": "042660.KS",  # 한화오션 Corp
     "한화시스템": "272210.KS",  # 한화시스템 Corp
     "농심": "004370.KS",  # 농심 Corp
+    "동원": "009150.KS",  # 동원 Corp
+    "SK": "034730.KS",  # SK Corp
 }
 
 stocks = {}
+
+def get_contents_type(file_name):
+    if file_name.lower().endswith((".jpg", ".jpeg")):
+        content_type = "image/jpeg"
+    elif file_name.lower().endswith((".pdf")):
+        content_type = "application/pdf"
+    elif file_name.lower().endswith((".txt")):
+        content_type = "text/plain"
+    elif file_name.lower().endswith((".csv")):
+        content_type = "text/csv"
+    elif file_name.lower().endswith((".ppt", ".pptx")):
+        content_type = "application/vnd.ms-powerpoint"
+    elif file_name.lower().endswith((".doc", ".docx")):
+        content_type = "application/msword"
+    elif file_name.lower().endswith((".xls")):
+        content_type = "application/vnd.ms-excel"
+    elif file_name.lower().endswith((".py")):
+        content_type = "text/x-python"
+    elif file_name.lower().endswith((".js")):
+        content_type = "application/javascript"
+    elif file_name.lower().endswith((".md")):
+        content_type = "text/markdown"
+    elif file_name.lower().endswith((".png")):
+        content_type = "image/png"
+    else:
+        content_type = "no info"    
+    return content_type
+
+def upload_to_s3(file_bytes, file_name):
+    """
+    Upload a file to S3 and return the URL
+    """
+    try:
+        s3_client = boto3.client(
+            service_name='s3',
+            region_name=region,
+        )
+
+        content_type = get_contents_type(file_name)       
+        logger.info(f"content_type: {content_type}") 
+
+        if content_type == "image/jpeg" or content_type == "image/png":
+            s3_key = f"{s3_image_prefix}/{file_name}"
+        else:
+            s3_key = f"{s3_prefix}/{file_name}"
+        
+        user_meta = {  # user-defined metadata
+            "content_type": content_type,
+            "model_name": model_name
+        }
+        
+        response = s3_client.put_object(
+            Bucket=s3_bucket, 
+            Key=s3_key, 
+            ContentType=content_type,
+            Metadata = user_meta,
+            Body=file_bytes            
+        )
+        logger.info(f"upload response: {response}")
+
+        #url = f"https://{s3_bucket}.s3.amazonaws.com/{s3_key}"
+        url = path+'/'+s3_image_prefix+'/'+parse.quote(file_name)
+        return url
+    
+    except Exception as e:
+        err_msg = f"Error uploading to S3: {str(e)}"
+        logger.info(f"{err_msg}")
+        return None
 
 def resolve_ticker(subject: str) -> str:
     """Resolve input into a yfinance-style ticker.
@@ -510,14 +607,27 @@ def draw_stock_trend(trend: Dict[str, object]) -> Dict[str, List[str]]:
 
     # Save to file
     image_name = generate_short_uuid() + '.png'
-    os.makedirs('contents', exist_ok=True)
-    file_path = os.path.join('contents', image_name)
-    
-    plt.savefig(file_path, format='png', dpi=100, bbox_inches='tight')
-    plt.close(fig)
+
+    if path:
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+        plt.close(fig)
+        buf.seek(0)
+
+        url = upload_to_s3(buf.getvalue(), image_name)
+        if url:
+            image_url.append(url)
+            logger.info(f"image_url: {image_url}")
+
+    else:
+        os.makedirs('contents', exist_ok=True)
+        file_path = os.path.join('contents', image_name)
         
-    image_url.append(os.path.abspath(file_path))
-    logger.info(f"image_url: {image_url}")
+        plt.savefig(file_path, format='png', dpi=100, bbox_inches='tight')
+        plt.close(fig)
+            
+        image_url.append(os.path.abspath(file_path))
+        logger.info(f"image_url: {image_url}")
 
     ###########################################################################################
     # Graph showing daily price increase and decrease percentages
@@ -590,11 +700,24 @@ def draw_stock_trend(trend: Dict[str, object]) -> Dict[str, List[str]]:
 
     # Save to file
     image_name = generate_short_uuid() + '.png'
-    os.makedirs('contents', exist_ok=True)
-    file_path = os.path.join('contents', image_name)
-    plt.savefig(file_path, format='png', dpi=100, bbox_inches='tight')
-    plt.close(fig2)
-    image_url.append(os.path.abspath(file_path))
+
+    if path:
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+        plt.close(fig2)
+        buf.seek(0)
+
+        url = upload_to_s3(buf.getvalue(), image_name)
+        if url:
+            image_url.append(url)
+            logger.info(f"image_url: {image_url}")
+
+    else:
+        os.makedirs('contents', exist_ok=True)
+        file_path = os.path.join('contents', image_name)
+        plt.savefig(file_path, format='png', dpi=100, bbox_inches='tight')
+        plt.close(fig2)
+        image_url.append(os.path.abspath(file_path))
 
     # Draw stock trend graph based on closing price
     df = pd.DataFrame(points)
@@ -693,15 +816,30 @@ def draw_stock_trend(trend: Dict[str, object]) -> Dict[str, List[str]]:
     plt.tight_layout()
 
     # Save to file
-    image_name = generate_short_uuid() + '.png'
-    os.makedirs('contents', exist_ok=True)
-    file_path = os.path.join('contents', image_name)
-    
-    plt.savefig(file_path, format='png', dpi=100, bbox_inches='tight')
-    plt.close(fig3)
+    image_name = generate_short_uuid() + '.png'    
 
-    image_url.append(os.path.abspath(file_path))
-    logger.info(f"image_url: {image_url}")
+    if path:
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+        plt.close(fig3)
+        buf.seek(0)
+
+        url = upload_to_s3(buf.getvalue(), image_name)
+        if url:
+            image_url.append(url)
+            logger.info(f"image_url: {image_url}")
+        else:
+            logger.error(f"Failed to upload image to S3: {image_name}")
+
+    else:
+        os.makedirs('contents', exist_ok=True)
+        file_path = os.path.join('contents', image_name)
+        
+        plt.savefig(file_path, format='png', dpi=100, bbox_inches='tight')
+        plt.close(fig3)
+
+        image_url.append(os.path.abspath(file_path))
+        logger.info(f"image_url: {image_url}")
 
     return {
         "path": image_url
