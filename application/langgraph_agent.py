@@ -49,7 +49,6 @@ class Skill:
     instructions: str
     path: str
 
-
 class SkillManager:
     """Discovers, loads and selects Agent Skills following the Anthropic spec."""
 
@@ -101,7 +100,6 @@ class SkillManager:
         return frontmatter, body
 
     # ---- prompt generation (progressive disclosure) ----
-
     def available_skills_xml(self) -> str:
         """Generate <available_skills> XML for the system prompt (metadata only)."""
         if not self.registry:
@@ -142,7 +140,6 @@ class SkillManager:
         parts.append("</active_skills>")
         return "\n".join(parts)
 
-
 # global singleton
 skill_manager = SkillManager()
 
@@ -180,7 +177,22 @@ def execute_code(code: str) -> str:
         old_stdout, old_stderr = sys.stdout, sys.stderr
         sys.stdout, sys.stderr = stdout_capture, stderr_capture
 
-        exec_globals = {"__builtins__": __builtins__}
+        import subprocess, json, pathlib, shutil, tempfile, glob, datetime, math, re as _re
+        exec_globals = {
+            "__builtins__": __builtins__,
+            "subprocess": subprocess,
+            "json": json,
+            "os": os,
+            "sys": sys,
+            "io": io,
+            "pathlib": pathlib,
+            "shutil": shutil,
+            "tempfile": tempfile,
+            "glob": glob,
+            "datetime": datetime,
+            "math": math,
+            "re": _re,
+        }
         exec(code, exec_globals)
 
         sys.stdout, sys.stderr = old_stdout, old_stderr
@@ -355,8 +367,7 @@ SKILL_USAGE_GUIDE = (
     "위의 <available_skills>에 나열된 skill이 사용자의 요청과 관련될 때:\n"
     "1. 먼저 get_skill_instructions 도구로 해당 skill의 상세 지침을 로드하세요.\n"
     "2. 지침에 포함된 코드 패턴을 execute_code 도구로 실행하세요.\n"
-    "3. 생성된 파일은 upload_file_to_s3로 업로드하고 URL을 사용자에게 전달하세요.\n"
-    "4. skill 지침이 없는 일반 질문은 직접 답변하세요.\n"
+    "3. skill 지침이 없는 일반 질문은 직접 답변하세요.\n"
 )
 
 
