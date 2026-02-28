@@ -53,9 +53,9 @@ dependencies = [
     "chembl-webresource-client==0.10.9",
     "pytrials==1.0.0",
     "strands-agents>=1.0.1",
-    # strands-agents-tools 버전 제약 완화
     "strands-agents-tools",
     "reportlab",
+    "pyyaml",
     "arize-phoenix",
     "colorama",
     # rich 버전 명시 (streamlit과 호환되는 버전)

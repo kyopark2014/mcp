@@ -115,17 +115,18 @@ def create_s3_bucket() -> str:
             VersioningConfiguration={"Status": "Suspended"}
         )
         
-        # Create docs folder
-        logger.debug("Creating docs folder")
-        try:
-            s3_client.put_object(
-                Bucket=bucket_name,
-                Key="docs/",
-                Body=b""
-            )
-            logger.debug("docs folder created successfully")
-        except ClientError as e:
-            logger.warning(f"Failed to create docs folder: {e}")
+        # Create docs and artifacts folders
+        logger.debug("Creating docs and artifacts folders")
+        for folder in ["docs/", "artifacts/"]:
+            try:
+                s3_client.put_object(
+                    Bucket=bucket_name,
+                    Key=folder,
+                    Body=b""
+                )
+                logger.debug(f"{folder} folder created successfully")
+            except ClientError as e:
+                logger.warning(f"Failed to create {folder} folder: {e}")
         
         logger.info(f"✓ S3 bucket created successfully: {bucket_name}")
         return bucket_name
@@ -133,18 +134,19 @@ def create_s3_bucket() -> str:
     except ClientError as e:
         if e.response["Error"]["Code"] in ["BucketAlreadyExists", "BucketAlreadyOwnedByYou"]:
             logger.warning(f"S3 bucket already exists: {bucket_name}")
-            # Create docs folder if bucket already exists
-            logger.debug("Creating docs folder in existing bucket")
-            try:
-                s3_client.put_object(
-                    Bucket=bucket_name,
-                    Key="docs/",
-                    Body=b""
-                )
-                logger.debug("docs folder created successfully")
-            except ClientError as folder_error:
-                if folder_error.response["Error"]["Code"] != "NoSuchBucket":
-                    logger.warning(f"Failed to create docs folder: {folder_error}")
+            # Create docs and artifacts folders if bucket already exists
+            logger.debug("Creating docs and artifacts folders in existing bucket")
+            for folder in ["docs/", "artifacts/"]:
+                try:
+                    s3_client.put_object(
+                        Bucket=bucket_name,
+                        Key=folder,
+                        Body=b""
+                    )
+                    logger.debug(f"{folder} folder created successfully")
+                except ClientError as folder_error:
+                    if folder_error.response["Error"]["Code"] != "NoSuchBucket":
+                        logger.warning(f"Failed to create {folder} folder: {folder_error}")
             return bucket_name
         logger.error(f"Failed to create S3 bucket: {e}")
         raise
@@ -3130,7 +3132,7 @@ def create_cloudfront_distribution(alb_info: Dict[str, str], s3_bucket_name: str
             "Compress": True
         },
         "CacheBehaviors": {
-            "Quantity": 2,
+            "Quantity": 3,
             "Items": [
                 {
                     "PathPattern": "/images/*",
@@ -3149,6 +3151,21 @@ def create_cloudfront_distribution(alb_info: Dict[str, str], s3_bucket_name: str
                 },
                 {
                     "PathPattern": "/docs/*",
+                    "TargetOriginId": f"s3-{project_name}",
+                    "ViewerProtocolPolicy": "redirect-to-https",
+                    "AllowedMethods": {
+                        "Quantity": 2,
+                        "Items": ["GET", "HEAD"],
+                        "CachedMethods": {
+                            "Quantity": 2,
+                            "Items": ["GET", "HEAD"]
+                        }
+                    },
+                    "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b5a84be39ad",
+                    "Compress": True
+                },
+                {
+                    "PathPattern": "/artifacts/*",
                     "TargetOriginId": f"s3-{project_name}",
                     "ViewerProtocolPolicy": "redirect-to-https",
                     "AllowedMethods": {
@@ -3213,7 +3230,7 @@ def create_cloudfront_distribution(alb_info: Dict[str, str], s3_bucket_name: str
         logger.info(f"✓ CloudFront distribution created (ALB + S3): {distribution_domain}")
         logger.info(f"  Distribution ID: {distribution_id}")
         logger.info(f"  Default origin: ALB {alb_info['dns']}")
-        logger.info(f"  /images/* and /docs/* origins: S3 bucket {s3_bucket_name}")
+        logger.info(f"  /images/*, /docs/*, /artifacts/* origins: S3 bucket {s3_bucket_name}")
         logger.warning("  Note: CloudFront distribution may take 15-20 minutes to deploy")
         
     except ClientError as e:

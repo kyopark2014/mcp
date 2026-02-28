@@ -2209,6 +2209,9 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
     client = MultiServerMCPClient(server_params)
     tools = await client.get_tools()
 
+    builtin_tools = langgraph_agent.get_builtin_tools()
+    tools = tools + builtin_tools
+
     tool_list = [tool.name for tool in tools]
     logger.info(f"tool_list: {tool_list}")
 
@@ -2342,7 +2345,10 @@ async def run_langgraph_agent_with_plan(query, mcp_servers, containers):
     
     tools = await client.get_tools()
     logger.info(f"get_tools() returned: {tools}")
-    
+
+    builtin_tools = langgraph_agent.get_builtin_tools()
+    tools = (tools if tools else []) + builtin_tools
+
     tool_list = [tool.name for tool in tools] if tools else []
     logger.info(f"tool_list: {tool_list}")
         

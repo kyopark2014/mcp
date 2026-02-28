@@ -53,7 +53,7 @@ custom_header_value = f"{project_name}_12dab15e4s31"
 - **설정**: 
   - CORS 활성화 (GET, POST, PUT)
   - 퍼블릭 액세스 차단
-  - `docs/` 폴더 자동 생성
+  - `docs/`, `artifacts/` 폴더 자동 생성
 
 ### 2. IAM 역할
 
@@ -98,7 +98,7 @@ VPC (10.20.0.0/16)
 ### 7. CloudFront 배포
 - **오리진**: 
   - 기본: ALB (동적 컨텐츠)
-  - `/images/*`, `/docs/*`: S3 (정적 컨텐츠)
+  - `/images/*`, `/docs/*`, `/artifacts/*`: S3 (정적 컨텐츠)
 - **캐시 정책**: Managed-CachingDisabled
 - **프로토콜**: HTTP → HTTPS 리다이렉트
 
@@ -129,7 +129,7 @@ def create_s3_bucket() -> str:
     # 버킷 생성
     # CORS 설정 (GET, POST, PUT 허용)
     # 퍼블릭 액세스 차단
-    # docs/ 폴더 생성
+    # docs/, artifacts/ 폴더 생성
     return bucket_name
 ```
 
@@ -203,7 +203,7 @@ def create_cloudfront_distribution(alb_info: Dict[str, str],
     # S3 버킷 정책 업데이트
     # CloudFront 배포 생성
     #   - 기본 오리진: ALB
-    #   - /images/*, /docs/*: S3
+    #   - /images/*, /docs/*, /artifacts/*: S3
     return {"id": distribution_id, "domain": distribution_domain}
 ```
 
