@@ -137,10 +137,11 @@ reasoning_mode = 'Disable'
 agent_type = 'langgraph'
 enable_memory = 'Disable'
 user_id = agent_type # for testing
+skill_mode = 'Disable'
 
-def update(modelName, debugMode, multiRegion, reasoningMode, agentType, memoryMode):    
+def update(modelName, debugMode, multiRegion, reasoningMode, agentType, memoryMode, skillMode):    
     global model_name, model_id, model_type, debug_mode, multi_region, reasoning_mode, enable_memory
-    global models, user_id, agent_type
+    global models, user_id, agent_type, skill_mode
 
     # load mcp.env    
     mcp_env = utils.load_mcp_env()
@@ -178,6 +179,10 @@ def update(modelName, debugMode, multiRegion, reasoningMode, agentType, memoryMo
     if enable_memory != memoryMode:
         enable_memory = memoryMode
         logger.info(f"enable_memory: {enable_memory}")
+
+    if skill_mode != skillMode:
+        skill_mode = skillMode
+        logger.info(f"skill_mode: {skill_mode}")
 
     # update mcp.env    
     utils.save_mcp_env(mcp_env)
@@ -2209,8 +2214,14 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
     client = MultiServerMCPClient(server_params)
     tools = await client.get_tools()
 
-    builtin_tools = langgraph_agent.get_builtin_tools()
-    tools = tools + builtin_tools
+    if skill_mode == "Enable":
+        builtin_tools = langgraph_agent.get_builtin_tools()
+        tool_names = {tool.name for tool in tools}
+        for bt in builtin_tools:
+            if bt.name not in tool_names:
+                tools.append(bt)
+            else:
+                logger.info(f"builtin_tool {bt.name} already in tools")
 
     tool_list = [tool.name for tool in tools]
     logger.info(f"tool_list: {tool_list}")

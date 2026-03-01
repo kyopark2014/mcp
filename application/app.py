@@ -346,20 +346,21 @@ with st.sidebar:
         ), index=1
     )
 
+    # skill checkbox
+    select_skillMode = st.checkbox('Skill Mode', value=True)
+    skillMode = 'Enable' if select_skillMode else 'Disable'    
+
     # debug checkbox
     select_debugMode = st.checkbox('Debug Mode', value=True)
     debugMode = 'Enable' if select_debugMode else 'Disable'
-    #logger.info('debugMode: ', debugMode)
 
     # Memory
     enable_memory = st.checkbox('Memory', value=True)
     memoryMode = 'Enable' if enable_memory else 'Disable'
-    # logger.info(f"memory_mode: {memory_mode}")
 
     # multi region check box
     select_multiRegion = st.checkbox('Multi Region', value=False)
     multiRegion = 'Enable' if select_multiRegion else 'Disable'
-    #logger.info('multiRegion: ', multiRegion)
 
     # extended thinking of claude 3.7 sonnet
     reasoningMode = "Disable"
@@ -376,7 +377,7 @@ with st.sidebar:
         st.subheader("📋 문서 업로드")
         uploaded_file = st.file_uploader("RAG를 위한 파일을 선택합니다.", type=["pdf", "txt", "py", "md", "csv", "json"], key=chat.fileId)
 
-    chat.update(modelName, debugMode, multiRegion, reasoningMode, agentType, memoryMode)    
+    chat.update(modelName, debugMode, multiRegion, reasoningMode, agentType, memoryMode, skillMode)    
 
     st.success(f"Connected to {modelName}", icon="💚")
     clear_button = st.button("대화 초기화", key="clear")

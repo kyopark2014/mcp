@@ -736,16 +736,18 @@ def load_config(mcp_type):
         return {
             "mcpServers": {
                 "filesystem": {
-                    "command": "mcp-server-filesystem",
+                    "command": "npx",
                     "args": [
+                        "-y",
+                        "@modelcontextprotocol/server-filesystem",
                         f"{parent_dir}",
                         f"{workingDir}",
                         f"{contents_dir}"
                     ]
                 }
             }
-        }
-    
+        }    
+
     elif mcp_type == "puppeteer":
         return {
             "mcpServers": {
