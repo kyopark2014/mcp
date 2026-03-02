@@ -349,7 +349,7 @@ with st.sidebar:
     )
 
     # skill checkbox
-    select_skillMode = st.checkbox('Skill Mode', value=True)
+    select_skillMode = st.checkbox('Skill Mode', value=False)
     skillMode = 'Enable' if select_skillMode else 'Disable'    
 
     # debug checkbox
