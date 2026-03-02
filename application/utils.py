@@ -210,29 +210,24 @@ except Exception as e:
     # raise e
     pass
 
-# api key to use notion
-notion_key = ""
-def get_notion_key():
-    global notion_key
+# api key to use Notion
+notion_api_key = ""
+try:
+    get_notion_api_secret = secretsmanager.get_secret_value(
+        SecretId=f"notionapikey-{projectName}"
+    )
+    secret = json.loads(get_notion_api_secret['SecretString'])
 
-    if not notion_key:
-        try:
-            get_notion_api_secret = secretsmanager.get_secret_value(
-                SecretId=f"notionapikey-{projectName}"
-            )
-            #logger.info('get_perplexity_api_secret: ', get_perplexity_api_secret)
-            secret = json.loads(get_notion_api_secret['SecretString'])
-            #logger.info('secret: ', secret)
+    if "notion_api_key" in secret:
+        notion_api_key = secret['notion_api_key']
 
-            if "notion_api_key" in secret:
-                notion_key = secret['notion_api_key']
-                # logger.info('updated notion_key: ', notion_key)
-
-        except Exception as e: 
-            logger.info(f"nova act credential is required: {e}")
-            # raise e
-            pass
-    return notion_key
+        if notion_api_key:
+            os.environ["NOTION_API_KEY"] = notion_api_key
+        else:
+            logger.info(f"notion_api_key is required.")
+except Exception as e:
+    logger.info(f"Notion credential is required: {e}")
+    pass
 
 async def generate_pdf_report(report_content: str, filename: str) -> str:
     """
