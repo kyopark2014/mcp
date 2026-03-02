@@ -2,3 +2,6 @@ __pycache__
 
 # configuration
 config.json
+node_modules/
+package-lock.json
+package.json
