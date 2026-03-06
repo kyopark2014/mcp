@@ -88,39 +88,29 @@ nova_2_lite_models = [   # Nova 2 Lite
     }
 ]
 
-claude_4_6_opus_models = [   # Claude 4.6 Opus
+claude_4_6_sonnet_models = [   # Sonnet 4.6
     {
         "bedrock_region": "us-west-2", # Oregon
         "model_type": "claude",
-        "model_id": "us.anthropic.claude-opus-4-6-v1"
+        "model_id": "us.anthropic.claude-sonnet-4-6"
     },
     {
         "bedrock_region": "us-east-1", # N.Virginia
         "model_type": "claude",
-        "model_id": "us.anthropic.claude-opus-4-6-v1"
-    },
-    {
-        "bedrock_region": "us-east-2", # Ohio
-        "model_type": "claude",
-        "model_id": "us.anthropic.claude-opus-4-6-v1"
+        "model_id": "us.anthropic.claude-sonnet-4-6"
     }
 ]
 
-claude_4_6_claude_models = [   # Claude 4.6 Claude
+claude_4_6_opus_models = [   # Opus 4.6
     {
         "bedrock_region": "us-west-2", # Oregon
         "model_type": "claude",
-        "model_id": "us.anthropic.claude-sonnet-4-6"
+        "model_id": "us.anthropic.claude-opus-4-6-v1"
     },
     {
         "bedrock_region": "us-east-1", # N.Virginia
         "model_type": "claude",
-        "model_id": "us.anthropic.claude-sonnet-4-6"
-    },
-    {
-        "bedrock_region": "us-east-2", # Ohio
-        "model_type": "claude",
-        "model_id": "us.anthropic.claude-sonnet-4-6"
+        "model_id": "us.anthropic.claude-opus-4-6-v1"
     }
 ]
 
@@ -344,8 +334,8 @@ def get_model_info(model_name):
         models = claude_4_5_sonnet_models
     elif model_name == "Claude 4.5 Haiku":
         models = claude_4_5_haiku_models
-    elif model_name == "Claude 4.6 Claude":
-        models = claude_4_6_claude_models
+    elif model_name == "Claude 4.6 Sonnet":
+        models = claude_4_6_sonnet_models
     elif model_name == "Claude 4.6 Opus":
         models = claude_4_6_opus_models
     elif model_name == "Nova Premier":

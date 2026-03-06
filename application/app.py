@@ -213,7 +213,7 @@ with st.sidebar:
                 "tavily-search", "tavily", "perplexity", "ArXiv", "wikipedia", "notion",
                 "filesystem", "terminal (MAC)", "terminal (linux)", "text editor", "github",
                 "context7", "puppeteer", "agentcore-browser", "playwright", "firecrawl", "obsidian", "airbnb", 
-                "pubmed", "chembl", "clinicaltrial", "arxiv-manual", "사용자 설정"
+                "pubmed", "chembl", "clinicaltrial", "arxiv-manual", "web_fetch", "사용자 설정"
             ]
         else:
             mcp_options = [ 
