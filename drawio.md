@@ -44,7 +44,7 @@ npx @drawio/mcp
 }
 ```
 
-이때의 결과로 drawio 파일을 얻으면, [drawio.com]([https://www.drawio.com/](https://app.diagrams.net/))을 접속한 후에 [다음에서 열기] - [URL]을 아래와 같이 선택합니다.
+이때의 결과로 drawio 파일을 얻으면, [drawio.com](https://app.diagrams.net/)을 접속한 후에 [다음에서 열기] - [URL]을 아래와 같이 선택합니다.
 
 <img width="494" height="328" alt="image" src="https://github.com/user-attachments/assets/f9864d23-49f8-4174-bb29-cc8ddaa215b4" />
 
