@@ -1,6 +1,6 @@
-# draw.io로 architecture 그리기
+# Draw.io로 Architecture 그리기
 
-## draw.io 활용하기
+## Draw.io 활용하기
 
 [Draw.io MCP Server](https://github.com/jgraph/drawio-mcp)을 참조하여 구현할 수 있습니다.
 
