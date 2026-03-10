@@ -1041,6 +1041,16 @@ def load_config(mcp_type):
                 }
             }
         }
+
+    elif mcp_type == "text_extraction":
+        return {
+            "mcpServers": {
+                "text_extraction": {
+                    "command": "python",
+                    "args": [f"{workingDir}/mcp_server_text_extraction.py"]
+                }
+            }
+        }
         
     elif mcp_type == "사용자 설정":
         return mcp_user_config
