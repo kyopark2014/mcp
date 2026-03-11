@@ -3,8 +3,10 @@
 1. Slack App 생성
    
    - https://api.slack.com/apps 접속
-   - "Create New App" → "From scratch" 선택
-   - App 이름과 워크스페이스 선택
+   
+   - "Create New App" → "From scratch" 선택
+   
+   - App 이름과 워크스페이스 선택
 
 2. Bot Token Scopes 추가
 
