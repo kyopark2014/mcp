@@ -210,7 +210,7 @@ with st.sidebar:
                 "aws-knowledge", "aws-api", "aws document", "aws cost", "aws cli", "aws ccapi",
                 "aws cloudwatch", "aws storage", "image generation", "aws diagram",
                 "repl coder","agentcore coder", "text_extraction",
-                "tavily-search", "tavily", "perplexity", "ArXiv", "wikipedia", "notion",
+                "tavily-search", "tavily", "perplexity", "ArXiv", "wikipedia", "notion", "slack_mcp",
                 "filesystem", "terminal (MAC)", "terminal (linux)", "text editor", "github", "drawio",
                 "context7", "puppeteer", "agentcore-browser", "playwright", "firecrawl", "obsidian", "airbnb", 
                 "pubmed", "chembl", "clinicaltrial", "arxiv-manual", "web_fetch", "사용자 설정"
@@ -223,7 +223,7 @@ with st.sidebar:
                 "aws-knowledge", "aws-api", "aws document", "aws cost", "aws cli", "aws ccapi",
                 "aws cloudwatch", "aws storage", "image generation", "aws diagram",
                 "repl coder", "agentcore coder", "text_extraction",
-                "tavily-search", "tavily", "ArXiv", "wikipedia", "notion",
+                "tavily-search", "tavily", "ArXiv", "wikipedia", "notion", "slack_mcp",
                 "filesystem", "terminal (MAC)", "terminal (linux)", "text editor", "github",
                 "agentcore-browser", "playwright", "airbnb", "drawio",
                 "pubmed", "chembl", "clinicaltrial", "arxiv-manual", "사용자 설정"

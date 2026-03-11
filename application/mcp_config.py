@@ -1051,6 +1051,23 @@ def load_config(mcp_type):
                 }
             }
         }
+    
+    elif mcp_type == "slack_mcp":
+        return {
+            "mcpServers": {
+                "slack": {
+                    "command": "npx",
+                    "args": [
+                        "-y",
+                        "@modelcontextprotocol/server-slack"
+                    ],
+                    "env": {
+                        "SLACK_BOT_TOKEN": os.environ["SLACK_BOT_TOKEN"],
+                        "SLACK_TEAM_ID": os.environ["SLACK_TEAM_ID"]
+                    }
+                }
+            }
+        }
         
     elif mcp_type == "사용자 설정":
         return mcp_user_config
