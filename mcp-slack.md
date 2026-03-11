@@ -10,16 +10,11 @@
    - "Bot Token Scopes"에 다음 권한 추가:   
    
      - channels:history
-     
-     - channels:read
-     
-     - chat:write
-     
-     - users:read
-     
-     - groups:history
-     
-     - groups:read
+     - channels:read
+     - chat:write
+     - users:read
+     - groups:history
+     - groups:read
 
 3. App 설치 및 Token 복사
 
