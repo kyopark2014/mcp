@@ -14,7 +14,6 @@
      - groups:read
 
 3. App 설치 및 Token 복사
-
    - "Install to Workspace" 클릭
    - 생성된 "Bot User OAuth Token" (xoxb-로 시작) 복사
 
