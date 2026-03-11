@@ -1,19 +1,13 @@
 # Slack 설정
 
-1. Slack App 생성
-   
-   - https://api.slack.com/apps 접속
-   
-   - "Create New App" → "From scratch" 선택
-   
+1. Slack App 생성   
+   - https://api.slack.com/apps 접속   
+   - "Create New App" → "From scratch" 선택   
    - App 이름과 워크스페이스 선택
 
 2. Bot Token Scopes 추가
-
-   - "OAuth & Permissions" 메뉴로 이동
-   
-   - "Bot Token Scopes"에 다음 권한 추가:
-   
+   - "OAuth & Permissions" 메뉴로 이동   
+   - "Bot Token Scopes"에 다음 권한 추가:   
      - channels:history
      
      - channels:read
