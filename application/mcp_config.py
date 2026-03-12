@@ -1069,6 +1069,19 @@ def load_config(mcp_type):
             }
         }
         
+    elif mcp_type == "pdf-generator":
+        return {
+            "mcpServers": {
+                "pdf-generator": {
+                    "command": "python",
+                    "args": [
+                        f"{workingDir}/mcp_server_pdf_generator.py"
+                    ]
+                }
+            }
+        }    
+    
+        
     elif mcp_type == "사용자 설정":
         return mcp_user_config
 
