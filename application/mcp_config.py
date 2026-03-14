@@ -1066,7 +1066,7 @@ def load_config(mcp_type):
             }
         }
     
-    elif mcp_type == "slack_mcp":
+    elif mcp_type == "slack":
         return {
             "mcpServers": {
                 "slack": {
