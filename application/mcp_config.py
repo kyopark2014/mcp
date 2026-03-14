@@ -951,14 +951,13 @@ def load_config(mcp_type):
         }    
     
     elif mcp_type == "notion":
-        token = utils.get_notion_key()
         return {
             "mcpServers": {
                 "notionApi": {
                     "command": "npx",
                     "args": ["-y", "@notionhq/notion-mcp-server"],
                     "env": {
-                        "NOTION_TOKEN": token
+                        "NOTION_TOKEN": utils.notion_api_key
                     }
                 }
             }
@@ -1028,6 +1027,21 @@ def load_config(mcp_type):
                 "drawio": {
                 "command": "npx",
                 "args": ["@drawio/mcp"]
+                }
+            }
+        }
+    
+    elif mcp_type == "aws-drawio":
+        return {
+            "mcpServers": {
+                "drawio": {
+                "command": "npx",
+                "args": [
+                    "-y",
+                    "https://github.com/aws-samples/sample-drawio-mcp/releases/latest/download/drawio-mcp-server-latest.tgz",
+                    "--no-cache"
+                ],
+                "type": "stdio"
                 }
             }
         }

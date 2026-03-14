@@ -39,12 +39,6 @@ except (ImportError, KeyError):
     logger.info(f"Username: {username}")
     pass  
 
-if username == "root":
-    environment = "system"
-else:
-    environment = "user"
-logger.info(f"environment: {environment}")
-
 os.environ["DEV"] = "true"  # Skip user confirmation of get_user_input
 
 def run_async(coro):
@@ -202,32 +196,18 @@ with st.sidebar:
         st.subheader("⚙️ MCP Config")
 
         # Change radio to checkbox
-        if environment == "user":        
-            mcp_options = [
-                "basic", "short-term memory", "long-term memory", "outlook", "trade_info",
-                "kb-retriever (local)", "kb-retriever (runtime)", "agentcore gateway", 
-                "use-aws (local)", "use-aws (runtime)", 
-                "aws-knowledge", "aws-api", "aws document", "aws cost", "aws cli", "aws ccapi",
-                "aws cloudwatch", "aws storage", "image generation", "aws diagram", "pdf-generator",
-                "repl coder","agentcore coder", "text_extraction",
-                "tavily-search", "tavily", "perplexity", "ArXiv", "wikipedia", "notion", "slack_mcp",
-                "filesystem", "terminal (MAC)", "terminal (linux)", "text editor", "github", "drawio",
-                "context7", "puppeteer", "agentcore-browser", "playwright", "firecrawl", "obsidian", "airbnb", 
-                "pubmed", "chembl", "clinicaltrial", "arxiv-manual", "web_fetch", "사용자 설정"
-            ]
-        else:
-            mcp_options = [ 
-                "basic", "short-term memory", "long-term memory", "outlook", "trade_info",
-                "kb-retriever (local)", "kb-retriever (runtime)", "agentcore gateway", 
-                "use-aws (local)", "use-aws (runtime)", 
-                "aws-knowledge", "aws-api", "aws document", "aws cost", "aws cli", "aws ccapi",
-                "aws cloudwatch", "aws storage", "image generation", "aws diagram", "pdf-generator",
-                "repl coder", "agentcore coder", "text_extraction",
-                "tavily-search", "tavily", "ArXiv", "wikipedia", "notion", "slack_mcp",
-                "filesystem", "terminal (MAC)", "terminal (linux)", "text editor", "github",
-                "agentcore-browser", "playwright", "airbnb", "drawio",
-                "pubmed", "chembl", "clinicaltrial", "arxiv-manual", "사용자 설정"
-            ]
+        mcp_options = [
+            "basic", "short-term memory", "long-term memory", "outlook", "trade_info",
+            "kb-retriever (local)", "kb-retriever (runtime)", "agentcore gateway", 
+            "use-aws (local)", "use-aws (runtime)", 
+            "aws-knowledge", "aws-api", "aws document", "aws cost", "aws cli", "aws ccapi",
+            "aws cloudwatch", "aws storage", "image generation", "aws diagram", "pdf-generator",
+            "repl coder","agentcore coder", "text_extraction",
+            "tavily-search", "tavily", "perplexity", "ArXiv", "wikipedia", "notion", "slack_mcp",
+            "filesystem", "terminal (MAC)", "terminal (linux)", "text editor", "github", "drawio", "aws-drawio"
+            "context7", "puppeteer", "agentcore-browser", "playwright", "firecrawl", "obsidian", "airbnb", 
+            "pubmed", "chembl", "clinicaltrial", "arxiv-manual", "web_fetch", "사용자 설정"
+        ]
         mcp_selections = {}
         default_selections = ["tavily-search", "repl coder"]
                 
@@ -348,10 +328,6 @@ with st.sidebar:
         ), index=2
     )
 
-    # skill checkbox
-    select_skillMode = st.checkbox('Skill Mode', value=False)
-    skillMode = 'Enable' if select_skillMode else 'Disable'    
-
     # debug checkbox
     select_debugMode = st.checkbox('Debug Mode', value=True)
     debugMode = 'Enable' if select_debugMode else 'Disable'
@@ -379,7 +355,7 @@ with st.sidebar:
         st.subheader("📋 문서 업로드")
         uploaded_file = st.file_uploader("RAG를 위한 파일을 선택합니다.", type=["pdf", "txt", "py", "md", "csv", "json"], key=chat.fileId)
 
-    chat.update(modelName, debugMode, multiRegion, reasoningMode, agentType, memoryMode, skillMode)    
+    chat.update(modelName, debugMode, multiRegion, reasoningMode, agentType, memoryMode)    
 
     st.success(f"Connected to {modelName}", icon="💚")
     clear_button = st.button("대화 초기화", key="clear")
