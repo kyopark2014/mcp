@@ -197,7 +197,7 @@ with st.sidebar:
 
         # Change radio to checkbox
         mcp_options = [
-            "basic", "short-term memory", "long-term memory", "outlook", "trade_info",
+            "basic", "short-term memory", "long-term memory", "outlook", "trade_info", "gog",
             "kb-retriever (local)", "kb-retriever (runtime)", "agentcore gateway", 
             "use-aws (local)", "use-aws (runtime)", 
             "aws-knowledge", "aws-api", "aws document", "aws cost", "aws cli", "aws ccapi",

@@ -509,15 +509,15 @@ def load_config(mcp_type):
         return {
             "mcpServers": {
                 "mcp-obsidian": {
-                "command": "npx",
-                "args": [
-                    "-y",
-                    "@smithery/cli@latest",
-                    "run",
-                    "mcp-obsidian",
-                    "--config",
-                    "{\"vaultPath\":\"/\"}"
-                ]
+                    "command": "npx",
+                    "args": [
+                        "-y",
+                        "@smithery/cli@latest",
+                        "run",
+                        "mcp-obsidian",
+                        "--config",
+                        "{\"vaultPath\":\"/\"}"
+                    ]
                 }
             }
         }
@@ -1095,6 +1095,15 @@ def load_config(mcp_type):
             }
         }    
     
+    elif mcp_type == "gog":
+        return {
+            "mcpServers": {
+                "gog": {
+                    "command": "python",
+                    "args": [f"{workingDir}/mcp_server_gog.py"]
+                }
+            }
+        }
         
     elif mcp_type == "사용자 설정":
         return mcp_user_config
