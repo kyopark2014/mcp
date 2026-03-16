@@ -18,3 +18,5 @@
    }
 }
 ```
+
+[installer.py](./installer.py)에서 secret으로 설정후에 [utils.py](./application/utils.py)에서 TAVILY_API_KEY로 등록하여 활용합니다.
