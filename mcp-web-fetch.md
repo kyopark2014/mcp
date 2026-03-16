@@ -29,3 +29,13 @@ RUN apt-get update && apt-get install -y curl && \
 RUN npx -y mcp-server-fetch-typescript --version 2>/dev/null || true && \
     npx playwright install --with-deps chromium
 ```
+
+MAC같은 local 환경에서 실행시 아래와 같이 수동으로 설치합니다.
+
+```text
+npx playwright install --with-deps chromium
+```
+
+Web Fetch로 아래와 같이 html을 markdown으로 변환하여 활용합니다.
+
+<img width="700" alt="image" src="https://github.com/user-attachments/assets/56dc77ea-4cb8-4317-af00-6a21ce5be9d0" />
