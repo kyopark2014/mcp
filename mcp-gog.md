@@ -52,3 +52,20 @@ gog auth list
 ```
 
 EC2와 같이 브라우저가 없는 경우에 dashboard에 접속해서 chat에서 "gmail을 등록해주세요"라고 입력후 주어진 가이드에 따라 수행합니다. "gog auth add"를 수행시 localhost로 수행되는 url을 받아서 client에서 수행하여야 하므로 dashboard의 chat에서 수행하여야 합니다.
+
+### MCP 설정
+
+[mcp_server_gog.py](./application/mcp_server_gog.py)와 같이 구현할 수 있습니다.
+
+```java
+{
+   "mcpServers":{
+      "gog":{
+         "command":"python",
+         "args":[
+            "f""{workingDir}/mcp_server_gog.py"
+         ]
+      }
+   }
+}
+```
