@@ -49,3 +49,18 @@ def retrieve(query):
 
     return json.dumps(json_docs, ensure_ascii=False)
 ```
+
+### MCP 설정
+
+```java
+{
+   "mcpServers":{
+      "kb_retriever":{
+         "command":"python",
+         "args":[
+            "f""{workingDir}/mcp_server_retrieve.py"
+         ]
+      }
+   }
+}
+```
