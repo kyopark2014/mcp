@@ -23,3 +23,28 @@
    - MCP 등록할 때에 slack_team_id로 App ID를 사용합니다.
 
 <img width="1025" height="270" alt="noname" src="https://github.com/user-attachments/assets/6561fc02-c348-4330-9758-cc309af9d672" />
+
+
+### MCP 설정
+
+```java
+{
+   "mcpServers":{
+      "slack":{
+         "command":"npx",
+         "args":[
+            "-y",
+            "@modelcontextprotocol/server-slack"
+         ],
+         "env":{
+            "SLACK_BOT_TOKEN":"os.environ"[
+               "SLACK_BOT_TOKEN"
+            ],
+            "SLACK_TEAM_ID":"os.environ"[
+               "SLACK_TEAM_ID"
+            ]
+         }
+      }
+   }
+}
+```
