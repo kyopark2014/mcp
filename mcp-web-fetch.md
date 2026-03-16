@@ -15,3 +15,17 @@
    }
 }
 ```
+
+playwright를 위해 아래와 같은 설정을 [Dockerfile](./Dockerfile)에 포함하여야 합니다.
+
+```text
+# Install Node.js and npm (for npx)
+RUN apt-get update && apt-get install -y curl && \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install mcp-server-fetch-typescript and Playwright browsers
+RUN npx -y mcp-server-fetch-typescript --version 2>/dev/null || true && \
+    npx playwright install --with-deps chromium
+```
