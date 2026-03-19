@@ -197,19 +197,23 @@ with st.sidebar:
 
         # Change radio to checkbox
         mcp_options = [
-            "basic", "short-term memory", "long-term memory", "outlook", "trade_info", "gog",
+            "notion", "slack", "text_extraction", "pdf-generator", "web_fetch", "outlook", "trade_info", "gog",
+            "weather", "korea_weather", "books",            
+            "short-term memory", "long-term memory", 
             "kb-retriever (local)", "kb-retriever (runtime)", "agentcore gateway", 
             "use-aws (local)", "use-aws (runtime)", 
             "aws-knowledge", "aws-api", "aws document", "aws cost", "aws cli", "aws ccapi",
-            "aws cloudwatch", "aws storage", "image generation", "aws diagram", "pdf-generator",
-            "repl coder","agentcore coder", "text_extraction",
-            "tavily-search", "tavily", "perplexity", "ArXiv", "wikipedia", "notion", "slack",
+            "aws cloudwatch", "aws storage", "image generation", "aws diagram", 
+            "repl coder","agentcore coder", 
+            "tavily-search", "tavily", "perplexity", "ArXiv", "wikipedia", 
             "filesystem", "terminal (MAC)", "terminal (linux)", "text editor", "github", "drawio", "aws-drawio"
             "context7", "puppeteer", "agentcore-browser", "playwright", "firecrawl", "obsidian", "airbnb", 
-            "pubmed", "chembl", "clinicaltrial", "arxiv-manual", "web_fetch", "사용자 설정"
+            "pubmed", "chembl", "clinicaltrial", "arxiv-manual", 
+            "AWS Sentral (Employee)", "AWS Outlook (Employee)",
+            "사용자 설정"
         ]
         mcp_selections = {}
-        default_selections = ["tavily-search", "repl coder"]
+        default_selections = ["tavily-search", "repl coder", "korea_weather", "web_fetch"]
                 
         with st.expander("MCP 옵션 선택", expanded=True):            
             # Create two columns

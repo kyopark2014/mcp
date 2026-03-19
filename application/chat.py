@@ -15,6 +15,7 @@ import mcp_config
 import agentcore_memory
 import random
 import string
+import datetime
 
 from io import BytesIO
 from PIL import Image
@@ -23,29 +24,9 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 from langchain_core.prompts import MessagesPlaceholder, ChatPromptTemplate
 from langchain_core.documents import Document
+from pytz import timezone
+from langchain_core.tools import tool
 
-# Simple memory class to replace ConversationBufferWindowMemory
-class SimpleMemory:
-    def __init__(self, k=5):
-        self.k = k
-        self.chat_memory = SimpleChatMemory()
-    
-    def load_memory_variables(self, inputs):
-        return {"chat_history": self.chat_memory.messages[-self.k:] if len(self.chat_memory.messages) > self.k else self.chat_memory.messages}
-
-class SimpleChatMemory:
-    def __init__(self):
-        self.messages = []
-    
-    def add_user_message(self, message):
-        self.messages.append(HumanMessage(content=message))
-    
-    def add_ai_message(self, message):
-        self.messages.append(AIMessage(content=message))
-    
-    def clear(self):
-        self.messages = []
-        
 from tavily import TavilyClient  
 from urllib import parse
 from pydantic.v1 import BaseModel, Field
@@ -137,6 +118,39 @@ reasoning_mode = 'Disable'
 agent_type = 'langgraph'
 enable_memory = 'Disable'
 user_id = agent_type # for testing
+
+# Simple memory class to replace ConversationBufferWindowMemory
+class SimpleMemory:
+    def __init__(self, k=5):
+        self.k = k
+        self.chat_memory = SimpleChatMemory()
+    
+    def load_memory_variables(self, inputs):
+        return {"chat_history": self.chat_memory.messages[-self.k:] if len(self.chat_memory.messages) > self.k else self.chat_memory.messages}
+
+class SimpleChatMemory:
+    def __init__(self):
+        self.messages = []
+    
+    def add_user_message(self, message):
+        self.messages.append(HumanMessage(content=message))
+    
+    def add_ai_message(self, message):
+        self.messages.append(AIMessage(content=message))
+    
+    def clear(self):
+        self.messages = []
+
+@tool
+def get_current_time(format: str=f"%Y-%m-%d %H:%M:%S")->str:
+    """Returns the current date and time in the specified format"""
+    # f"%Y-%m-%d %H:%M:%S"
+    
+    format = format.replace('\'','')
+    timestr = datetime.datetime.now(timezone('Asia/Seoul')).strftime(format)
+    logger.info(f"timestr: {timestr}")
+    
+    return timestr
 
 def update(modelName, debugMode, multiRegion, reasoningMode, agentType, memoryMode):    
     global model_name, model_id, model_type, debug_mode, multi_region, reasoning_mode, enable_memory
@@ -2203,6 +2217,9 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
 
     image_url = []
     references = []
+    tools = []
+
+    tools.append(get_current_time)
 
     mcp_json = mcp_config.load_selected_config(mcp_servers)
     logger.info(f"mcp_json: {mcp_json}")
@@ -2211,7 +2228,7 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
     logger.info(f"server_params: {server_params}")    
 
     client = MultiServerMCPClient(server_params)
-    tools = await client.get_tools()
+    tools.extend(await client.get_tools())     
 
     tool_list = [tool.name for tool in tools]
     logger.info(f"tool_list: {tool_list}")
@@ -2332,6 +2349,9 @@ async def run_langgraph_agent_with_plan(query, mcp_servers, containers):
 
     image_url = []
     references = []
+    tools = []
+
+    tools.append(get_current_time)
 
     add_notification(containers, f"계획을 생성하는 중입니다...")
 
@@ -2344,7 +2364,7 @@ async def run_langgraph_agent_with_plan(query, mcp_servers, containers):
     client = MultiServerMCPClient(server_params)
     logger.info(f"MCP client created successfully")
     
-    tools = await client.get_tools()
+    tools.extend(await client.get_tools())        
     logger.info(f"get_tools() returned: {tools}")
 
     builtin_tools = langgraph_agent.get_builtin_tools()
