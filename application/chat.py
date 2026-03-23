@@ -1978,8 +1978,11 @@ def get_tool_info(tool_name, tool_content):
             elif isinstance(json_data, list):  # Parse JSON from text field when json_data is a list
                 for item in json_data:
                     if isinstance(item, dict) and "text" in item:
+                        text_val = item["text"]
+                        if not (isinstance(text_val, str) and text_val.strip().startswith(("{", "["))):
+                            continue  # Skip non-JSON text (e.g. plain web search results)
                         try:
-                            text_json = json.loads(item["text"])
+                            text_json = json.loads(text_val)
                             if isinstance(text_json, dict) and "path" in text_json:
                                 path = text_json["path"]
                                 if isinstance(path, list):
@@ -2007,9 +2010,12 @@ def get_tool_info(tool_name, tool_content):
                 logger.info(f"json_data is a list: {json_data}")
                 for item in json_data:
                     if isinstance(item, dict) and "text" in item:
+                        text_val = item["text"]
+                        if not (isinstance(text_val, str) and text_val.strip().startswith(("{", "["))):
+                            continue  # Skip non-JSON text (e.g. plain web search results)
                         try:
                             # text 필드 안의 JSON 문자열 파싱
-                            text_json = json.loads(item["text"])
+                            text_json = json.loads(text_val)
                             if isinstance(text_json, list):
                                 # 파싱된 JSON이 리스트인 경우
                                 for ref_item in text_json:

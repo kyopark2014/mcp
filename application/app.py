@@ -198,7 +198,7 @@ with st.sidebar:
         # Change radio to checkbox
         mcp_options = [
             "notion", "slack", "text_extraction", "pdf-generator", "web_fetch", "outlook", "trade_info", "gog",
-            "weather", "korea_weather", "books",            
+            "weather", "korea_weather", "books", "obsidian",           
             "short-term memory", "long-term memory", 
             "kb-retriever (local)", "kb-retriever (runtime)", "agentcore gateway", 
             "use-aws (local)", "use-aws (runtime)", 
@@ -207,13 +207,13 @@ with st.sidebar:
             "repl coder","agentcore coder", 
             "tavily-search", "tavily", "perplexity", "ArXiv", "wikipedia", 
             "filesystem", "terminal (MAC)", "terminal (linux)", "text editor", "github", "drawio", "aws-drawio"
-            "context7", "puppeteer", "agentcore-browser", "playwright", "firecrawl", "obsidian", "airbnb", 
+            "context7", "puppeteer", "agentcore-browser", "playwright", "firecrawl", "airbnb", 
             "pubmed", "chembl", "clinicaltrial", "arxiv-manual", 
             "AWS Sentral (Employee)", "AWS Outlook (Employee)",
             "사용자 설정"
         ]
         mcp_selections = {}
-        default_selections = ["tavily-search", "repl coder", "korea_weather", "web_fetch"]
+        default_selections = ["tavily", "korea_weather", "web_fetch", "obsidian"]
                 
         with st.expander("MCP 옵션 선택", expanded=True):            
             # Create two columns
