@@ -1,12 +1,11 @@
 ---
 name: notion
-description: Notion API for creating and managing pages, databases, and blocks.
-homepage: https://developers.notion.com
+description: "Interact with Notion workspaces via the Notion API. Create, read, update, and search pages, databases (data sources), and blocks. Use when the user mentions Notion, wants to create or edit Notion pages, query Notion databases, manage workspace content, add blocks, update properties, or sync data with Notion. Triggers on terms like 'Notion', 'Notion page', 'Notion database', 'Notion doc', 'add to Notion', 'Notion workspace'. Requires NOTION_API_KEY."
 ---
 
-# notion
+# Notion API
 
-Use the Notion API to create/read/update pages, data sources (databases), and blocks.
+Create, read, update, and search pages, databases (data sources), and blocks via the Notion API.
 
 ## Setup
 
@@ -15,18 +14,25 @@ Use the Notion API to create/read/update pages, data sources (databases), and bl
 3. Set the environment variable `NOTION_API_KEY`
 4. Share target pages/databases with your integration (click "..." → "Connect to" → your integration name)
 
-## API Basics
-
-All requests need:
+**Verify connection:**
 
 ```bash
-curl -X GET "https://api.notion.com/v1/..." \
+curl -s "https://api.notion.com/v1/users/me" \
   -H "Authorization: Bearer $NOTION_API_KEY" \
-  -H "Notion-Version: 2025-09-03" \
-  -H "Content-Type: application/json"
+  -H "Notion-Version: 2025-09-03" | python3 -c "import sys,json; print(json.load(sys.stdin).get('name','ERROR'))"
 ```
 
-> **Note:** The `Notion-Version` header is required. This skill uses `2025-09-03` (latest). In this version, databases are called "data sources" in the API.
+## API Basics
+
+All requests require these headers:
+
+```bash
+-H "Authorization: Bearer $NOTION_API_KEY" \
+-H "Notion-Version: 2025-09-03" \
+-H "Content-Type: application/json"
+```
+
+> **Note:** `Notion-Version: 2025-09-03` is the latest. In this version, databases are called "data sources" in the API.
 
 ## Common Operations
 
@@ -40,20 +46,14 @@ curl -X POST "https://api.notion.com/v1/search" \
   -d '{"query": "page title"}'
 ```
 
-**Get page:**
+**Get page / page content:**
 
 ```bash
 curl "https://api.notion.com/v1/pages/{page_id}" \
-  -H "Authorization: Bearer $NOTION_API_KEY" \
-  -H "Notion-Version: 2025-09-03"
-```
+  -H "Authorization: Bearer $NOTION_API_KEY" -H "Notion-Version: 2025-09-03"
 
-**Get page content (blocks):**
-
-```bash
 curl "https://api.notion.com/v1/blocks/{page_id}/children" \
-  -H "Authorization: Bearer $NOTION_API_KEY" \
-  -H "Notion-Version: 2025-09-03"
+  -H "Authorization: Bearer $NOTION_API_KEY" -H "Notion-Version: 2025-09-03"
 ```
 
 **Create page in a data source:**
@@ -152,9 +152,17 @@ Common property formats for database items:
 - **Parent in responses:** Pages show `parent.data_source_id` alongside `parent.database_id`
 - **Finding the data_source_id:** Search for the database, or call `GET /v1/data_sources/{data_source_id}`
 
+## Troubleshooting
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| 401 Unauthorized | Bad or missing API key | Check `NOTION_API_KEY` is set and valid |
+| 403 Forbidden | Page not shared with integration | Share page via "..." → "Connect to" |
+| 404 Not Found | Wrong page/database ID | Verify UUID; try searching first |
+| 429 Rate Limited | Too many requests (~3/sec avg) | Add delays between calls |
+
 ## Notes
 
 - Page/database IDs are UUIDs (with or without dashes)
 - The API cannot set database view filters — that's UI-only
-- Rate limit: ~3 requests/second average
 - Use `is_inline: true` when creating data sources to embed them in pages
