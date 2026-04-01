@@ -213,7 +213,7 @@ with st.sidebar:
             "사용자 설정"
         ]
         mcp_selections = {}
-        default_selections = ["tavily", "korea_weather", "web_fetch", "obsidian"]
+        default_selections = ["tavily", "korea_weather", "web_fetch", "obsidian", "notion", "slack"]
                 
         with st.expander("MCP 옵션 선택", expanded=True):            
             # Create two columns
