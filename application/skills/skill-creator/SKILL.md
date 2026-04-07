@@ -1,25 +1,9 @@
 ---
 name: skill-creator
-description: Create or update AgentSkills. Use when designing, structuring, or packaging skills with scripts, references, and assets.
+description: "Create, update, and package agent skills (SKILL.md files with scripts, references, and assets). Use when designing new skills, structuring skill directories, writing SKILL.md frontmatter and instructions, initializing skill templates, packaging .skill files, or iterating on existing skills. Triggers on 'create skill', 'new skill', 'SKILL.md', 'skill template', 'package skill', 'skill file', 'agent capability'."
 ---
 
 # Skill Creator
-
-This skill provides guidance for creating effective skills.
-
-## About Skills
-
-Skills are modular, self-contained packages that extend the agent's capabilities by providing
-specialized knowledge, workflows, and tools. Think of them as "onboarding guides" for specific
-domains or tasks—they transform the agent from a general-purpose agent into a specialized agent
-equipped with procedural knowledge that no model can fully possess.
-
-### What Skills Provide
-
-1. Specialized workflows - Multi-step procedures for specific domains
-2. Tool integrations - Instructions for working with specific file formats or APIs
-3. Domain expertise - Company-specific knowledge, schemas, business logic
-4. Bundled resources - Scripts, references, and assets for complex and repetitive tasks
 
 ## Core Principles
 
