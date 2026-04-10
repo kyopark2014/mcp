@@ -2248,21 +2248,21 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
                             if 'id' in content_item and 'name' in content_item:
                                 toolUseId = content_item.get('id', '')
                                 tool_name = content_item.get('name', '')
-                                logger.info(f"tool_name: {tool_name}, toolUseId: {toolUseId}")
+                                # logger.info(f"tool_name: {tool_name}, toolUseId: {toolUseId}")
                                 streaming_index = index                                                                                                                         
                                 index += 1
                                                                     
                             if 'partial_json' in content_item:
                                 partial_json = content_item.get('partial_json', '')
-                                logger.info(f"partial_json: {partial_json}")
+                                # logger.info(f"partial_json: {partial_json}")
                                 
                                 if toolUseId not in tool_input_list:
                                     tool_input_list[toolUseId] = ""                                
                                 tool_input_list[toolUseId] += partial_json
                                 input = tool_input_list[toolUseId]
-                                logger.info(f"input: {input}")
+                                # logger.info(f"input: {input}")
 
-                                logger.info(f"tool_name: {tool_name}, input: {input}, toolUseId: {toolUseId}")
+                                # logger.info(f"tool_name: {tool_name}, input: {input}, toolUseId: {toolUseId}")
                                 if debug_mode == "Enable":   
                                     update_streaming_result(containers, f"Tool: {tool_name}, Input: {input}", "info")
                         

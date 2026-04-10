@@ -189,10 +189,12 @@ async def generate_image(
 async def generate_image_from_image(
     ctx: Context,
     prompt: str = Field(
-        description='Text description of the desired output image.'
+        default="",
+        description='Text description of the desired output image. (Required)',
     ),
     image_base64: str = Field(
-        description='Base64-encoded source image for style transfer or variation.'
+        default="",
+        description='Base64-encoded source image for style transfer or variation. (Required)',
     ),
     strength: float = Field(
         default=0.7,
@@ -215,6 +217,11 @@ async def generate_image_from_image(
     Returns:
         dict with status, paths (list of image URLs or local paths), and seed used.
     """
+    if not prompt:
+        return {"status": "error", "error": "prompt is required.", "paths": []}
+    if not image_base64:
+        return {"status": "error", "error": "image_base64 is required.", "paths": []}
+
     strength = max(0.0, min(1.0, strength))
     actual_seed = seed if seed is not None else random.randint(0, 4294967294)
 
