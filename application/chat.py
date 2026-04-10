@@ -12,7 +12,6 @@ import utils
 import strands_agent
 import langgraph_agent
 import mcp_config
-import agentcore_memory
 import random
 import string
 import datetime
@@ -116,7 +115,6 @@ multi_region = "Disable"
 
 reasoning_mode = 'Disable'
 agent_type = 'langgraph'
-enable_memory = 'Disable'
 user_id = agent_type # for testing
 
 # Simple memory class to replace ConversationBufferWindowMemory
@@ -152,8 +150,8 @@ def get_current_time(format: str=f"%Y-%m-%d %H:%M:%S")->str:
     
     return timestr
 
-def update(modelName, debugMode, multiRegion, reasoningMode, agentType, memoryMode):    
-    global model_name, model_id, model_type, debug_mode, multi_region, reasoning_mode, enable_memory
+def update(modelName, debugMode, multiRegion, reasoningMode, agentType):    
+    global model_name, model_id, model_type, debug_mode, multi_region, reasoning_mode
     global models, user_id, agent_type
 
     # load mcp.env    
@@ -189,10 +187,6 @@ def update(modelName, debugMode, multiRegion, reasoningMode, agentType, memoryMo
         logger.info(f"user_id: {user_id}")
         mcp_env['user_id'] = user_id
     
-    if enable_memory != memoryMode:
-        enable_memory = memoryMode
-        logger.info(f"enable_memory: {enable_memory}")
-
     # update mcp.env    
     utils.save_mcp_env(mcp_env)
     # logger.info(f"mcp.env updated: {mcp_env}")
@@ -2059,48 +2053,6 @@ def get_tool_info(tool_name, tool_content):
 
     return content, urls, tool_references
 
-memory_id = actor_id = session_id = None
-def initiate_memory():
-    global memory_id, actor_id, session_id
-
-    # Ensure user_id is valid
-    effective_user_id = user_id if user_id and user_id.strip() else agent_type
-    if not effective_user_id or not effective_user_id.strip():
-        effective_user_id = "default"  # Fallback to default if agent_type is also invalid
-    logger.info(f"Using user_id: {effective_user_id}")
-
-    # initate memory variables    
-    memory_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables(effective_user_id)
-    logger.info(f"memory_id: {memory_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
-
-    if memory_id is None:
-        # retrieve memory id
-        memory_id = agentcore_memory.retrieve_memory_id()
-        logger.info(f"memory_id: {memory_id}")        
-        
-        # create memory if not exists
-        if memory_id is None:
-            logger.info(f"Memory will be created...")
-            memory_id = agentcore_memory.create_memory(namespace, effective_user_id)
-            logger.info(f"Memory was created... {memory_id}")
-        
-        # create strategy if not exists
-        agentcore_memory.create_strategy_if_not_exists(memory_id=memory_id, namespace=namespace, strategy_name=effective_user_id)
-
-        # save memory variables
-        agentcore_memory.update_memory_variables(
-            user_id=effective_user_id, 
-            memory_id=memory_id, 
-            actor_id=actor_id, 
-            session_id=session_id, 
-            namespace=namespace)
-    
-enable_short_term_memory = "Disable"
-    
-def save_to_memory(query, result):
-    if memory_id is None and enable_memory=="Enable":
-        initiate_memory()    
-    agentcore_memory.save_conversation_to_memory(memory_id, actor_id, session_id, query, result) 
 
 async def run_strands_agent(query, strands_tools, mcp_servers, history_mode, containers):
     global tool_list, index

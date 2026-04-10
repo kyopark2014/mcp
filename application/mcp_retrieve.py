@@ -151,3 +151,14 @@ def retrieve(query):
     logger.info(f"json_docs: {json_docs}")
 
     return json.dumps(json_docs, ensure_ascii=False)
+
+def sync_data_source():
+    global knowledge_base_id
+    
+    try:
+        response = bedrock_agent_runtime_client.sync_data_source(
+            knowledgeBaseId=knowledge_base_id,
+        )
+    except ClientError as e:
+        logger.error(f"Error syncing data source: {e}")
+        raise

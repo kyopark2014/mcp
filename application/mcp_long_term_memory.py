@@ -14,7 +14,6 @@ import logging
 import boto3
 import os
 import sys
-import agentcore_memory
 import utils
 
 from datetime import datetime, timezone

@@ -1,11 +1,7 @@
 import streamlit as st 
 import chat
 import json
-import knowledge_base as kb
 import cost_analysis as cost
-import supervisor
-import router
-import swarm
 import traceback
 import mcp_config 
 import logging
@@ -13,9 +9,6 @@ import sys
 import os
 import pwd 
 import asyncio
-import aws_cost.implementation as aws_cost
-import swarm_agent
-import agentcore_memory
 import uuid
 import claude_agent
 
@@ -79,21 +72,6 @@ mode_descriptions = {
     "Agent (Chat)": [
         "MCP를 활용한 Agent를 이용합니다. 채팅 히스토리를 이용해 interative한 대화를 즐길 수 있습니다."
     ],
-    "Multi-agent Supervisor (Router)": [
-        "Multi-agent Supervisor (Router)에 기반한 대화입니다. 여기에서는 Supervisor/Collaborators의 구조를 가지고 있습니다."
-    ],
-    "LangGraph Supervisor": [
-        "LangGraph Supervisor를 이용한 Multi-agent Collaboration입니다. 여기에서는 Supervisor/Collaborators의 구조를 가지고 있습니다."
-    ],
-    "LangGraph Swarm": [
-        "LangGraph Swarm를 이용한 Multi-agent Collaboration입니다. 여기에서는 Agent들 사이에 서로 정보를 교환합니다."
-    ],
-    "Swarm Agent": [
-        "Swarm Agent를 이용한 Multi-agent Collaboration입니다. 여기에서는 Agent들 사이에 서로 정보를 교환합니다."
-    ],
-    "Agent with Plan": [
-        "Agent와 Planning를 이용하여 향상된 답변을 제공합니다. 여기에서는 질문에 대해 답변하기 전에 계획을 생성하고, 계획에 따라 답변을 구합니다."
-    ],
     "번역하기": [
         "한국어와 영어에 대한 번역을 제공합니다. 한국어로 입력하면 영어로, 영어로 입력하면 한국어로 번역합니다."        
     ],
@@ -102,9 +80,6 @@ mode_descriptions = {
     ],
     "이미지 분석": [
         "이미지를 업로드하면 이미지의 내용을 요약할 수 있습니다."
-    ],
-    "비용 분석": [
-        "Cloud 사용에 대한 분석을 수행합니다."
     ]
 }
 
@@ -172,7 +147,6 @@ with st.sidebar:
         "Amazon Bedrock을 이용해 다양한 형태의 대화를 구현합니다." 
         "여기에서는 MCP를 이용해 RAG를 구현하고, Multi agent를 이용해 다양한 기능을 구현할 수 있습니다." 
         "또한 번역이나 문법 확인과 같은 용도로 사용할 수 있습니다."
-        "주요 코드는 LangChain과 LangGraph를 이용해 구현되었습니다.\n"
         "상세한 코드는 [Github](https://github.com/kyopark2014/mcp)을 참조하세요."
     )
 
@@ -180,7 +154,15 @@ with st.sidebar:
     
     # radio selection
     mode = st.radio(
-        label="원하는 대화 형태를 선택하세요. ",options=["일상적인 대화", "RAG", "Agent", "Agent (Chat)", "Multi-agent Supervisor (Router)", "LangGraph Supervisor", "LangGraph Swarm", "Swarm Agent", "Agent with Plan", "번역하기", "문법 검토하기", "이미지 분석", "비용 분석"], index=3
+        label="원하는 대화 형태를 선택하세요. ",options=[
+            "일상적인 대화", 
+            "RAG", 
+            "Agent", 
+            "Agent (Chat)", 
+            "번역하기", 
+            "문법 검토하기", 
+            "이미지 분석"
+        ], index=3
     )   
     st.info(mode_descriptions[mode][0])
     
@@ -197,16 +179,16 @@ with st.sidebar:
 
         # Change radio to checkbox
         mcp_options = [
+            "Knowledge Base"
             "notion", "slack", "text_extraction", "pdf-generator", "web_fetch", "outlook", "trade_info", "gog",
             "weather", "korea_weather", "books", "obsidian",           
-            "short-term memory", "long-term memory", 
-            "kb-retriever (local)", "kb-retriever (runtime)", "agentcore gateway", 
-            "use-aws (local)", "use-aws (runtime)", 
+            "use-aws", 
             "aws-knowledge", "aws-api", "aws document", "aws cost", "aws cli", "aws ccapi",
-            "aws cloudwatch", "aws storage", "image generation", "aws diagram", 
+            "aws cloudwatch", "aws storage", 
+            "image generation", "aws diagram", 
             "repl coder","agentcore coder", 
-            "tavily-search", "tavily", "perplexity", "ArXiv", "wikipedia", 
-            "filesystem", "terminal (MAC)", "terminal (linux)", "text editor", "github", "drawio", "aws-drawio"
+            "tavily", "perplexity", "ArXiv", "wikipedia", 
+            "text editor", "github", "drawio", "aws-drawio"
             "context7", "puppeteer", "agentcore-browser", "playwright", "firecrawl", "airbnb", 
             "pubmed", "chembl", "clinicaltrial", "arxiv-manual", 
             "AWS Sentral (Employee)", "AWS Outlook (Employee)",
@@ -236,9 +218,6 @@ with st.sidebar:
                     default_value = option in default_selections
                     mcp_selections[option] = st.checkbox(option, key=f"mcp_{option}", value=default_value)
         
-        # if not any(mcp_selections.values()):
-        #     mcp_selections["basic"] = True
-
         if mcp_selections["사용자 설정"]:
             mcp = {}
             try:
@@ -311,7 +290,7 @@ with st.sidebar:
     modelName = st.selectbox(
         '🖊️ 사용 모델을 선택하세요',
         (
-            "Claude 4.6 Claude",
+            "Claude 4.6 Sonnet",
             "Claude 4.6 Opus",
             "Claude 4.5 Haiku",
             "Claude 4.5 Sonnet",
@@ -336,10 +315,6 @@ with st.sidebar:
     select_debugMode = st.checkbox('Debug Mode', value=True)
     debugMode = 'Enable' if select_debugMode else 'Disable'
 
-    # Memory
-    enable_memory = st.checkbox('Memory', value=True)
-    memoryMode = 'Enable' if enable_memory else 'Disable'
-
     # multi region check box
     select_multiRegion = st.checkbox('Multi Region', value=False)
     multiRegion = 'Enable' if select_multiRegion else 'Disable'
@@ -359,7 +334,7 @@ with st.sidebar:
         st.subheader("📋 문서 업로드")
         uploaded_file = st.file_uploader("RAG를 위한 파일을 선택합니다.", type=["pdf", "txt", "py", "md", "csv", "json"], key=chat.fileId)
 
-    chat.update(modelName, debugMode, multiRegion, reasoningMode, agentType, memoryMode)    
+    chat.update(modelName, debugMode, multiRegion, reasoningMode, agentType)    
 
     st.success(f"Connected to {modelName}", icon="💚")
     clear_button = st.button("대화 초기화", key="clear")
@@ -447,7 +422,8 @@ if uploaded_file is not None and clear_button==False:
         file_url = chat.upload_to_s3(uploaded_file.getvalue(), file_name)
         logger.info(f"file_url: {file_url}")
 
-        kb.sync_data_source()  # sync uploaded files
+        import mcp_retrieve as rag
+        rag.sync_data_source()  # sync uploaded files
             
         status = f'선택한 "{file_name}"의 내용을 요약합니다.'
         if debugMode=='Enable':
@@ -542,6 +518,7 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                         mcp_servers=mcp_servers, 
                         history_mode=history_mode, 
                         containers=containers))
+                
                 elif agentType == "claude":
                     response, image_url = asyncio.run(claude_agent.run_claude_agent(
                         prompt=prompt, 
@@ -565,105 +542,6 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                         file_name = url[url.rfind('/')+1:]
                         st.image(url, caption=file_name, use_container_width=True)
 
-            if memoryMode == "Enable":
-                chat.save_to_memory(prompt, response)            
-
-        elif mode == "Multi-agent Supervisor (Router)":
-            sessionState = ""
-            chat.references = []
-            chat.image_url = []
-            with st.status("thinking...", expanded=True, state="running") as status:
-                response, image_url, reference_docs = router.run_router_supervisor(prompt, st)
-                st.write(response)
-                logger.info(f"response: {response}")
-                
-                st.session_state.messages.append({
-                    "role": "assistant", 
-                    "content": response,
-                    "images": image_url if image_url else []
-                })
-
-                show_references(reference_docs)              
-
-        elif mode == "LangGraph Supervisor":
-            sessionState = ""
-            chat.references = []
-            chat.image_url = []
-            with st.status("thinking...", expanded=True, state="running") as status:
-                response, image_url, reference_docs = supervisor.run_langgraph_supervisor(prompt, st)
-                st.write(response)
-                logger.info(f"response: {response}")
-                
-                st.session_state.messages.append({
-                    "role": "assistant", 
-                    "content": response,
-                    "images": image_url if image_url else []
-                })
-
-                show_references(reference_docs)              
-
-        elif mode == "LangGraph Swarm":
-            sessionState = ""
-            with st.status("thinking...", expanded=True, state="running") as status:
-                response, image_url, reference_docs = swarm.run_langgraph_swarm(prompt, st)
-                st.write(response)
-                logger.info(f"response: {response}")
-                
-                st.session_state.messages.append({
-                    "role": "assistant", 
-                    "content": response,
-                    "images": image_url if image_url else []
-                })
-
-                show_references(reference_docs)              
-        
-        elif mode == "Swarm Agent":
-            sessionState = ""
-            with st.status("thinking...", expanded=True, state="running") as status:
-                containers = {
-                    "tools": st.empty(),
-                    "status": st.empty(),
-                    "notification": [st.empty() for _ in range(500)]
-                }         
-
-                if multiRegion == 'Disable':
-                    response, urls = asyncio.run(swarm_agent.run_swarm_agent(prompt, mcp_servers, containers))                                    
-                else:
-                    response, urls = asyncio.run(swarm_agent.run_swarm_agent_parallel(prompt, mcp_servers, containers))                                    
-                    
-                logger.info(f"response: {response}")
-                st.write(response)
-
-                st.session_state.messages.append({"role": "assistant", "content": response})
-
-            if urls:
-                with st.expander(f"최종 결과"):
-                    url_msg = '\n\n'.join(urls)
-                    st.markdown(url_msg)
-
-        elif mode == "Agent with Plan":
-            containers = {
-                "tools": st.empty(),
-                "status": st.empty(),
-                "notification": [st.empty() for _ in range(500)]
-            }
-            
-            response, urls = asyncio.run(chat.run_langgraph_agent_with_plan(
-                query=prompt, 
-                mcp_servers=mcp_servers, 
-                containers=containers))
-            logger.info(f"response: {response}")
-
-            st.session_state.messages.append({"role": "assistant", "content": response})
-
-            if urls:
-                with st.expander(f"최종 결과"):
-                    url_msg = '\n\n'.join(urls)
-                    st.markdown(url_msg)
-            
-            if memoryMode == "Enable":
-                chat.save_to_memory(prompt, response)
-                
         elif mode == '번역하기':
             response = chat.translate_text(prompt)
             st.write(response)
