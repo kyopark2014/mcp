@@ -71,45 +71,32 @@ RAG 검색을 위한 MCP server는 아래와 같이 정의할 수 있습니다. 
 from mcp.server.fastmcp import FastMCP 
 
 mcp = FastMCP(
-    name = "Search",
-    instructions=(
-        "You are a helpful assistant. "
-        "You can search the documentation for the user's question and provide the answer."
-    ),
+    name = "retrieve"
 ) 
 
 @mcp.tool()
-def search(keyword: str) -> str:
+def rag_search(keyword: str) -> str:
     "search keyword"
 
-    return retrieve_knowledge_base(keyword)
+    return retrieve(keyword)
 
 if __name__ =="__main__":
     print(f"###### main ######")
     mcp.run(transport="stdio")
 ```
 
-Server는 요청이 들어오면, retrieve_knowledge_base()로 RAG 검색을 수행합니다. Server의 python code는 경량(lightweight)이어야 하므로, 아래와 같이 lambda를 trigger하는 방식으로 구성하였습니다. Lambda에서는 retrieve, grade, generation의 동작을 수행합니다. 아래와 같이 "model_name"을 지정할 수 있고, 필요에 따라서는 "grading"을 선택적으로 사용할 수 있습니다. 또한 병렬처리로 속도를 빠르게 하고 싶은 경우에은 "multi_region"을 "Enable"로 설정합니다. 상세한 코드는 [lambda-rag](./lambda-rag/lambda_function.py)를 참조합니다. 
+Server는 요청이 들어오면, retrieve_knowledge_base()로 RAG 검색을 수행합니다.
 
 ```python
-def retrieve_knowledge_base(query):
-    lambda_client = boto3.client(
-        service_name='lambda',
-        region_name=bedrock_region
-    )
-    functionName = f"lambda-rag-for-{projectName}"
-    payload = {
-        'function': 'search_rag',
-        'knowledge_base_name': knowledge_base_name,
-        'keyword': query,
-        'top_k': numberOfDocs,
-        'grading': "Enable",
-        'model_name': model_name,
-        'multi_region': multi_region
-    }
-    output = lambda_client.invoke(
-        FunctionName=functionName,
-        Payload=json.dumps(payload),
+bedrock_agent_runtime_client = boto3.client("bedrock-agent-runtime", region_name=bedrock_region)
+
+def retrieve(query):
+    response = bedrock_agent_runtime_client.retrieve(
+        retrievalQuery={"text": query},
+        knowledgeBaseId=knowledge_base_id,
+        retrievalConfiguration={
+            "vectorSearchConfiguration": {"numberOfResults": number_of_results},
+        },
     )
     payload = json.load(output['Payload'])
     return payload['response'], []
