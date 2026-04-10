@@ -135,8 +135,6 @@ def load_config(mcp_type):
         mcp_type = 'knowledge_base'
     elif mcp_type == "repl coder":
         mcp_type = 'repl_coder'
-    elif mcp_type == "agentcore coder":
-        mcp_type = 'agentcore_coder'
     elif mcp_type == "aws cli":
         mcp_type = 'aws_cli'
     elif mcp_type == "text editor":
@@ -333,19 +331,7 @@ def load_config(mcp_type):
                 }
             }
         }    
-    
-    elif mcp_type == "agentcore_coder":
-        return {
-            "mcpServers": {
-                "agentcore_coder": {
-                    "command": "python",
-                    "args": [
-                        f"{workingDir}/mcp_server_agentcore_coder.py"
-                    ]
-                }
-            }
-        }
-    
+        
     elif mcp_type == "aws_cli":
         return {
             "mcpServers": {

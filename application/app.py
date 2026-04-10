@@ -186,10 +186,10 @@ with st.sidebar:
             "aws-knowledge", "aws-api", "aws document", "aws cost", "aws cli", "aws ccapi",
             "aws cloudwatch", "aws storage", 
             "image generation", "aws diagram", 
-            "repl coder","agentcore coder", 
+            "repl coder",
             "tavily", "perplexity", "ArXiv", "wikipedia", 
             "text editor", "github", "drawio", "aws-drawio"
-            "context7", "puppeteer", "agentcore-browser", "playwright", "firecrawl", "airbnb", 
+            "context7", "puppeteer", "playwright", "firecrawl", "airbnb", 
             "pubmed", "chembl", "clinicaltrial", "arxiv-manual", 
             "AWS Sentral (Employee)", "AWS Outlook (Employee)",
             "사용자 설정"
