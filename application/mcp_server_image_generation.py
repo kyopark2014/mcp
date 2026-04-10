@@ -72,7 +72,7 @@ def _save_and_upload(result: dict, prefix: str = "sd35l") -> dict:
         return {
             "status": "error",
             "error": "Content was filtered by the safety system. Please revise your prompt.",
-            "paths": [],
+            "path": [],
         }
 
     images = result.get("images", [])
@@ -81,7 +81,7 @@ def _save_and_upload(result: dict, prefix: str = "sd35l") -> dict:
         return {
             "status": "error",
             "error": "No images returned from the model.",
-            "paths": [],
+            "path": [],
         }
 
     paths = []
@@ -104,7 +104,7 @@ def _save_and_upload(result: dict, prefix: str = "sd35l") -> dict:
 
     return {
         "status": "success",
-        "paths": paths,
+        "path": paths,
         "seed": seeds[0] if seeds else None,
     }
 
@@ -160,7 +160,7 @@ async def generate_image(
         dict with status, paths (list of image URLs or local paths), and seed used.
     """
     if aspect_ratio not in VALID_ASPECT_RATIOS:
-        return {"status": "error", "error": f"Invalid aspect_ratio '{aspect_ratio}'. Valid: {VALID_ASPECT_RATIOS}", "paths": []}
+        return {"status": "error", "error": f"Invalid aspect_ratio '{aspect_ratio}'. Valid: {VALID_ASPECT_RATIOS}", "path": []}
 
     actual_seed = seed if seed is not None else random.randint(0, 4294967294)
 
@@ -182,7 +182,7 @@ async def generate_image(
     except Exception as e:
         error_msg = f"Image generation failed: {e}"
         logger.error(error_msg)
-        return {"status": "error", "error": error_msg, "paths": []}
+        return {"status": "error", "error": error_msg, "path": []}
 
 
 @mcp.tool(name='generate_image_from_image')
@@ -218,9 +218,9 @@ async def generate_image_from_image(
         dict with status, paths (list of image URLs or local paths), and seed used.
     """
     if not prompt:
-        return {"status": "error", "error": "prompt is required.", "paths": []}
+        return {"status": "error", "error": "prompt is required.", "path": []}
     if not image_base64:
-        return {"status": "error", "error": "image_base64 is required.", "paths": []}
+        return {"status": "error", "error": "image_base64 is required.", "path": []}
 
     strength = max(0.0, min(1.0, strength))
     actual_seed = seed if seed is not None else random.randint(0, 4294967294)
@@ -244,7 +244,7 @@ async def generate_image_from_image(
     except Exception as e:
         error_msg = f"Image-to-image generation failed: {e}"
         logger.error(error_msg)
-        return {"status": "error", "error": error_msg, "paths": []}
+        return {"status": "error", "error": error_msg, "path": []}
 
 
 if __name__ == "__main__":
