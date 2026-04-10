@@ -131,8 +131,6 @@ def load_config(mcp_type):
         mcp_type = 'aws_cloudwatch'
     elif mcp_type == "aws storage":
         mcp_type = 'aws_storage'
-    elif mcp_type == "knowledge base":
-        mcp_type = 'knowledge_base'
     elif mcp_type == "repl coder":
         mcp_type = 'repl_coder'
     elif mcp_type == "aws cli":
@@ -147,8 +145,8 @@ def load_config(mcp_type):
         mcp_type = 'ccapi'
     elif mcp_type == "use-aws (runtime)":
         mcp_type = "use-aws"
-    elif mcp_type == "Knowledge Base":        
-        mcp_type = "knowledge_base"
+    elif mcp_type == "knowledge base":        
+        mcp_type = "kb-retriever"
     elif mcp_type == "AWS Sentral (Employee)":
         mcp_type = "aws_sentral"
     elif mcp_type == "AWS Outlook (Employee)":
@@ -166,12 +164,12 @@ def load_config(mcp_type):
             }
         }
     
-    elif mcp_type == "knowledge_base":
+    elif mcp_type == "kb-retriever":
         return {
             "mcpServers": {
-                "knowledge_base": {
+                "kb_retriever": {
                     "command": "python",
-                    "args": [f"{workingDir}/mcp_server_kb.py"]
+                    "args": [f"{workingDir}/mcp_server_retrieve.py"]
                 }
             }
         }

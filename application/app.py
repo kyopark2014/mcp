@@ -179,7 +179,7 @@ with st.sidebar:
 
         # Change radio to checkbox
         mcp_options = [
-            "Knowledge Base"
+            "knowledge base",
             "notion", "slack", "text_extraction", "pdf-generator", "web_fetch", "outlook", "trade_info", "gog",
             "weather", "korea_weather", "books", "obsidian",           
             "use-aws", 
