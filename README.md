@@ -353,7 +353,7 @@ pip install -U kaleido
 
 ### MCP Image Generation
 
-[mcp_server_image_generation.py](./application/mcp_server_image_generation.py)과 같이 mcp_generate_image와 mcp_generate_image_with_colors을 tool로 등록합니다. 
+[mcp_server_image_generation.py](./application/mcp_server_image_generation.py)과 같이 이미지 생성하는 tool을 등록합니다. 
 
 MCP config는 아래와 같이 설정합니다. [mcp_config.py](./application/mcp_config.py)을 참조합니다.
 
