@@ -181,7 +181,7 @@ with st.sidebar:
         mcp_options = [
             "knowledge base",
             "notion", "slack", "text_extraction", "pdf-generator", "web_fetch", "outlook", "trade_info", "gog",
-            "weather", "korea_weather", "books", "obsidian",           
+            "weather", "korea_weather", "books", "obsidian", "browser-use",        
             "use-aws", 
             "aws-knowledge", "aws-api", "aws document", "aws cost", "aws cli", "aws ccapi",
             "aws cloudwatch", "aws storage", 

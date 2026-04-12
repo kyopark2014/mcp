@@ -714,6 +714,16 @@ def load_config(mcp_type):
             }
         }       
         
+    elif mcp_type == "browser-use":
+        return {
+            "mcpServers": {
+                "browser-use": {
+                    "command": "python",
+                    "args": [f"{workingDir}/mcp_server_brower_use.py"]
+                }
+            }
+        }
+
     elif mcp_type == "사용자 설정":
         return mcp_user_config
 

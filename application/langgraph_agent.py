@@ -3,6 +3,7 @@ import sys
 import traceback
 import chat
 import utils
+import subprocess
 
 from langgraph.prebuilt import ToolNode
 from typing import Literal
@@ -16,6 +17,7 @@ from typing import Literal
 from langgraph.graph import START, END, StateGraph
 from typing_extensions import Annotated, TypedDict
 from langgraph.graph.message import add_messages
+from urllib import parse
 
 logging.basicConfig(
     level=logging.INFO,  
@@ -454,10 +456,53 @@ def memory_get(path: str, from_line: int = 0, lines: int = 0) -> str:
     except Exception as e:
         return json.dumps({"text": f"Error reading file: {e}", "path": path}, ensure_ascii=False)
 
+def _ensure_cli_scripts_on_path() -> None:
+    """Prepend pip user script dir so CLIs (e.g. browser-use) resolve in subprocess."""
+    import site
+    import sysconfig
+
+    extra: list[str] = []
+    user_base = getattr(site, "USER_BASE", None)
+    if user_base:
+        user_bin = os.path.join(user_base, "bin")
+        if os.path.isdir(user_bin):
+            extra.append(user_bin)
+    try:
+        scripts = sysconfig.get_path("scripts")
+        if scripts and os.path.isdir(scripts):
+            extra.append(scripts)
+    except Exception:
+        pass
+    path = os.environ.get("PATH", "")
+    parts = [p for p in path.split(os.pathsep) if p]
+    for d in reversed(extra):
+        if d and d not in parts:
+            parts.insert(0, d)
+    os.environ["PATH"] = os.pathsep.join(parts)
+
+@tool
+def bash(command: str) -> str:
+    """Execute a bash command and return the result"""
+    logger.info(f"###### bash: {command} ######")
+    _ensure_cli_scripts_on_path()
+    result = subprocess.run(
+        command, shell=True, capture_output=True, text=True,
+        cwd=WORKING_DIR, timeout=300,
+        env=os.environ,
+    )
+    parts = []
+    if result.stdout:
+        parts.append(f"STDOUT:\n{result.stdout}")
+    if result.stderr:
+        parts.append(f"STDERR:\n{result.stderr}")
+    if result.returncode != 0:
+        parts.append(f"Return code: {result.returncode}")
+    return "\n".join(parts) if parts else "(no output)"
+
 
 def get_builtin_tools() -> list:
     """Return the list of built-in tools for the skill-aware agent."""
-    return [execute_code, write_file, read_file, upload_file_to_s3, get_current_time]
+    return [execute_code, write_file, read_file, bash, upload_file_to_s3, get_current_time]
 
 class State(TypedDict):
     messages: Annotated[list, add_messages]
