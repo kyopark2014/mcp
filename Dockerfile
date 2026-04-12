@@ -67,6 +67,7 @@ RUN pip install sarif-om==1.0.4 arxiv==2.2.0 chembl-webresource-client==0.10.9 p
 RUN pip install strands-agents strands-agents-tools reportlab arize-phoenix colorama
 RUN pip install rich==13.9.0 bedrock-agentcore claude-agent-sdk nest-asyncio finance-datareader
 RUN pip install nova-act
+RUN pip install browser-use
 
 RUN mkdir -p /root/.streamlit
 COPY config.toml /root/.streamlit/
