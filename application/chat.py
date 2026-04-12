@@ -115,7 +115,7 @@ multi_region = "Disable"
 
 reasoning_mode = 'Disable'
 agent_type = 'langgraph'
-user_id = agent_type # for testing
+user_id = 'agent'
 
 # Simple memory class to replace ConversationBufferWindowMemory
 class SimpleMemory:
@@ -199,8 +199,11 @@ memorystore = InMemoryStore()
 memory_chain = None  # Initialize memory_chain as global variable
 
 def initiate():
-    global memory_chain, checkpointer, memorystore, checkpointers, memorystores
+    global memory_chain, checkpointer, memorystore, checkpointers, memorystores, user_id
 
+    user_id = uuid.uuid4().hex
+
+    # general conversation memory
     if user_id in map_chain:  
         logger.info(f"memory exist. reuse it!")
         memory_chain = map_chain[user_id]
@@ -2211,18 +2214,21 @@ async def create_agent(mcp_servers: list, history_mode: str = "Disable"):
 
 app = config = None
 active_mcp_servers = []
+current_id = None
 
 async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
-    global index, streaming_index, app, config, active_mcp_servers
+    global index, streaming_index, app, config, active_mcp_servers, current_id
 
     index = 0
     image_url = []
     references = []
     
-    if app is None or mcp_servers != active_mcp_servers:
+    if app is None or mcp_servers != active_mcp_servers or current_id != user_id:
         active_mcp_servers = mcp_servers
-        app, config = await create_agent(mcp_servers, history_mode)
+        current_id = user_id
     
+        app, config = await create_agent(mcp_servers, history_mode)
+        
     if app is None:
         logger.error("Failed to create agent - app is None")
         return "에이전트를 생성할 수 없습니다. MCP 서버 설정 또는 도구 구성을 확인해주세요.", []

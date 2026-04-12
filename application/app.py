@@ -351,9 +351,6 @@ if clear_button==True:
     chat.memorystores = dict() 
     chat.initiate()
 
-    session_id = uuid.uuid4().hex
-    agentcore_memory.update_memory_variables(user_id=chat.user_id, session_id=session_id)
-
 # Initialize chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
