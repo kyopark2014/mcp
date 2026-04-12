@@ -2213,7 +2213,7 @@ app = config = None
 active_mcp_servers = []
 
 async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
-    global streaming_index, app, config, active_mcp_servers
+    global index, streaming_index, app, config, active_mcp_servers
 
     index = 0
     image_url = []
