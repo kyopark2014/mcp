@@ -139,17 +139,6 @@ class SimpleChatMemory:
     def clear(self):
         self.messages = []
 
-@tool
-def get_current_time(format: str=f"%Y-%m-%d %H:%M:%S")->str:
-    """Returns the current date and time in the specified format"""
-    # f"%Y-%m-%d %H:%M:%S"
-    
-    format = format.replace('\'','')
-    timestr = datetime.datetime.now(timezone('Asia/Seoul')).strftime(format)
-    logger.info(f"timestr: {timestr}")
-    
-    return timestr
-
 def update(modelName, debugMode, multiRegion, reasoningMode, agentType):    
     global model_name, model_id, model_type, debug_mode, multi_region, reasoning_mode
     global models, user_id, agent_type
@@ -2169,34 +2158,33 @@ async def run_strands_agent(query, strands_tools, mcp_servers, history_mode, con
 
     return final_result, image_url
 
-async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
-    global index, streaming_index
-    index = 0
+async def create_agent(mcp_servers: list, history_mode: str = "Disable"):
+    # builtin tools
+    tools = langgraph_agent.get_builtin_tools()
+    logger.info(f"builtin_tools count: {len(tools)}")
 
-    image_url = []
-    references = []
-    tools = []
-
+    # mcp
     mcp_json = mcp_config.load_selected_config(mcp_servers)
-    logger.info(f"mcp_json: {mcp_json}")
+    # logger.info(f"mcp_json: {mcp_json}")
 
     server_params = langgraph_agent.load_multiple_mcp_server_parameters(mcp_json)
-    logger.info(f"server_params: {server_params}")    
+    # logger.info(f"server_params: {server_params}")    
 
     client = MultiServerMCPClient(server_params)
-    tools.extend(await client.get_tools())     
+    logger.info(f"MCP client created successfully")
 
-    builtin_tools = langgraph_agent.get_builtin_tools()
-    tool_names = {tool.name for tool in tools}
-    for bt in builtin_tools:
-        if bt.name not in tool_names:
-            tools.append(bt)
+    mcp_tools = await client.get_tools()        # add MCP tools
+    # logger.info(f"mcp_tools: {mcp_tools}")        
+    for tool in mcp_tools:
+        logger.info(f"mcp_tool: {tool.name}")
+        if tool.name not in tools:
+            tools.append(tool)
         else:
-            logger.info(f"builtin_tool {bt.name} already in tools")
+            logger.info(f"mcp_tool of {tool.name} already in tools")
 
-    tool_list = [tool.name for tool in tools]
+    tool_list = [tool.name for tool in tools] if tools else []
     logger.info(f"tool_list: {tool_list}")
-
+        
     if history_mode == "Enable":
         app = langgraph_agent.buildChatAgentWithHistory(tools)
         config = {
@@ -2213,6 +2201,22 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
             "tools": tools,
             "system_prompt": None
         }        
+    
+    return app, config
+
+app = config = None
+active_mcp_servers = []
+
+async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
+    global streaming_index, app, config, active_mcp_servers
+
+    index = 0
+    image_url = []
+    references = []
+    
+    if mcp_servers != active_mcp_servers:
+        active_mcp_servers = mcp_servers
+        app, config = await create_agent(mcp_servers, history_mode)
     
     inputs = {
         "messages": [HumanMessage(content=query)]
