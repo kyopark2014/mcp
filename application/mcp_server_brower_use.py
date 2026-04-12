@@ -547,20 +547,63 @@ def _build_js_extractor(engine: str, max_results: int) -> str:
         return f"""
 (function() {{
     var results = [];
-    var items = document.querySelectorAll('li.b_algo');
     var max = {max_results};
+    var seen = {{}};
+
+    var selectors = [
+        'li.b_algo',
+        '#b_results > li.b_algo',
+        '#b_results li[class*="algo"]',
+        '.b_algo'
+    ];
+    var items = [];
+    for (var s = 0; s < selectors.length; s++) {{
+        items = document.querySelectorAll(selectors[s]);
+        if (items.length > 0) break;
+    }}
+
     for (var i = 0; i < Math.min(items.length, max); i++) {{
         var item = items[i];
-        var titleEl = item.querySelector('h2 a');
-        var snippetEl = item.querySelector('p, .b_caption p');
-        if (titleEl) {{
+        var titleEl = item.querySelector('h2 a') || item.querySelector('h2 > a') || item.querySelector('a h2');
+        var snippetEl = item.querySelector('.b_caption p') || item.querySelector('p') || item.querySelector('.b_caption');
+        var aEl = titleEl || item.querySelector('a[href^="http"]');
+        if (aEl) {{
+            var url = aEl.href || aEl.closest('a')?.href || '';
+            if (url && !seen[url]) {{
+                seen[url] = 1;
+                var title = '';
+                var h2 = item.querySelector('h2');
+                if (h2) title = h2.innerText || '';
+                else if (aEl.innerText) title = aEl.innerText;
+                results.push({{
+                    title: title,
+                    url: url,
+                    snippet: snippetEl ? snippetEl.innerText : ''
+                }});
+            }}
+        }}
+    }}
+
+    if (results.length === 0) {{
+        var container = document.querySelector('#b_results') || document.querySelector('main') || document.body;
+        var allLinks = container.querySelectorAll('a[href^="http"]');
+        for (var j = 0; j < allLinks.length && results.length < max; j++) {{
+            var link = allLinks[j];
+            var href = link.href;
+            if (!href || seen[href]) continue;
+            if (href.indexOf('bing.com') !== -1 || href.indexOf('microsoft.com') !== -1) continue;
+            if (href.indexOf('go.microsoft.com') !== -1) continue;
+            seen[href] = 1;
+            var txt = link.innerText.trim();
+            if (txt.length < 5) continue;
             results.push({{
-                title: titleEl.innerText || '',
-                url: titleEl.href || '',
-                snippet: snippetEl ? snippetEl.innerText : ''
+                title: txt,
+                url: href,
+                snippet: ''
             }});
         }}
     }}
+
     return JSON.stringify(results);
 }})()
 """
@@ -594,15 +637,36 @@ def _detect_captcha(page_text: str) -> bool:
 
 
 def _extract_search_results(raw: str) -> list | None:
-    """Try to parse JSON search results from eval output."""
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
-        if raw.startswith('"') and raw.endswith('"'):
+    """Try to parse JSON search results from eval output.
+
+    browser-use eval may prefix output with 'result: ' or similar labels.
+    """
+    text = raw.strip()
+
+    prefix_patterns = ["result: ", "result:", "output: ", "output:"]
+    for prefix in prefix_patterns:
+        if text.lower().startswith(prefix.lower()):
+            text = text[len(prefix):].strip()
+            break
+
+    for candidate in (text, raw.strip()):
+        try:
+            parsed = json.loads(candidate)
+            if isinstance(parsed, list):
+                return parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+        if candidate.startswith('"') and candidate.endswith('"'):
             try:
-                return json.loads(json.loads(raw))
+                inner = json.loads(candidate)
+                parsed = json.loads(inner)
+                if isinstance(parsed, list):
+                    return parsed
             except Exception:
-                return None
+                pass
+
+    logger.warning(f"Could not parse search results from eval output: {raw[:200]}")
     return None
 
 
@@ -649,12 +713,58 @@ def _do_search(
         return None, _format_output(eval_out)
 
     raw = eval_out["stdout"].strip()
+    logger.info(f"Eval raw output ({len(raw)} chars): {raw[:300]}")
 
     if _detect_captcha(raw):
         return None, "__CAPTCHA__"
 
     results = _extract_search_results(raw)
+    logger.info(f"Parsed results: {type(results).__name__}, count={len(results) if results is not None else 'None'}")
     return results, raw
+
+
+def _extract_results_from_page_text(query: str, max_results: int) -> list | None:
+    """Fallback: extract links from page state when JS selectors fail."""
+    import re
+
+    state_out = _run_browser_use("state")
+    state_text = state_out.get("stdout", "")
+    if not state_text:
+        return None
+
+    link_pattern = re.compile(
+        r'\[(\d+)\]\s*<a[^>]*>\s*(.*?)\s*</a>|'
+        r'(?:^|\n)\s*\[(\d+)\]\s*(.+?)\s*\n\s*(?:https?://\S+)',
+        re.IGNORECASE,
+    )
+    url_pattern = re.compile(r'(https?://[^\s<>"\']+)')
+
+    results = []
+    lines = state_text.split('\n')
+    i = 0
+    while i < len(lines) and len(results) < max_results:
+        line = lines[i].strip()
+        urls_in_line = url_pattern.findall(line)
+        if urls_in_line:
+            url = urls_in_line[0]
+            if any(skip in url for skip in ['google.com/search', 'bing.com/search', 'bing.com/aclick']):
+                i += 1
+                continue
+            title = re.sub(r'https?://\S+', '', line).strip()
+            title = re.sub(r'^\[\d+\]\s*(<\w+[^>]*>)?\s*', '', title).strip()
+            if not title and i > 0:
+                title = lines[i - 1].strip()
+            snippet = ""
+            if i + 1 < len(lines):
+                next_line = lines[i + 1].strip()
+                if next_line and not url_pattern.match(next_line):
+                    snippet = next_line
+            if title and url:
+                results.append({"title": title, "url": url, "snippet": snippet})
+        i += 1
+
+    logger.info(f"Text extraction fallback found {len(results)} results")
+    return results if results else None
 
 
 def _format_search_results(query: str, results: list) -> str:
@@ -718,14 +828,31 @@ def browser_web_search(
                 'browser_web_search(query="...", profile="Default")'
             )
 
-        if results:
+        if results is not None and len(results) > 0:
             return (
                 f"[Note: {search_engine} blocked by CAPTCHA, used {fallback_engine} instead]\n\n"
                 + _format_search_results(query, results)
             )
 
-    if results:
+        if results is not None and len(results) == 0:
+            logger.warning(f"Fallback {fallback_engine} returned 0 results, attempting text extraction")
+            text_results = _extract_results_from_page_text(query, max_results)
+            if text_results:
+                return (
+                    f"[Note: {search_engine} blocked by CAPTCHA, used {fallback_engine} text extraction]\n\n"
+                    + _format_search_results(query, text_results)
+                )
+            return f"Search on {fallback_engine} returned no results for: {query}"
+
+    if results is not None and len(results) > 0:
         return _format_search_results(query, results)
+
+    if results is not None and len(results) == 0:
+        logger.warning("JS extractor returned empty array, attempting text extraction fallback")
+        text_results = _extract_results_from_page_text(query, max_results)
+        if text_results:
+            return _format_search_results(query, text_results)
+        return f"Search returned no results for: {query}"
 
     return f"Search completed but could not parse results. Raw output:\n{raw}"
 
