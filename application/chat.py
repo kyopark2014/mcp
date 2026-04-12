@@ -2170,17 +2170,22 @@ async def create_agent(mcp_servers: list, history_mode: str = "Disable"):
     server_params = langgraph_agent.load_multiple_mcp_server_parameters(mcp_json)
     # logger.info(f"server_params: {server_params}")    
 
-    client = MultiServerMCPClient(server_params)
-    logger.info(f"MCP client created successfully")
+    try:
+        client = MultiServerMCPClient(server_params)
+        logger.info(f"MCP client created successfully")
 
-    mcp_tools = await client.get_tools()        # add MCP tools
-    # logger.info(f"mcp_tools: {mcp_tools}")        
-    for tool in mcp_tools:
-        logger.info(f"mcp_tool: {tool.name}")
-        if tool.name not in tools:
-            tools.append(tool)
-        else:
-            logger.info(f"mcp_tool of {tool.name} already in tools")
+        mcp_tools = await client.get_tools()        # add MCP tools
+        # logger.info(f"mcp_tools: {mcp_tools}")        
+        for tool in mcp_tools:
+            logger.info(f"mcp_tool: {tool.name}")
+            if tool.name not in tools:
+                tools.append(tool)
+            else:
+                logger.info(f"mcp_tool of {tool.name} already in tools")
+
+    except Exception as e:
+        logger.error(f"Error creating MCP client or getting tools: {e}")
+        logger.info(f"Falling back to builtin tools only (count: {len(tools)})")
 
     tool_list = [tool.name for tool in tools] if tools else []
     logger.info(f"tool_list: {tool_list}")
@@ -2214,9 +2219,13 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
     image_url = []
     references = []
     
-    if mcp_servers != active_mcp_servers:
+    if app is None or mcp_servers != active_mcp_servers:
         active_mcp_servers = mcp_servers
         app, config = await create_agent(mcp_servers, history_mode)
+    
+    if app is None:
+        logger.error("Failed to create agent - app is None")
+        return "에이전트를 생성할 수 없습니다. MCP 서버 설정 또는 도구 구성을 확인해주세요.", []
     
     inputs = {
         "messages": [HumanMessage(content=query)]
