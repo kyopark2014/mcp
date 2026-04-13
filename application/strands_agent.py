@@ -313,6 +313,8 @@ def upload_file_to_s3(filepath: str) -> str:
         import boto3
         from urllib import parse as url_parse
 
+        config = utils.load_config()
+
         s3_bucket = config.get("s3_bucket")
         if not s3_bucket:
             return "S3 bucket is not configured."
@@ -327,6 +329,7 @@ def upload_file_to_s3(filepath: str) -> str:
         with open(full_path, "rb") as f:
             s3.put_object(Bucket=s3_bucket, Key=filepath, Body=f.read(), ContentType=content_type)
 
+        sharing_url = config.get("sharing_url")
         if sharing_url:
             url = f"{sharing_url}/{url_parse.quote(filepath)}"
             return f"Upload complete: {url}"

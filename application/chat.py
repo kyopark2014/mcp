@@ -1738,31 +1738,22 @@ def extract_thinking_tag(response, st):
 
     return msg
 
-streaming_index = None
-index = 0
 def add_notification(containers, message):
-    global index
-
-    if index == streaming_index:
-        index += 1
-
     if containers is not None:
-        containers['notification'][index].info(message)
-    index += 1
+        containers['queue'].notify(message)
 
-def update_streaming_result(containers, message, type):
-    global streaming_index
-    streaming_index = index
-
+def update_streaming_result(containers, message, type="markdown"):
     if containers is not None:
         if type == "markdown":
-            containers['notification'][streaming_index].markdown(message)
+            containers['queue'].stream(message)
         elif type == "info":
-            containers['notification'][streaming_index].info(message)
+            containers['queue'].notify(message)
 
-tool_info_list = dict()
+def update_final_result(containers, message):
+    if containers is not None:
+        containers['queue'].result(message)
+
 tool_input_list = dict()
-tool_name_list = dict()
 
 sharing_url = config["sharing_url"] if "sharing_url" in config else None
 s3_prefix = "docs"
@@ -2047,9 +2038,12 @@ def get_tool_info(tool_name, tool_content):
 
 
 async def run_strands_agent(query, strands_tools, mcp_servers, history_mode, containers):
-    global tool_list, index
+    global tool_list
     tool_list = []
-    index = 0
+
+    queue = containers['queue'] if containers else None
+    if queue:
+        queue.reset()
 
     artifacts = []
     references = []
@@ -2075,8 +2069,8 @@ async def run_strands_agent(query, strands_tools, mcp_servers, history_mode, con
                 logger.info(f"[data] {text}")
                 current += text
 
-                if debug_mode == "Enable":   
-                    update_streaming_result(containers, current, "markdown")
+                if debug_mode == "Enable" and queue:
+                    queue.stream(current)
 
             elif "result" in event:
                 final = event["result"]                
@@ -2097,40 +2091,33 @@ async def run_strands_agent(query, strands_tools, mcp_servers, history_mode, con
                 text = f"name: {name}, input: {input}"
                 logger.info(f"[current_tool_use] {text}")
 
-                if toolUseId not in tool_info_list: # new tool info
-                    index += 1
-                    current = ""
-                    logger.info(f"new tool info: {toolUseId} -> {index}")
-                    tool_info_list[toolUseId] = index
-                    tool_name_list[toolUseId] = name
-
-                    if debug_mode == "Enable":   
-                        add_notification(containers, f"Tool: {name}, Input: {input}")
-                else: # overwrite tool info if already exists
-                    logger.info(f"overwrite tool info: {toolUseId} -> {tool_info_list[toolUseId]}")
-
-                    if debug_mode == "Enable":   
-                        containers['notification'][tool_info_list[toolUseId]].info(f"Tool: {name}, Input: {input}")
+                current = ""
+                if queue:
+                    queue.register_tool(toolUseId, name)
+                if debug_mode == "Enable" and queue:
+                    queue.tool_update(toolUseId, f"Tool: {name}, Input: {input}")
 
             elif "message" in event:
                 message = event["message"]
                 logger.info(f"[message] {message}")
 
                 if "content" in message:
-                    content = message["content"]
-                    logger.info(f"tool content: {content}")
-                    if "toolResult" in content[0]:
-                        toolResult = content[0]["toolResult"]
+                    msg_content = message["content"]
+                    logger.info(f"tool content: {msg_content}")
+                    for item in msg_content:
+                        if "toolResult" not in item:
+                            continue
+                        toolResult = item["toolResult"]
                         toolUseId = toolResult["toolUseId"]
                         toolContent = toolResult["content"]
-                        toolResult = toolContent[0].get("text", "")
-                        tool_name = tool_name_list[toolUseId]
-                        logger.info(f"[toolResult] {toolResult}, [toolUseId] {toolUseId}")
+                        toolResultText = toolContent[0].get("text", "")
+                        tool_name = queue.get_tool_name(toolUseId) if queue else ""
+                        logger.info(f"[toolResult] {toolResultText}, [toolUseId] {toolUseId}")
 
-                        if debug_mode == "Enable":   
-                            add_notification(containers, f"Tool Result: {str(toolResult)}")
+                        if debug_mode == "Enable":
+                            add_notification(containers, f"Tool Result: {str(toolResultText)}")
 
-                        content, urls, refs = get_tool_info(tool_name, toolResult)
+                        info_content, urls, refs = get_tool_info(tool_name, toolResultText)
                         if refs:
                             for r in refs:
                                 references.append(r)
@@ -2140,8 +2127,8 @@ async def run_strands_agent(query, strands_tools, mcp_servers, history_mode, con
                                 artifacts.append(url)
                             logger.info(f"urls: {urls}")
 
-                        if content:
-                            logger.info(f"content: {content}")                
+                        if info_content:
+                            logger.info(f"content: {info_content}")                
                 
             elif "contentBlockDelta" or "contentBlockStop" or "messageStop" or "metadata" in event:
                 pass
@@ -2157,7 +2144,7 @@ async def run_strands_agent(query, strands_tools, mcp_servers, history_mode, con
             final_result += ref
 
         if containers is not None and debug_mode == "Enable":
-            containers['notification'][index].markdown(final_result)
+            update_final_result(containers, final_result)
 
     return final_result, artifacts
 
@@ -2217,9 +2204,12 @@ active_mcp_servers = []
 current_id = None
 
 async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
-    global index, streaming_index, app, config, active_mcp_servers, current_id
+    global app, config, active_mcp_servers, current_id
 
-    index = 0
+    queue = containers['queue'] if containers else None
+    if queue:
+        queue.reset()
+
     artifacts = []
     references = []
     
@@ -2238,7 +2228,7 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
     }
             
     result = ""
-    tool_used = False  # Track if tool was used
+    tool_used = False
     tool_name = toolUseId = ""
     async for stream in app.astream(inputs, config, stream_mode="messages"):
         if isinstance(stream[0], AIMessageChunk):
@@ -2249,41 +2239,33 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
                     if isinstance(content_item, dict):
                         if content_item.get('type') == 'text':
                             text_content = content_item.get('text', '')
-                            # logger.info(f"text_content: {text_content}")
                             
-                            # If tool was used, start fresh result
                             if tool_used:
                                 result = text_content
                                 tool_used = False
                             else:
                                 result += text_content
                                 
-                            # logger.info(f"result: {result}")             
-                            if debug_mode == "Enable":   
-                                update_streaming_result(containers, result, "markdown")
+                            if debug_mode == "Enable" and queue:
+                                queue.stream(result)
 
                         elif content_item.get('type') == 'tool_use':
-                            # logger.info(f"content_item: {content_item}")      
                             if 'id' in content_item and 'name' in content_item:
                                 toolUseId = content_item.get('id', '')
                                 tool_name = content_item.get('name', '')
-                                # logger.info(f"tool_name: {tool_name}, toolUseId: {toolUseId}")
-                                streaming_index = index                                                                                                                         
-                                index += 1
+                                if queue:
+                                    queue.register_tool(toolUseId, tool_name)
                                                                     
                             if 'partial_json' in content_item:
                                 partial_json = content_item.get('partial_json', '')
-                                # logger.info(f"partial_json: {partial_json}")
                                 
                                 if toolUseId not in tool_input_list:
                                     tool_input_list[toolUseId] = ""                                
                                 tool_input_list[toolUseId] += partial_json
                                 input = tool_input_list[toolUseId]
-                                # logger.info(f"input: {input}")
 
-                                # logger.info(f"tool_name: {tool_name}, input: {input}, toolUseId: {toolUseId}")
-                                if debug_mode == "Enable":   
-                                    update_streaming_result(containers, f"Tool: {tool_name}, Input: {input}", "info")
+                                if debug_mode == "Enable" and queue:
+                                    queue.tool_update(toolUseId, f"Tool: {tool_name}, Input: {input}")
                         
         elif isinstance(stream[0], ToolMessage):
             message = stream[0]
@@ -2293,7 +2275,7 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
             toolUseId = message.tool_call_id
             logger.info(f"toolResult: {toolResult}, toolUseId: {toolUseId}")
 
-            if debug_mode == "Enable":   
+            if debug_mode == "Enable":
                 add_notification(containers, f"Tool Result: {toolResult}")
             tool_used = True
             
@@ -2322,13 +2304,14 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
         result += ref
     
     if containers is not None and debug_mode == "Enable":
-        containers['notification'][index].markdown(result)
+        update_final_result(containers, result)
 
     return result, artifacts
 
 async def run_langgraph_agent_with_plan(query, mcp_servers, containers):
-    global index, streaming_index
-    index = 0
+    queue = containers['queue'] if containers else None
+    if queue:
+        queue.reset()
 
     artifacts = []
     references = []
@@ -2370,7 +2353,7 @@ async def run_langgraph_agent_with_plan(query, mcp_servers, containers):
     }
             
     result = ""
-    tool_used = False  # Track if tool was used
+    tool_used = False
     tool_name = toolUseId = ""
     async for stream in app.astream(inputs, config, stream_mode="messages"):
         if isinstance(stream[0], AIMessageChunk):
@@ -2388,16 +2371,16 @@ async def run_langgraph_agent_with_plan(query, mcp_servers, containers):
                             else:
                                 result += text_content
                                 
-                            update_streaming_result(containers, result, "markdown")
+                            if queue:
+                                queue.stream(result)
 
                         elif content_item.get('type') == 'tool_use':
-                            # logger.info(f"content_item: {content_item}")      
                             if 'id' in content_item and 'name' in content_item:
                                 toolUseId = content_item.get('id', '')
                                 tool_name = content_item.get('name', '')
                                 logger.info(f"tool_name: {tool_name}, toolUseId: {toolUseId}")
-                                streaming_index = index
-                                index += 1
+                                if queue:
+                                    queue.register_tool(toolUseId, tool_name)
 
                             if 'partial_json' in content_item:
                                 partial_json = content_item.get('partial_json', '')
@@ -2410,7 +2393,8 @@ async def run_langgraph_agent_with_plan(query, mcp_servers, containers):
                                 logger.info(f"input: {input}")
 
                                 logger.info(f"tool_name: {tool_name}, input: {input}, toolUseId: {toolUseId}")
-                                update_streaming_result(containers, f"Tool: {tool_name}, Input: {input}", "info")
+                                if queue:
+                                    queue.tool_update(toolUseId, f"Tool: {tool_name}, Input: {input}")
                         
         elif isinstance(stream[0], ToolMessage):
             message = stream[0]
@@ -2447,7 +2431,7 @@ async def run_langgraph_agent_with_plan(query, mcp_servers, containers):
         result += ref
     
     if containers is not None:
-        containers['notification'][index].markdown(result)
+        update_final_result(containers, result)
 
     # save result to md file
     request_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))

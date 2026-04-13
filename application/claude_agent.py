@@ -31,25 +31,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger("claude_agent")
 
-index = 0
 def add_notification(containers, message):
-    global index
-
-    index += 1
-
     if containers is not None:
-        containers['notification'][index].info(message)
-    index += 1
+        containers['queue'].notify(message)
 
 def add_system_message(containers, message, type):
-    global index
-    index += 1
-
     if containers is not None:
         if type == "markdown":
-            containers['notification'][index].markdown(message)
+            containers['queue'].stream(message)
         elif type == "info":
-            containers['notification'][index].info(message)
+            containers['queue'].notify(message)
 
 # Claude Code environment variables
 os.environ["CLAUDE_CODE_USE_BEDROCK"] = "1"
@@ -162,9 +153,12 @@ async def prompt_for_tool_approval(tool_name: str, input_params: dict, context: 
     return PermissionResultAllow(updated_input=input_params)
 
 async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
-    global index, session_id
-    index = 0
+    global session_id
     image_url = []
+
+    queue = containers['queue'] if containers else None
+    if queue:
+        queue.reset()
 
     logger.info(f"history_mode: {history_mode}")
 

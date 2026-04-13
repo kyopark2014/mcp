@@ -11,6 +11,7 @@ import pwd
 import asyncio
 import uuid
 import claude_agent
+from notification_queue import NotificationQueue
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -485,7 +486,7 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                 containers = {
                     "tools": st.empty(),
                     "status": st.empty(),
-                    "notification": [st.empty() for _ in range(1000)]
+                    "queue": NotificationQueue(container=status),
                 }
 
                 if agentType == "langgraph":
