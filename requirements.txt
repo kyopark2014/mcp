@@ -1,5 +1,6 @@
 streamlit
 streamlit-chat
+streamlit-paste-button
 pandas
 numpy
 boto3

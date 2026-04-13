@@ -1157,6 +1157,80 @@ def summary_image(img_base64, instruction):
         
     return extracted_text
 
+def summarize_image(image_content, prompt, st):
+    img = Image.open(BytesIO(image_content))
+    
+    width, height = img.size 
+    logger.info(f"width: {width}, height: {height}, size: {width*height}")
+    
+    isResized = False
+    max_size = 5 * 1024 * 1024  # 5MB in bytes
+    
+    while(width*height > 2000000):
+        width = int(width/2)
+        height = int(height/2)
+        isResized = True
+        logger.info(f"width: {width}, height: {height}, size: {width*height}")
+    
+    if isResized:
+        img = img.resize((width, height))
+    
+    max_attempts = 5
+    for attempt in range(max_attempts):
+        buffer = BytesIO()
+        img.save(buffer, format="PNG", optimize=True)
+        img_bytes = buffer.getvalue()
+        img_base64 = base64.b64encode(img_bytes).decode("utf-8")
+        
+        base64_size = len(img_base64.encode('utf-8'))
+        logger.info(f"attempt {attempt + 1}: base64_size = {base64_size} bytes")
+        
+        if base64_size <= max_size:
+            break
+        else:
+            width = int(width * 0.8)
+            height = int(height * 0.8)
+            img = img.resize((width, height))
+            logger.info(f"resizing to {width}x{height} due to size limit")
+    
+    if base64_size > max_size:
+        logger.warning(f"Image still too large after {max_attempts} attempts: {base64_size} bytes")
+        raise Exception(f"이미지 크기가 너무 큽니다. 5MB 이하의 이미지를 사용해주세요.")
+
+    if debug_mode=="Enable":
+        status = "이미지에서 텍스트를 추출합니다."
+        logger.info(f"status: {status}")
+        st.info(status)
+
+    text = extract_text(img_base64)
+    logger.info(f"extracted text: {text}")
+
+    if text.find('<result>') != -1:
+        extracted_text = text[text.find('<result>')+8:text.find('</result>')]
+    else:
+        extracted_text = text
+    
+    if debug_mode=="Enable":
+        status = f"### 추출된 텍스트\n\n{extracted_text}"
+        logger.info(f"status: {status}")
+        st.info(status)
+    
+    if debug_mode=="Enable":
+        status = "이미지의 내용을 분석합니다."
+        logger.info(f"status: {status}")
+        st.info(status)
+
+    image_summary = summary_image(img_base64, prompt)
+    
+    if text.find('<result>') != -1:
+        image_summary = image_summary[image_summary.find('<result>')+8:image_summary.find('</result>')]
+    logger.info(f"image summary: {image_summary}")
+
+    contents = f"## 이미지 분석\n\n{image_summary}"
+    logger.info(f"image contents: {contents}")
+
+    return contents
+
 def extract_text(img_base64):    
     multimodal = get_chat(extended_thinking=reasoning_mode)
     query = "텍스트를 추출해서 markdown 포맷으로 변환하세요. <result> tag를 붙여주세요."
