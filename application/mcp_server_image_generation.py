@@ -40,12 +40,24 @@ except Exception as e:
     raise
 
 
+WORKING_DIR = os.path.dirname(os.path.abspath(__file__))
+ARTIFACTS_DIR = os.path.join(WORKING_DIR, "artifacts")
+
+def _has_sharing_url() -> bool:
+    """Check if sharing_url is configured in config.json."""
+    try:
+        import utils
+        cfg = utils.load_config()
+        return bool(cfg.get("sharing_url"))
+    except Exception:
+        return False
+
 def _upload_to_s3(image_bytes: bytes, filename: str) -> Optional[str]:
     """Upload image bytes to S3 via chat.upload_to_s3 if available."""
     try:
         import chat
         url = chat.upload_to_s3(image_bytes, filename)
-        if url:
+        if url and url.startswith("http"):
             logger.info(f"Uploaded to S3: {url}")
             return url
     except ImportError:
@@ -84,23 +96,25 @@ def _save_and_upload(result: dict, prefix: str = "sd35l") -> dict:
             "path": [],
         }
 
+    use_s3 = _has_sharing_url()
     paths = []
     for i, img_b64 in enumerate(images):
         image_bytes = base64.b64decode(img_b64)
         rand_id = ''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=8))
         filename = f"{prefix}_{rand_id}.png"
 
-        url = _upload_to_s3(image_bytes, filename)
-        if url:
-            paths.append(url)
-        else:
-            local_dir = "/tmp/sd35l_output"
-            os.makedirs(local_dir, exist_ok=True)
-            local_path = os.path.join(local_dir, filename)
-            with open(local_path, "wb") as f:
-                f.write(image_bytes)
-            paths.append(local_path)
-            logger.info(f"Saved locally: {local_path}")
+        if use_s3:
+            url = _upload_to_s3(image_bytes, filename)
+            if url:
+                paths.append(url)
+                continue
+
+        os.makedirs(ARTIFACTS_DIR, exist_ok=True)
+        local_path = os.path.join(ARTIFACTS_DIR, filename)
+        with open(local_path, "wb") as f:
+            f.write(image_bytes)
+        paths.append(local_path)
+        logger.info(f"Saved to artifacts: {local_path}")
 
     return {
         "status": "success",
@@ -240,7 +254,8 @@ async def generate_image_from_image(
 
     try:
         result = _invoke_sd35(request_body)
-        return _save_and_upload(result, prefix="sd35l_i2i")
+        return _save_and_upload(result, prefix="sd35l_i2i")            
+
     except Exception as e:
         error_msg = f"Image-to-image generation failed: {e}"
         logger.error(error_msg)

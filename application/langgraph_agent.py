@@ -499,7 +499,11 @@ def bash(command: str) -> str:
 
 def get_builtin_tools() -> list:
     """Return the list of built-in tools for the skill-aware agent."""
-    return [execute_code, write_file, read_file, bash, upload_file_to_s3, get_current_time]
+
+    if config.get("sharing_url"):
+        return [execute_code, write_file, read_file, bash, upload_file_to_s3, get_current_time]
+    else:
+        return [execute_code, write_file, read_file, bash, get_current_time]
 
 class State(TypedDict):
     messages: Annotated[list, add_messages]
