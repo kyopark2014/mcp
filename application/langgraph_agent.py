@@ -503,7 +503,7 @@ def get_builtin_tools() -> list:
 
 class State(TypedDict):
     messages: Annotated[list, add_messages]
-    image_url: list
+    artifacts: list
 
 async def call_model(state: State, config):
     logger.info(f"###### call_model ######")
@@ -511,7 +511,7 @@ async def call_model(state: State, config):
     last_message = state['messages'][-1]
     logger.info(f"last message: {last_message}")
     
-    image_url = state['image_url'] if 'image_url' in state else []
+    artifacts = state['artifacts'] if 'artifacts' in state else []
 
     tools = config.get("configurable", {}).get("tools", None)
     system_prompt = config.get("configurable", {}).get("system_prompt", None)
@@ -593,7 +593,7 @@ async def call_model(state: State, config):
         err_msg = traceback.format_exc()
         logger.info(f"error message: {err_msg}")
 
-    return {"messages": [response], "image_url": image_url}
+    return {"messages": [response], "artifacts": artifacts}
 
 async def should_continue(state: State, config) -> Literal["continue", "end"]:
     logger.info(f"###### should_continue ######")

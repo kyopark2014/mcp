@@ -444,19 +444,6 @@ if seed_image_url and clear_button==False and enable_seed==True:
     st.image(seed_image_url, caption="이미지 미리보기", use_container_width=True)
     logger.info(f"preview: {seed_image_url}")
     
-if clear_button==False and mode == '비용 분석':
-    response = aws_cost.run_cost_agent(mcp_servers, st)
-    logger.info(f"response: {response}")
-
-    if aws_cost.response_msg:
-        with st.expander(f"수행 결과"):
-            response_msgs = '\n\n'.join(aws_cost.response_msg)  
-            st.markdown(response_msgs)
-
-    st.write(response)
-
-    st.session_state.messages.append({"role": "assistant", "content": response})
-
 # Always show the chat input
 if prompt := st.chat_input("메시지를 입력하세요."):
     with st.chat_message("user"):  # display user message in chat message container
@@ -502,14 +489,14 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                 }
 
                 if agentType == "langgraph":
-                    response, image_url = asyncio.run(chat.run_langgraph_agent(
+                    response, artifacts = asyncio.run(chat.run_langgraph_agent(
                         query=prompt, 
                         mcp_servers=mcp_servers, 
                         history_mode=history_mode, 
                         containers=containers))
 
                 elif agentType == "strands":
-                    response, image_url = asyncio.run(chat.run_strands_agent(
+                    response, artifacts = asyncio.run(chat.run_strands_agent(
                         query=prompt, 
                         strands_tools=[], 
                         mcp_servers=mcp_servers, 
@@ -517,7 +504,7 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                         containers=containers))
                 
                 elif agentType == "claude":
-                    response, image_url = asyncio.run(claude_agent.run_claude_agent(
+                    response, artifacts = asyncio.run(claude_agent.run_claude_agent(
                         prompt=prompt, 
                         mcp_servers=mcp_servers, 
                         history_mode=history_mode, 
@@ -529,11 +516,11 @@ if prompt := st.chat_input("메시지를 입력하세요."):
             st.session_state.messages.append({
                 "role": "assistant", 
                 "content": response,
-                "images": image_url if image_url else []
+                "artifacts": artifacts if artifacts else []
             })
 
-            if image_url:
-                for url in image_url:
+            if artifacts:
+                for url in artifacts:
                     if url and url.strip():  # 빈 문자열이나 공백만 있는 경우 건너뛰기
                         logger.info(f"url: {url}")
                         file_name = url[url.rfind('/')+1:]

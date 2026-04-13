@@ -2051,7 +2051,7 @@ async def run_strands_agent(query, strands_tools, mcp_servers, history_mode, con
     tool_list = []
     index = 0
 
-    image_url = []
+    artifacts = []
     references = []
 
     # initiate agent
@@ -2137,7 +2137,7 @@ async def run_strands_agent(query, strands_tools, mcp_servers, history_mode, con
                             logger.info(f"refs: {refs}")
                         if urls:
                             for url in urls:
-                                image_url.append(url)
+                                artifacts.append(url)
                             logger.info(f"urls: {urls}")
 
                         if content:
@@ -2159,7 +2159,7 @@ async def run_strands_agent(query, strands_tools, mcp_servers, history_mode, con
         if containers is not None and debug_mode == "Enable":
             containers['notification'][index].markdown(final_result)
 
-    return final_result, image_url
+    return final_result, artifacts
 
 async def create_agent(mcp_servers: list, history_mode: str = "Disable"):
     # builtin tools
@@ -2220,7 +2220,7 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
     global index, streaming_index, app, config, active_mcp_servers, current_id
 
     index = 0
-    image_url = []
+    artifacts = []
     references = []
     
     if app is None or mcp_servers != active_mcp_servers or current_id != user_id:
@@ -2304,7 +2304,7 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
                 logger.info(f"refs: {refs}")
             if urls:
                 for url in urls:
-                    image_url.append(url)
+                    artifacts.append(url)
                 logger.info(f"urls: {urls}")
 
             if content:
@@ -2324,13 +2324,13 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
     if containers is not None and debug_mode == "Enable":
         containers['notification'][index].markdown(result)
 
-    return result, image_url
+    return result, artifacts
 
 async def run_langgraph_agent_with_plan(query, mcp_servers, containers):
     global index, streaming_index
     index = 0
 
-    image_url = []
+    artifacts = []
     references = []
     tools = []
 
@@ -2429,7 +2429,7 @@ async def run_langgraph_agent_with_plan(query, mcp_servers, containers):
                 logger.info(f"refs: {refs}")
             if urls:
                 for url in urls:
-                    image_url.append(url)
+                    artifacts.append(url)
                 logger.info(f"urls: {urls}")
 
             if content:
@@ -2456,4 +2456,4 @@ async def run_langgraph_agent_with_plan(query, mcp_servers, containers):
     with open(key, 'w') as f:
         f.write(body)
 
-    return result, image_url
+    return result, artifacts
