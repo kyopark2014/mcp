@@ -316,8 +316,14 @@ def updata_object(key, body, direction):
 selected_chat = 0
 def get_max_output_tokens(model_id: str = "") -> int:
     """Return the max output tokens based on the model ID."""
-    if "claude-4" in model_id or "claude-sonnet-4" in model_id or "claude-opus-4" in model_id or "claude-haiku-4" in model_id:
-        return 16384
+    if "claude-opus-4-6" in model_id:
+        return 128000
+    if "claude-opus-4-5" in model_id:
+        return 64000
+    if "claude-opus-4" in model_id or "claude-4-opus" in model_id:
+        return 32000
+    if "claude-sonnet-4" in model_id or "claude-4-sonnet" in model_id or "claude-haiku-4" in model_id:
+        return 64000
     return 8192
 
 def get_chat(extended_thinking):
@@ -360,12 +366,12 @@ def get_chat(extended_thinking):
     )
 
     if profile['model_type'] != 'openai' and extended_thinking=='Enable':
-        maxReasoningOutputTokens=64000
         logger.info(f"extended_thinking: {extended_thinking}")
-        thinking_budget = min(maxOutputTokens, maxReasoningOutputTokens-1000)
+        response_budget = max(maxOutputTokens // 8, 4000)
+        thinking_budget = maxOutputTokens - response_budget
 
         parameters = {
-            "max_tokens":maxReasoningOutputTokens,
+            "max_tokens":maxOutputTokens,
             "temperature":1,            
             "thinking": {
                 "type": "enabled",
