@@ -372,7 +372,6 @@ def get_chat(extended_thinking):
 
         parameters = {
             "max_tokens":maxOutputTokens,
-            "temperature":1,            
             "thinking": {
                 "type": "enabled",
                 "budget_tokens": thinking_budget
@@ -382,8 +381,6 @@ def get_chat(extended_thinking):
     elif profile['model_type'] != 'openai' and extended_thinking=='Disable':
         parameters = {
             "max_tokens":maxOutputTokens,     
-            "temperature":0.1,
-            "top_k":250,
             "stop_sequences": [STOP_SEQUENCE]
         }
     elif profile['model_type'] == 'openai':
