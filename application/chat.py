@@ -1818,20 +1818,20 @@ def extract_thinking_tag(response, st):
 
     return msg
 
-def add_notification(containers, message):
-    if containers is not None:
-        containers['queue'].notify(message)
+def add_notification(notification_queue, message):
+    if notification_queue is not None:
+        notification_queue.notify(message)
 
-def update_streaming_result(containers, message, type="markdown"):
-    if containers is not None:
+def update_streaming_result(notification_queue, message, type="markdown"):
+    if notification_queue is not None:
         if type == "markdown":
-            containers['queue'].stream(message)
+            notification_queue.stream(message)
         elif type == "info":
-            containers['queue'].notify(message)
+            notification_queue.notify(message)
 
-def update_final_result(containers, message):
-    if containers is not None:
-        containers['queue'].result(message)
+def update_final_result(notification_queue, message):
+    if notification_queue is not None:
+        notification_queue.result(message)
 
 tool_input_list = dict()
 
@@ -2117,11 +2117,11 @@ def get_tool_info(tool_name, tool_content):
     return content, urls, tool_references
 
 
-async def run_strands_agent(query, strands_tools, mcp_servers, history_mode, containers):
+async def run_strands_agent(query, strands_tools, mcp_servers, history_mode, notification_queue):
     global tool_list
     tool_list = []
 
-    queue = containers['queue'] if containers else None
+    queue = notification_queue if notification_queue else None
     if queue:
         queue.reset()
 
@@ -2195,7 +2195,7 @@ async def run_strands_agent(query, strands_tools, mcp_servers, history_mode, con
                         logger.info(f"[toolResult] {toolResultText}, [toolUseId] {toolUseId}")
 
                         if debug_mode == "Enable":
-                            add_notification(containers, f"Tool Result: {str(toolResultText)}")
+                            add_notification(notification_queue, f"Tool Result: {str(toolResultText)}")
 
                         info_content, urls, refs = get_tool_info(tool_name, toolResultText)
                         if refs:
@@ -2223,8 +2223,8 @@ async def run_strands_agent(query, strands_tools, mcp_servers, history_mode, con
                 ref += f"{i+1}. [{reference['title']}]({reference['url']}), {content}...\n"    
             final_result += ref
 
-        if containers is not None and debug_mode == "Enable":
-            update_final_result(containers, final_result)
+        if notification_queue is not None and debug_mode == "Enable":
+            update_final_result(notification_queue, final_result)
 
     return final_result, artifacts
 
@@ -2283,10 +2283,10 @@ app = config = None
 active_mcp_servers = []
 current_id = None
 
-async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
+async def run_langgraph_agent(query, mcp_servers, history_mode, notification_queue):
     global app, config, active_mcp_servers, current_id
 
-    queue = containers['queue'] if containers else None
+    queue = notification_queue if notification_queue else None
     if queue:
         queue.reset()
 
@@ -2356,7 +2356,7 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
             logger.info(f"toolResult: {toolResult}, toolUseId: {toolUseId}")
 
             if debug_mode == "Enable":
-                add_notification(containers, f"Tool Result: {toolResult}")
+                add_notification(notification_queue, f"Tool Result: {toolResult}")
             tool_used = True
             
             content, urls, refs = get_tool_info(tool_name, toolResult)
@@ -2383,13 +2383,13 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, containers):
             ref += f"{i+1}. [{reference['title']}]({reference['url']}), {page_content}...\n"    
         result += ref
     
-    if containers is not None and debug_mode == "Enable":
-        update_final_result(containers, result)
+    if notification_queue is not None and debug_mode == "Enable":
+        update_final_result(notification_queue, result)
 
     return result, artifacts
 
-async def run_langgraph_agent_with_plan(query, mcp_servers, containers):
-    queue = containers['queue'] if containers else None
+async def run_langgraph_agent_with_plan(query, mcp_servers, notification_queue):
+    queue = notification_queue if notification_queue else None
     if queue:
         queue.reset()
 
@@ -2399,7 +2399,7 @@ async def run_langgraph_agent_with_plan(query, mcp_servers, containers):
 
     tools.append(get_current_time)
 
-    add_notification(containers, f"계획을 생성하는 중입니다...")
+    add_notification(notification_queue, f"계획을 생성하는 중입니다...")
 
     mcp_json = mcp_config.load_selected_config(mcp_servers)
     logger.info(f"mcp_json: {mcp_json}")
@@ -2422,10 +2422,12 @@ async def run_langgraph_agent_with_plan(query, mcp_servers, containers):
     app = langgraph_agent.buildChatAgentWithPlan(tools)
     config = {
         "recursion_limit": 50,
-        "configurable": {"thread_id": user_id},
+        "configurable": {
+            "thread_id": user_id,
+            "notification_queue": notification_queue,
+        },
         "tools": tools,
         "system_prompt": None,
-        "containers": containers
     }        
     
     inputs = {
@@ -2483,7 +2485,7 @@ async def run_langgraph_agent_with_plan(query, mcp_servers, containers):
             toolResult = message.content
             toolUseId = message.tool_call_id
             logger.info(f"toolResult: {toolResult}, toolUseId: {toolUseId}")
-            add_notification(containers, f"Tool Result: {toolResult}")
+            add_notification(notification_queue, f"Tool Result: {toolResult}")
             tool_used = True
             
             content, urls, refs = get_tool_info(tool_name, toolResult)
@@ -2510,8 +2512,8 @@ async def run_langgraph_agent_with_plan(query, mcp_servers, containers):
             ref += f"{i+1}. [{reference['title']}]({reference['url']}), {page_content}...\n"    
         result += ref
     
-    if containers is not None:
-        update_final_result(containers, result)
+    if notification_queue is not None:
+        update_final_result(notification_queue, result)
 
     # save result to md file
     request_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))

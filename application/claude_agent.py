@@ -31,16 +31,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger("claude_agent")
 
-def add_notification(containers, message):
-    if containers is not None:
-        containers['queue'].notify(message)
+def add_notification(notification_queue, message):
+    if notification_queue is not None:
+        notification_queue.notify(message)
 
-def add_system_message(containers, message, type):
-    if containers is not None:
+def add_system_message(notification_queue, message, type):
+    if notification_queue is not None:
         if type == "markdown":
-            containers['queue'].stream(message)
+            notification_queue.stream(message)
         elif type == "info":
-            containers['queue'].notify(message)
+            notification_queue.notify(message)
 
 # Claude Code environment variables
 os.environ["CLAUDE_CODE_USE_BEDROCK"] = "1"
@@ -152,11 +152,11 @@ async def prompt_for_tool_approval(tool_name: str, input_params: dict, context: 
     # Auto-approve for streamlit app
     return PermissionResultAllow(updated_input=input_params)
 
-async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
+async def run_claude_agent(prompt, mcp_servers, history_mode, notification_queue):
     global session_id
     image_url = []
 
-    queue = containers['queue'] if containers else None
+    queue = notification_queue if notification_queue else None
     if queue:
         queue.reset()
 
@@ -229,19 +229,19 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
                     logger.info(f"--> tools: {tools}")
 
                     if chat.debug_mode == 'Enable':
-                        add_notification(containers, f"Tools: {tools}")
+                        add_notification(notification_queue, f"Tools: {tools}")
 
             elif isinstance(message, AssistantMessage):
                 for block in message.content:
                     if isinstance(block, TextBlock):
                         logger.info(f"--> TextBlock: {block.text}")
                         if chat.debug_mode == 'Enable':
-                            add_system_message(containers, f"{block.text}", "markdown")
+                            add_system_message(notification_queue, f"{block.text}", "markdown")
                         final_result = block.text
                     elif isinstance(block, ToolUseBlock):
                         logger.info(f"--> tool_use_id: {block.id=}, name: {block.name}, input: {block.input}")
                         if chat.debug_mode == 'Enable':
-                            add_notification(containers, f"Tool name: {block.name}, input: {block.input}")
+                            add_notification(notification_queue, f"Tool name: {block.name}, input: {block.input}")
                     elif isinstance(block, ToolResultBlock):
                         logger.info(f"--> tool_use_id: {block.tool_use_id=}, content: {block.content}")
                         # Skip displaying image type ToolResults
@@ -251,7 +251,7 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
                                 logger.info("Skipping image type ToolResult")
                                 continue
                         if chat.debug_mode == 'Enable':
-                            add_notification(containers, f"Tool result: {block.content}")
+                            add_notification(notification_queue, f"Tool result: {block.content}")
                     else:
                         logger.info(f"AssistantMessage: {block}")
                     
@@ -268,7 +268,7 @@ async def run_claude_agent(prompt, mcp_servers, history_mode, containers):
                                 skip_notification = True
                         
                         if not skip_notification and chat.debug_mode == 'Enable':
-                            add_notification(containers, f"Tool result: {block.content}")
+                            add_notification(notification_queue, f"Tool result: {block.content}")
                         
                         if isinstance(block.content, list):
                             for item in block.content:

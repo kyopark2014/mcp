@@ -1,6 +1,7 @@
 import streamlit as st 
 import streamlit_paste_button as spb
 import chat
+import utils
 import json
 import io
 import cost_analysis as cost
@@ -455,8 +456,7 @@ if uploaded_file is not None and clear_button==False:
         file_url = chat.upload_to_s3(uploaded_file.getvalue(), file_name)
         logger.info(f"file_url: {file_url}")
 
-        import mcp_retrieve as rag
-        rag.sync_data_source()  # sync uploaded files
+        utils.sync_data_source()  # sync uploaded files
             
         status = f'선택한 "{file_name}"의 내용을 요약합니다.'
         if debugMode=='Enable':
@@ -518,18 +518,14 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                 history_mode = "Enable"
 
             with st.status("thinking...", expanded=True, state="running") as status:
-                containers = {
-                    "tools": st.empty(),
-                    "status": st.empty(),
-                    "queue": NotificationQueue(container=status),
-                }
+                notification_queue = NotificationQueue(container=status)
 
                 if agentType == "langgraph":
                     response, artifacts = asyncio.run(chat.run_langgraph_agent(
                         query=prompt, 
                         mcp_servers=mcp_servers, 
                         history_mode=history_mode, 
-                        containers=containers))
+                        notification_queue=notification_queue))
 
                 elif agentType == "strands":
                     response, artifacts = asyncio.run(chat.run_strands_agent(
@@ -537,14 +533,14 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                         strands_tools=[], 
                         mcp_servers=mcp_servers, 
                         history_mode=history_mode, 
-                        containers=containers))
+                        notification_queue=notification_queue))
                 
                 elif agentType == "claude":
                     response, artifacts = asyncio.run(claude_agent.run_claude_agent(
                         prompt=prompt, 
                         mcp_servers=mcp_servers, 
                         history_mode=history_mode, 
-                        containers=containers))
+                        notification_queue=notification_queue))
 
                 if debugMode == "Disable":
                     st.markdown(response)

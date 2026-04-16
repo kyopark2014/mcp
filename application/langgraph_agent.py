@@ -644,7 +644,7 @@ def buildChatAgent(tools):
 async def plan_node(state: State, config):
     logger.info(f"###### plan_node ######")
 
-    containers = config.get("configurable", {}).get("containers", None)
+    notification_queue = config.get("configurable", {}).get("notification_queue", None)
 
     system=(
         "For the given objective, come up with a simple step by step plan."
@@ -674,8 +674,8 @@ async def plan_node(state: State, config):
         plan = plan.strip()
         response = HumanMessage(content="다음의 plan을 참고하여 답변하세요.\n" + plan)
 
-        if containers is not None:
-            chat.add_notification(containers, '계획:\n' + plan)
+        if notification_queue is not None:
+            chat.add_notification(notification_queue, '계획:\n' + plan)
 
     except Exception:
         response = HumanMessage(content="")
