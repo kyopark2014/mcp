@@ -344,8 +344,6 @@ with st.sidebar:
 
         st.markdown("**또는** 화면 캡처를 붙여넣으세요:")
         pasted_image = safe_paste_button("📋 클립보드에서 붙여넣기", key="paste_image")
-        if pasted_image:
-            st.image(pasted_image, caption="붙여넣은 이미지", use_container_width=True)
 
     elif mode=='RAG' or mode=="Agent" or mode=="Agent (Chat)":
         st.subheader("📋 문서/이미지 업로드")
@@ -430,14 +428,6 @@ if pasted_image is not None and clear_button==False:
 
     if mode == '이미지 분석':
         st.image(pasted_image, caption="붙여넣은 이미지 미리보기", use_container_width=True)
-    elif mode in ('Agent', 'Agent (Chat)', 'RAG'):
-        chat.initiate()
-        if debugMode=='Enable':
-            st.info('붙여넣은 이미지를 업로드합니다.')
-        file_url = chat.upload_to_s3(file_bytes, file_name)
-        logger.info(f"pasted image uploaded: {file_url}")
-        import mcp_retrieve as rag
-        rag.sync_data_source()
 
 if uploaded_file is not None and clear_button==False:
     logger.info(f"uploaded_file.name: {uploaded_file.name}")
