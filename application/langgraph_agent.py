@@ -11,7 +11,13 @@ from langgraph.graph import START, END, StateGraph
 from typing_extensions import Annotated, TypedDict
 from langgraph.graph.message import add_messages
 from langchain_core.prompts import MessagesPlaceholder, ChatPromptTemplate
-from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+from langchain_core.messages import (
+    HumanMessage,
+    AIMessage,
+    AIMessageChunk,
+    ToolMessage,
+    message_chunk_to_message,
+)
 from langgraph.prebuilt import ToolNode
 from typing import Literal
 from langgraph.graph import START, END, StateGraph
@@ -587,8 +593,22 @@ async def call_model(state: State, config):
             ]
         )
         chain = prompt | model
-            
-        response = await chain.ainvoke(messages)
+
+        # Stream tokens/chunks to the graph via astream (use with stream_mode="messages")
+        accumulated: AIMessageChunk | None = None
+        async for chunk in chain.astream({"messages": messages}):
+            if accumulated is None:
+                accumulated = chunk
+            else:
+                accumulated = accumulated + chunk
+
+        if accumulated is None:
+            response = AIMessage(content="답변을 찾지 못하였습니다.")
+        else:
+            merged = message_chunk_to_message(accumulated)
+            response = merged if isinstance(merged, AIMessage) else AIMessage(
+                content=getattr(merged, "content", str(merged))
+            )
         logger.info(f"response of call_model: {response}")
 
     except Exception:

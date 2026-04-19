@@ -2392,9 +2392,8 @@ async def run_langgraph_agent_with_plan(query, mcp_servers, notification_queue):
 
     artifacts = []
     references = []
-    tools = []
-
-    tools.append(get_current_time)
+    tools = langgraph_agent.get_builtin_tools()
+    logger.info(f"builtin_tools count: {len(tools)}")
 
     add_notification(notification_queue, f"계획을 생성하는 중입니다...")
 
@@ -2407,11 +2406,15 @@ async def run_langgraph_agent_with_plan(query, mcp_servers, notification_queue):
     client = MultiServerMCPClient(server_params)
     logger.info(f"MCP client created successfully")
     
-    tools.extend(await client.get_tools())        
-    logger.info(f"get_tools() returned: {tools}")
+    mcp_tools = await client.get_tools()
+    logger.info(f"mcp_tools: {mcp_tools}")
 
-    builtin_tools = langgraph_agent.get_builtin_tools()
-    tools = (tools if tools else []) + builtin_tools
+    for tool in mcp_tools:
+        logger.info(f"mcp_tool: {tool.name}")
+        if tool.name not in tools:
+            tools.append(tool)
+        else:
+            logger.info(f"mcp_tool of {tool.name} already in tools")
 
     tool_list = [tool.name for tool in tools] if tools else []
     logger.info(f"tool_list: {tool_list}")
