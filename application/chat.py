@@ -2261,17 +2261,21 @@ async def create_agent(mcp_servers: list, history_mode: str = "Disable"):
         app = langgraph_agent.buildChatAgentWithHistory(tools)
         config = {
             "recursion_limit": 50,
-            "configurable": {"thread_id": user_id},
-            "tools": tools,
-            "system_prompt": None
+            "configurable": {
+                "thread_id": user_id,
+                "tools": tools,
+                "system_prompt": None
+            }
         }
     else:
         app = langgraph_agent.buildChatAgent(tools)
         config = {
             "recursion_limit": 50,
-            "configurable": {"thread_id": user_id},
-            "tools": tools,
-            "system_prompt": None
+            "configurable": {
+                "thread_id": user_id,
+                "tools": tools,
+                "system_prompt": None
+            }
         }        
     
     return app, config
