@@ -14,7 +14,6 @@ import langgraph_agent
 import mcp_config
 import random
 import string
-import datetime
 
 from io import BytesIO
 from PIL import Image
@@ -23,8 +22,6 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 from langchain_core.prompts import MessagesPlaceholder, ChatPromptTemplate
 from langchain_core.documents import Document
-from pytz import timezone
-from langchain_core.tools import tool
 
 from tavily import TavilyClient  
 from urllib import parse
@@ -73,30 +70,12 @@ s3_prefix = 'docs'
 s3_image_prefix = 'images'
 
 knowledge_base_role = config["knowledge_base_role"] if "knowledge_base_role" in config else None
-if knowledge_base_role is None:
-    raise Exception ("No Knowledge Base Role")
-
 collectionArn = config["collectionArn"] if "collectionArn" in config else None
-if collectionArn is None:
-    raise Exception ("No collectionArn")
-
 vectorIndexName = projectName
-
 opensearch_url = config["opensearch_url"] if "opensearch_url" in config else None
-if opensearch_url is None:
-    raise Exception ("No OpenSearch URL")
-
 path = config["sharing_url"] if "sharing_url" in config else None
-if path is None:
-    raise Exception ("No Sharing URL")
-
 s3_arn = config["s3_arn"] if "s3_arn" in config else None
-if s3_arn is None:
-    raise Exception ("No S3 ARN")
-
 s3_bucket = config["s3_bucket"] if "s3_bucket" in config else None
-if s3_bucket is None:
-    raise Exception ("No storage!")
 
 knowledge_base_name = projectName
 numberOfDocs = 4
@@ -1641,8 +1620,6 @@ def get_knowledge_base_id():
     return None
 
 knowledge_base_id = config.get('knowledge_base_id', get_knowledge_base_id())
-if not knowledge_base_id:
-    raise Exception(f"Knowledge base not found: {projectName}")
 
 number_of_results = 4
 
