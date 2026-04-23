@@ -568,17 +568,15 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                 st.stop()
 
             else:
-                if modelName == "Claude 3.5 Haiku":
-                    st.error("Claude 3.5 Haiku은 이미지를 지원하지 않습니다. 다른 모델을 선택해주세요.")
-                else:
-                    with st.status("thinking...", expanded=True, state="running") as status:
-                        if file_bytes is not None:
-                            summary = chat.summarize_image(file_bytes, prompt, st)
-                        else:
-                            summary = chat.get_image_summarization(file_name, prompt, st)
-                        st.write(summary)
+                with st.status("thinking...", expanded=True, state="running") as status:
+                    if file_bytes is not None:
+                        summary = chat.summarize_image(file_bytes, prompt, st)
+                    else:
+                        summary = chat.get_image_summarization(file_name, prompt, st)
+                    st.write(summary)
 
-                        st.session_state.messages.append({"role": "assistant", "content": summary})
+                    chat.save_chat_history("문서 분석 결과", summary)
+                    st.session_state.messages.append({"role": "assistant", "content": summary})                
 
         elif mode == '비용 분석':
             with st.status("thinking...", expanded=True, state="running") as status:
