@@ -163,9 +163,9 @@ with st.sidebar:
             "RAG", 
             "Agent", 
             "Agent (Chat)", 
-            "번역하기", 
-            "문법 검토하기", 
-            "이미지 분석"
+            "이미지 분석",
+            "번역하기",
+            "문법 검토하기"            
         ], index=3
     )   
     st.info(mode_descriptions[mode][0])
