@@ -192,7 +192,7 @@ with st.sidebar:
             "image generation", "aws diagram", 
             "repl coder",
             "tavily", "perplexity", "ArXiv", "wikipedia", 
-            "text editor", "github", "drawio", "aws-drawio"
+            "text editor", "github", "drawio", "aws-drawio",
             "context7", "puppeteer", "playwright", "firecrawl", "airbnb", 
             "pubmed", "chembl", "clinicaltrial", "arxiv-manual", 
             "AWS Sentral (Employee)", "AWS Outlook (Employee)",

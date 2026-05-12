@@ -55,6 +55,16 @@ fi
 
 echo "Docker image built successfully"
 
+# Pre-pull GitHub MCP server image (used by application/mcp_config.py when mcp_type is github)
+echo ""
+echo "Pulling GitHub MCP server image (Agent MCP github)..."
+if sudo docker pull ghcr.io/github/github-mcp-server:latest; then
+    echo "GitHub MCP server image ready"
+else
+    echo "WARNING: ghcr.io/github/github-mcp-server pull failed. Start Docker and run:"
+    echo "  sudo docker pull ghcr.io/github/github-mcp-server:latest"
+fi
+
 # Step 3: Run Docker container
 echo ""
 echo "Starting Docker container..."
