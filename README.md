@@ -50,7 +50,110 @@ resources = await session.list_resources()
 ```python
 prompts = await session.list_prompts()
 ```
-  
+
+### Operation Architecture
+
+Streamlit UI(`app.py`)에서 대화 형태·Agent 타입·MCP 서버를 선택하면 `chat.py`가 모드별로 라우팅합니다. Agent 모드는 LangGraph, Strands, Claude Agent SDK 세 가지 구현을 지원하며, MCP 서버 설정은 `mcp_config.py`에서 stdio / streamable HTTP transport로 로드됩니다.
+
+```mermaid
+flowchart TB
+  subgraph UI["Streamlit (app.py)"]
+    MODE["대화 형태 선택"]
+    AGT["Agent 타입: langgraph / strands / claude"]
+    MCPUI["MCP 서버 체크박스 선택"]
+  end
+
+  subgraph Router["chat.py"]
+    GC[general_conversation]
+    RAG[run_rag_with_knowledge_base]
+    LG[run_langgraph_agent]
+    ST[run_strands_agent]
+    CA[run_claude_agent]
+    IMG[summarize_image]
+    TR[translate_text]
+    GR[check_grammer]
+  end
+
+  subgraph LLM["Amazon Bedrock"]
+    BR[Bedrock Runtime]
+    KB[Knowledge Base retrieve]
+  end
+
+  subgraph LangGraphStack["LangGraph Agent (langgraph_agent.py)"]
+    LGA[create_agent]
+    MSC[MultiServerMCPClient]
+    LBT["Built-in: execute_code, bash, read_file, write_file, upload_file_to_s3"]
+    LGW[LangGraph StateGraph]
+  end
+
+  subgraph StrandsStack["Strands Agent (strands_agent.py)"]
+    SIA[initiate_agent]
+    SA[Agent / stream_async]
+    BM[BedrockModel]
+    SBT["Built-in: execute_code, read_file, write_file, upload_file_to_s3"]
+    STT["strands_tools: calculator, current_time, use_aws"]
+    MCM[MCPClientManager]
+  end
+
+  subgraph ClaudeStack["Claude Agent (claude_agent.py)"]
+    CSDK[ClaudeSDKClient / query]
+  end
+
+  subgraph MCPServers["MCP Servers (mcp_config.py)"]
+    S1["knowledge base · tavily · web_fetch · perplexity"]
+    S2["aws document · use-aws · aws-api · aws cost"]
+    S3["korea_weather · trade_info · notion · slack · github · ..."]
+  end
+
+  subgraph Storage["Artifacts / S3"]
+    ART[artifacts/]
+    S3[(S3)]
+  end
+
+  MODE --> Router
+  AGT --> LG
+  AGT --> ST
+  AGT --> CA
+  MCPUI --> MCPServers
+
+  GC --> BR
+  RAG --> KB --> BR
+  IMG --> BR
+  TR --> BR
+  GR --> BR
+
+  LG --> LGA --> LGW --> BR
+  LGA --> MSC --> MCPServers
+  LGA --> LBT
+
+  ST --> SIA --> SA --> BM --> BR
+  SIA --> SBT
+  SIA --> STT
+  SIA --> MCM --> MCPServers
+
+  CA --> CSDK --> BR
+  CSDK --> MCPServers
+
+  LBT --> ART
+  SBT --> ART
+  LBT --> S3
+  SBT --> S3
+```
+
+| 모드 | 모듈 | 설명 |
+|------|------|------|
+| 일상적인 대화 | `chat.general_conversation` | 대화 이력 + Bedrock Runtime `invoke_model_with_response_stream` 스트리밍 |
+| RAG | `chat.run_rag_with_knowledge_base` | Bedrock Knowledge Base 검색(`retrieve`) 후 Bedrock Runtime으로 답변 생성 |
+| **Agent** / **Agent (Chat)** — langgraph | `chat.run_langgraph_agent` | LangGraph StateGraph + LangChain `MultiServerMCPClient` + built-in tools |
+| **Agent** / **Agent (Chat)** — strands | `chat.run_strands_agent` | Strands SDK + `strands_tools` + `MCPClientManager` + built-in tools |
+| **Agent** / **Agent (Chat)** — claude | `claude_agent.run_claude_agent` | Claude Agent SDK(`ClaudeSDKClient`) + MCP (Bedrock 백엔드) |
+| 이미지 분석 | `chat.summarize_image` / `chat.get_image_summarization` | ChatBedrock 멀티모달 (이미지 + 텍스트) 분석 |
+| 번역하기 | `chat.translate_text` | 한↔영 번역 |
+| 문법 검토하기 | `chat.check_grammer` | 한국어·영어 문법 검토 및 수정 제안 |
+
+Agent (Chat) 모드는 Agent 모드와 동일한 Agent 구현을 사용하되, `history_mode=Enable`로 대화 이력을 유지합니다. MCP 서버는 사이드바에서 다중 선택 가능하며, `mcp_config.load_selected_config()`로 stdio 또는 streamable HTTP 설정이 병합됩니다.
+
+
 ### LangChain MCP Adapter
 
 [LangChain MCP Adapter](https://github.com/langchain-ai/langchain-mcp-adapters)는 MCP를 LangGraph agent와 함께 사용할 수 있게 해주는 경량의 랩퍼(lightweight wrapper)로서 MIT 기반의 오픈소스입니다. MCP Adapter의 주된 역할은 MCP server를 위한 tool들을 정의하고, MCP client에서 tools의 정보를 조회하고 LangGraph의 tool node로 정의하여 활용할 수 있도록 도와줍니다. 
