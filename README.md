@@ -58,51 +58,30 @@ Streamlit UI(`app.py`)에서 대화 형태·Agent 타입·MCP 서버를 선택�
 ```mermaid
 flowchart TB
   subgraph UI["Streamlit (app.py)"]
-    MODE["대화 형태 선택"]
-    AGT["Agent 타입: langgraph / strands / claude"]
-    MCPUI["MCP 서버 체크박스 선택"]
+    MODE["대화 형태 / Agent 타입"]
+    MCPUI["MCP 서버 선택"]
   end
 
   subgraph Router["chat.py"]
-    GC[general_conversation]
     RAG[run_rag_with_knowledge_base]
     LG[run_langgraph_agent]
     ST[run_strands_agent]
     CA[run_claude_agent]
-    IMG[summarize_image]
-    TR[translate_text]
-    GR[check_grammer]
   end
 
   subgraph LLM["Amazon Bedrock"]
     BR[Bedrock Runtime]
-    KB[Knowledge Base retrieve]
+    KB[Knowledge Base]
   end
 
-  subgraph LangGraphStack["LangGraph Agent (langgraph_agent.py)"]
-    LGA[create_agent]
-    MSC[MultiServerMCPClient]
-    LBT["Built-in: execute_code, bash, read_file, write_file, upload_file_to_s3"]
-    LGW[LangGraph StateGraph]
-  end
-
-  subgraph StrandsStack["Strands Agent (strands_agent.py)"]
-    SIA[initiate_agent]
-    SA[Agent / stream_async]
-    BM[BedrockModel]
-    SBT["Built-in: execute_code, read_file, write_file, upload_file_to_s3"]
-    STT["strands_tools: calculator, current_time, use_aws"]
-    MCM[MCPClientManager]
-  end
-
-  subgraph ClaudeStack["Claude Agent (claude_agent.py)"]
-    CSDK[ClaudeSDKClient / query]
+  subgraph Agents["Agent 구현"]
+    LGA["LangGraph\nMultiServerMCPClient + built-in tools"]
+    STA["Strands\nMCPClientManager + strands_tools"]
+    CLA["Claude SDK\nClaudeSDKClient + MCP"]
   end
 
   subgraph MCPServers["MCP Servers (mcp_config.py)"]
-    S1["knowledge base · tavily · web_fetch · perplexity"]
-    S2["aws document · use-aws · aws-api · aws cost"]
-    S3["korea_weather · trade_info · notion · slack · github · ..."]
+    MCP["knowledge base · tavily · aws document · korea_weather · ..."]
   end
 
   subgraph Storage["Artifacts / S3"]
@@ -110,34 +89,26 @@ flowchart TB
     S3[(S3)]
   end
 
-  MODE --> Router
-  AGT --> LG
-  AGT --> ST
-  AGT --> CA
+  MODE --> RAG
+  MODE --> LG
+  MODE --> ST
+  MODE --> CA
   MCPUI --> MCPServers
 
-  GC --> BR
   RAG --> KB --> BR
-  IMG --> BR
-  TR --> BR
-  GR --> BR
 
-  LG --> LGA --> LGW --> BR
-  LGA --> MSC --> MCPServers
-  LGA --> LBT
+  LG --> LGA --> BR
+  ST --> STA --> BR
+  CA --> CLA --> BR
 
-  ST --> SIA --> SA --> BM --> BR
-  SIA --> SBT
-  SIA --> STT
-  SIA --> MCM --> MCPServers
+  LGA --> MCPServers
+  STA --> MCPServers
+  CLA --> MCPServers
 
-  CA --> CSDK --> BR
-  CSDK --> MCPServers
-
-  LBT --> ART
-  SBT --> ART
-  LBT --> S3
-  SBT --> S3
+  LGA --> ART
+  STA --> ART
+  LGA --> S3
+  STA --> S3
 ```
 
 | 모드 | 모듈 | 설명 |
