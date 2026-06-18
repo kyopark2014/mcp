@@ -6,6 +6,8 @@ numpy
 boto3
 langchain_aws
 langchain
+langchain-openai
+openai>=2.41.0
 langchain_community
 langgraph
 langchain_experimental

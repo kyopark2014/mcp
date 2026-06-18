@@ -301,6 +301,8 @@ with st.sidebar:
             "Claude 4.5 Haiku",
             "Claude 4.5 Sonnet",
             "Claude 4.5 Opus",  
+            "OpenAI GPT 5.4",
+            "OpenAI GPT 5.5",
             "OpenAI OSS 120B",
             "OpenAI OSS 20B",
             "Nova 2 Lite",

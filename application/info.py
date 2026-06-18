@@ -181,6 +181,30 @@ claude_4_5_sonnet_models = [   # Sonnet 4.5
     }
 ]
 
+openai_gpt_54_models = [
+    {
+        "bedrock_region": "us-west-2", # Oregon
+        "model_type": "openai",
+        "model_id": "openai.gpt-5.4",
+        "mantle_api": "responses",
+    },
+    {
+        "bedrock_region": "us-east-2", # Ohio
+        "model_type": "openai",
+        "model_id": "openai.gpt-5.4",
+        "mantle_api": "responses",
+    },
+]
+
+openai_gpt_55_models = [
+    {
+        "bedrock_region": "us-east-2", # Ohio
+        "model_type": "openai",
+        "model_id": "openai.gpt-5.5",
+        "mantle_api": "responses",
+    },
+]
+
 openai_oss_120b_models = [
     {
         "bedrock_region": "us-west-2", # Oregon
@@ -222,6 +246,10 @@ def get_model_info(model_name):
         models = claude_4_7_opus_models
     elif model_name == "Nova Premier":
         models = nova_premier
+    elif model_name == "OpenAI GPT 5.4":
+        models = openai_gpt_54_models
+    elif model_name == "OpenAI GPT 5.5":
+        models = openai_gpt_55_models
     elif model_name == "OpenAI OSS 120B":
         models = openai_oss_120b_models
     elif model_name == "OpenAI OSS 20B":
