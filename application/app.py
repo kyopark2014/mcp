@@ -186,7 +186,7 @@ with st.sidebar:
             "knowledge base",
             "notion", "slack", "text_extraction", "pdf-generator", "web_fetch", "outlook", "trade_info", "gog",
             "weather", "korea_weather", "books", "obsidian", "browser-use",        
-            "use-aws", 
+            "use-aws", "websearch",
             "aws-knowledge", "aws-api", "aws document", "aws cost", "aws cli", "aws ccapi",
             "aws cloudwatch", "aws storage", 
             "image generation", "aws diagram", 
@@ -200,7 +200,7 @@ with st.sidebar:
             "사용자 설정"
         ]
         mcp_selections = {}
-        default_selections = ["korea_weather", "web_fetch"]
+        default_selections = ["korea_weather", "web_fetch", "websearch"]
                 
         with st.expander("MCP 옵션 선택", expanded=True):            
             # Create two columns
