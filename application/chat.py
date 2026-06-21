@@ -2291,7 +2291,8 @@ async def create_agent(mcp_servers: list, history_mode: str = "Disable"):
                 "thread_id": user_id,
                 "tools": tools,
                 "system_prompt": None
-            }
+            },
+            "max_turns": langgraph_agent.MAX_CONTEXT_TURNS,
         }
     else:
         app = langgraph_agent.buildChatAgent(tools)
@@ -2301,7 +2302,8 @@ async def create_agent(mcp_servers: list, history_mode: str = "Disable"):
                 "thread_id": user_id,
                 "tools": tools,
                 "system_prompt": None
-            }
+            },
+            "max_turns": langgraph_agent.MAX_CONTEXT_TURNS,
         }        
     
     return app, config

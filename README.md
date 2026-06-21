@@ -543,7 +543,125 @@ brew install graphviz
 aws bedrock list-foundation-models --region=us-west-2 --by-provider anthropic --query "modelSummaries[*].modelId"
 ```
 
+### Message Trim
 
+LangGraph 에이전트([application/langgraph_agent.py](./application/langgraph_agent.py)의 `call_model`)는 LLM 호출 직전에 **HumanMessage 기준 최근 N턴**만 남깁니다. LangGraph state의 `messages`는 checkpointer에 그대로 두고, **모델에 넘기는 메시지만** trim합니다. `history_mode=Enable`/`Disable` 모두 동일하게 적용됩니다.
+
+**기본값:** `MAX_CONTEXT_TURNS = 5` (일반 채팅의 `SimpleMemory(k=5)`와 동일한 “최근 5턴” 의도)
+
+**설정 변경:**
+
+- [application/langgraph_agent.py](./application/langgraph_agent.py)의 `MAX_CONTEXT_TURNS` 상수 수정
+- 또는 [application/chat.py](./application/chat.py)의 `create_agent()`에서 config의 `max_turns` / `configurable.max_turns` 지정
+- `max_turns=0`이면 trim 비활성화
+
+상수와 trim 함수는 `langgraph_agent.py`에 정의합니다.
+
+```python
+# application/langgraph_agent.py
+MAX_CONTEXT_TURNS = 5
+
+
+def trim_messages_by_human_turns(messages: list, max_turns: int) -> list:
+    """Keep messages from the last N HumanMessage turns (inclusive)."""
+    if max_turns <= 0 or not messages:
+        return messages
+
+    human_indices = [i for i, msg in enumerate(messages) if isinstance(msg, HumanMessage)]
+    if len(human_indices) <= max_turns:
+        return messages
+
+    return messages[human_indices[-max_turns]:]
+```
+
+`call_model`에서는 `ToolMessage` content 정규화 후 trim을 적용합니다.
+
+```python
+# application/langgraph_agent.py — call_model() 내부
+        max_turns = (
+            config.get("configurable", {}).get("max_turns")
+            or config.get("max_turns")
+            or MAX_CONTEXT_TURNS
+        )
+        trimmed = trim_messages_by_human_turns(messages, max_turns)
+        if len(trimmed) < len(messages):
+            logger.info(
+                f"trimmed messages from {len(messages)} to {len(trimmed)} "
+                f"(max_turns={max_turns})"
+            )
+            messages = trimmed
+
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", system),
+                MessagesPlaceholder(variable_name="messages"),
+            ]
+        )
+        chain = prompt | model
+        async for chunk in chain.astream({"messages": messages}):
+            ...
+```
+
+에이전트 config는 `chat.py`의 `create_agent()`에서 생성하며, `history_mode`와 관계없이 `max_turns`를 전달합니다.
+
+```python
+# application/chat.py — create_agent()
+    if history_mode == "Enable":
+        app = langgraph_agent.buildChatAgentWithHistory(tools)
+        config = {
+            "recursion_limit": 50,
+            "configurable": {
+                "thread_id": user_id,
+                "tools": tools,
+                "system_prompt": None,
+            },
+            "max_turns": langgraph_agent.MAX_CONTEXT_TURNS,
+        }
+    else:
+        app = langgraph_agent.buildChatAgent(tools)
+        config = {
+            "recursion_limit": 50,
+            "configurable": {
+                "thread_id": user_id,
+                "tools": tools,
+                "system_prompt": None,
+            },
+            "max_turns": langgraph_agent.MAX_CONTEXT_TURNS,
+        }
+```
+
+**`max_turns=5`의 의미**
+
+- **사용자 HumanMessage 5개**와, 각 턴에 이어진 **모든 후속 메시지**를 유지
+- 1턴 = `HumanMessage` 1개 + 그 뒤의 `AIMessage`, `ToolMessage`, 도구 feedback loop 전체
+- 도구를 여러 번 호출해도 **같은 사용자 질문이면 1턴**으로 카운트
+
+**예 (도구 사용 포함)**
+
+```
+Human(Q1) → AI(tool_calls) → ToolMessage → AI(A1)
+Human(Q2) → AI(A2)
+Human(Q3) → AI(tool_calls) → ToolMessage → AI(A3)
+```
+
+`max_turns=2`이면 **Q2부터** 유지:
+
+```
+Human(Q2) → AI(A2) → Human(Q3) → AI(tool_calls) → ToolMessage → AI(A3)
+```
+
+**메시지 개수 trim과의 차이**
+
+| 방식 | `N=5`일 때 |
+|------|------------|
+| 이전 (메시지 개수) | 메시지 객체 5개만 유지 → 도구 루프 때문에 사용자 턴 수가 불규칙 |
+| 현재 (HumanMessage 턴) | 사용자 질문 5개 + 각 턴의 AI/Tool 응답 전체 유지 |
+
+**Checkpointer와의 관계**
+
+- `history_mode=Enable`일 때 `MemorySaver` checkpointer에는 **전체 대화 이력**이 저장됩니다.
+- trim은 LLM 컨텍스트 윈도우 관리용이며, 저장된 history를 삭제하지 않습니다.
+- CloudWatch(`/ecs/...`) 또는 애플리케이션 로그에서 `trimmed messages from X to Y (max_turns=5)`로 trim 여부를 확인할 수 있습니다.
 
 ## 배포하기
 
