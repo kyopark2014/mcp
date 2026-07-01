@@ -29,7 +29,7 @@ logger = logging.getLogger("text-extraction-mcp")
 
 config = utils.load_config()
 bedrock_region = config.get("region", "us-west-2")
-model_name = "Claude 4.6 Sonnet"
+model_name = "Claude 5.0 Sonnet"
 models = info.get_model_info(model_name)
 profile = models[0]
 model_id = profile["model_id"]

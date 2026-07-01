@@ -11,11 +11,56 @@ from botocore.awsrequest import AWSRequest
 logger = logging.getLogger(__name__)
 
 OPTED_IN_REGIONS: set[str] = set()
+FABLE_RETENTION_ENSURED = False
 BEDROCK_DATA_RETENTION_URL = "https://bedrock.{region}.amazonaws.com/data-retention"
 MANTLE_DATA_RETENTION_URL = "https://bedrock-mantle.{region}.api.aws/v1/data_retention"
 OPT_IN_MODE = "provider_data_share"
 DEFAULT_REGION = "us-east-1"
 FABLE_BEDROCK_REGIONS = ("us-west-2", "us-east-1", "us-east-2")
+CONFIG_KEY = "fable_data_retention_opt_in"
+
+
+def _get_account_id() -> str:
+    import utils
+
+    account_id = utils.config.get("accountId")
+    if account_id:
+        return str(account_id)
+
+    sts = boto3.client("sts")
+    account_id = sts.get_caller_identity()["Account"]
+    utils.config["accountId"] = account_id
+    return str(account_id)
+
+
+def _is_fable_opt_in_recorded(account_id: str) -> bool:
+    import utils
+
+    recorded = utils.config.get(CONFIG_KEY)
+    if isinstance(recorded, dict):
+        return (
+            recorded.get("completed") is True
+            and str(recorded.get("account_id", "")) == account_id
+        )
+    return recorded is True
+
+
+def _record_fable_opt_in(account_id: str) -> None:
+    import utils
+
+    utils.config[CONFIG_KEY] = {
+        "completed": True,
+        "account_id": account_id,
+    }
+    try:
+        with open(utils.config_path, "w", encoding="utf-8") as config_file:
+            json.dump(utils.config, config_file, indent=2, ensure_ascii=False)
+        logger.info(
+            "Recorded Fable data retention opt-in in config.json for account %s",
+            account_id,
+        )
+    except Exception as error:
+        logger.warning("Failed to record Fable opt-in in config.json: %s", error)
 
 
 def _get_bearer_token(region: str) -> str:
@@ -81,7 +126,7 @@ def get_data_retention_mode(region: str = DEFAULT_REGION) -> tuple[bool, str]:
 
 def opt_in_provider_data_share(region: str = DEFAULT_REGION) -> tuple[bool, str]:
     if region in OPTED_IN_REGIONS:
-        return True, f"already opted in for {region}"
+        return True, ""
 
     try:
         status, body = _request_bedrock_control_plane(
@@ -117,7 +162,20 @@ def ensure_fable_data_retention(
     model_id: str,
     bedrock_region: str = DEFAULT_REGION,
 ) -> bool:
+    global FABLE_RETENTION_ENSURED
+
     if "fable" not in model_id.lower():
+        return True
+
+    if FABLE_RETENTION_ENSURED:
+        return True
+
+    account_id = _get_account_id()
+    if _is_fable_opt_in_recorded(account_id):
+        FABLE_RETENTION_ENSURED = True
+        OPTED_IN_REGIONS.update(FABLE_BEDROCK_REGIONS)
+        if bedrock_region:
+            OPTED_IN_REGIONS.add(bedrock_region)
         return True
 
     regions = []
@@ -129,9 +187,14 @@ def ensure_fable_data_retention(
     for region in regions:
         success, message = opt_in_provider_data_share(region=region)
         if success:
-            logger.info("Bedrock data retention opt-in: %s", message)
+            if message:
+                logger.info("Bedrock data retention opt-in: %s", message)
         else:
             logger.warning("Bedrock data retention opt-in failed: %s", message)
             all_success = False
+
+    if all_success:
+        FABLE_RETENTION_ENSURED = True
+        _record_fable_opt_in(account_id)
 
     return all_success
