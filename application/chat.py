@@ -400,7 +400,6 @@ def _build_openai_chat(profile: dict, max_output_tokens: int):
         client=boto3_bedrock,
         model_kwargs={
             "max_tokens": max_output_tokens,
-            "temperature": 0.1,
         },
         region_name=bedrock_region,
     )
@@ -2434,10 +2433,64 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, notification_que
                                     tool_input_list[toolUseId] = ""                                
                                 tool_input_list[toolUseId] += partial_json
                                 input = tool_input_list[toolUseId]
+                        elif content_item.get('type') == 'function_call':
+                            # OpenAI Responses API: function_call blocks instead of tool_use
+                            call_id = content_item.get('call_id') or content_item.get('id', '')
+                            name = content_item.get('name', '')
+                            if call_id and name:
+                                toolUseId = call_id
+                                tool_name = name
+                                logger.info(f"tool_name: {tool_name}, toolUseId: {toolUseId}")
+                                if queue:
+                                    queue.register_tool(toolUseId, tool_name)
+
+                            if 'arguments' in content_item and toolUseId:
+                                arguments = content_item.get('arguments', '')
+                                if not isinstance(arguments, str):
+                                    arguments = str(arguments)
+                                tool_input_list[toolUseId] = arguments
+                                input = tool_input_list[toolUseId]
+                                if queue:
+                                    queue.tool_update(toolUseId, f"Tool: {tool_name}, Input: {input}")
 
                                 if debug_mode == "Enable" and queue:
                                     queue.tool_update(toolUseId, f"Tool: {tool_name}, Input: {input}")
                         
+
+            # OpenAI streaming may deliver tool calls via tool_call_chunks
+            tool_call_chunks = getattr(message, "tool_call_chunks", None) or []
+            for tc in tool_call_chunks:
+                tid = tc.get("id") or toolUseId
+                tname = tc.get("name") or tool_name
+                if tid and tname:
+                    toolUseId = tid
+                    tool_name = tname
+                    logger.info(f"tool_name: {tool_name}, toolUseId: {toolUseId}")
+                    if queue:
+                        queue.register_tool(toolUseId, tool_name)
+                args_delta = tc.get("args")
+                if args_delta is not None and toolUseId:
+                    if toolUseId not in tool_input_list:
+                        tool_input_list[toolUseId] = ""
+                    if isinstance(args_delta, str):
+                        tool_input_list[toolUseId] += args_delta
+                    elif args_delta:
+                        tool_input_list[toolUseId] = str(args_delta)
+                    if queue:
+                        queue.tool_update(
+                            toolUseId,
+                            f"Tool: {tool_name}, Input: {tool_input_list[toolUseId]}",
+                        )
+
+            # Fallback: completed tool_calls on a chunk (no tool_use/function_call content)
+            if not tool_call_chunks and getattr(message, "tool_calls", None):
+                for tc in message.tool_calls:
+                    tid = tc.get("id", "")
+                    tname = tc.get("name", "")
+                    targs = tc.get("args", {})
+                    if tid and tname and queue:
+                        queue.register_tool(tid, tname)
+                        queue.tool_update(tid, f"Tool: {tname}, Input: {targs}")
         elif isinstance(stream[0], ToolMessage):
             message = stream[0]
             logger.info(f"ToolMessage: {message.name}, {message.content}")
@@ -2557,6 +2610,25 @@ async def run_langgraph_agent_with_plan(query, mcp_servers, notification_queue):
                                 logger.info(f"tool_name: {tool_name}, toolUseId: {toolUseId}")
                                 if queue:
                                     queue.register_tool(toolUseId, tool_name)
+                        elif content_item.get('type') == 'function_call':
+                            # OpenAI Responses API: function_call blocks instead of tool_use
+                            call_id = content_item.get('call_id') or content_item.get('id', '')
+                            name = content_item.get('name', '')
+                            if call_id and name:
+                                toolUseId = call_id
+                                tool_name = name
+                                logger.info(f"tool_name: {tool_name}, toolUseId: {toolUseId}")
+                                if queue:
+                                    queue.register_tool(toolUseId, tool_name)
+
+                            if 'arguments' in content_item and toolUseId:
+                                arguments = content_item.get('arguments', '')
+                                if not isinstance(arguments, str):
+                                    arguments = str(arguments)
+                                tool_input_list[toolUseId] = arguments
+                                input = tool_input_list[toolUseId]
+                                if queue:
+                                    queue.tool_update(toolUseId, f"Tool: {tool_name}, Input: {input}")
 
                             if 'partial_json' in content_item:
                                 partial_json = content_item.get('partial_json', '')
@@ -2572,6 +2644,41 @@ async def run_langgraph_agent_with_plan(query, mcp_servers, notification_queue):
                                 if queue:
                                     queue.tool_update(toolUseId, f"Tool: {tool_name}, Input: {input}")
                         
+
+            # OpenAI streaming may deliver tool calls via tool_call_chunks
+            tool_call_chunks = getattr(message, "tool_call_chunks", None) or []
+            for tc in tool_call_chunks:
+                tid = tc.get("id") or toolUseId
+                tname = tc.get("name") or tool_name
+                if tid and tname:
+                    toolUseId = tid
+                    tool_name = tname
+                    logger.info(f"tool_name: {tool_name}, toolUseId: {toolUseId}")
+                    if queue:
+                        queue.register_tool(toolUseId, tool_name)
+                args_delta = tc.get("args")
+                if args_delta is not None and toolUseId:
+                    if toolUseId not in tool_input_list:
+                        tool_input_list[toolUseId] = ""
+                    if isinstance(args_delta, str):
+                        tool_input_list[toolUseId] += args_delta
+                    elif args_delta:
+                        tool_input_list[toolUseId] = str(args_delta)
+                    if queue:
+                        queue.tool_update(
+                            toolUseId,
+                            f"Tool: {tool_name}, Input: {tool_input_list[toolUseId]}",
+                        )
+
+            # Fallback: completed tool_calls on a chunk (no tool_use/function_call content)
+            if not tool_call_chunks and getattr(message, "tool_calls", None):
+                for tc in message.tool_calls:
+                    tid = tc.get("id", "")
+                    tname = tc.get("name", "")
+                    targs = tc.get("args", {})
+                    if tid and tname and queue:
+                        queue.register_tool(tid, tname)
+                        queue.tool_update(tid, f"Tool: {tname}, Input: {targs}")
         elif isinstance(stream[0], ToolMessage):
             message = stream[0]
             logger.info(f"ToolMessage: {message.name}, {message.content}")
