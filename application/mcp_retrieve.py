@@ -140,13 +140,26 @@ def retrieve(query):
                 url = location["webLocation"]["url"] if location["webLocation"]["url"] is not None else ""
                 name = "WEB"
 
+        page = None
+        raw_page = (result.get("metadata") or {}).get("x-amz-bedrock-kb-document-page-number")
+        if raw_page is not None:
+            try:
+                # Bedrock KB uses 0-based page numbers; convert to 1-based for display
+                page = int(raw_page) + 1
+            except (TypeError, ValueError):
+                page = raw_page
+
+        reference = {
+            "url": url,
+            "title": name,
+            "from": "RAG",
+        }
+        if page is not None:
+            reference["page"] = page
+
         json_docs.append({
-            "contents": text,              
-            "reference": {
-                "url": url,                   
-                "title": name,
-                "from": "RAG"
-            }
+            "contents": text,
+            "reference": reference,
         })
     logger.info(f"json_docs: {json_docs}")
 
