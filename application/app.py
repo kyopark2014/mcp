@@ -296,6 +296,7 @@ with st.sidebar:
         '🖊️ 사용 모델을 선택하세요',
         (
             "Claude 5.0 Sonnet",
+            "Claude 5.0 Opus",
             "Claude 4.6 Sonnet",
             "Claude Fable 5",
             "Claude 4.7 Opus",                        
