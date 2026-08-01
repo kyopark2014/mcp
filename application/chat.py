@@ -310,8 +310,14 @@ def uses_adaptive_thinking(model_id: str | None = None) -> bool:
         if not models:
             return False
         model_id = models[selected_chat].get("model_id", "")
-    model_id = model_id.lower()
-    return "fable" in model_id or "claude-sonnet-5" in model_id
+    mid = model_id.lower()
+    return (
+        "fable" in mid
+        or "claude-sonnet-5" in mid
+        or "claude-5-sonnet" in mid
+        or "claude-opus-5" in mid
+        or "claude-5-opus" in mid
+    )
 
 
 def sanitize_messages_for_bedrock(messages: list) -> list:
