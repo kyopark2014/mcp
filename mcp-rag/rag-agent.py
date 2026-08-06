@@ -124,7 +124,7 @@ def show_extended_thinking(st, result):
 
 debug_mode = "Enable"
 def create_agent(tools):
-    tool_node = ToolNode(tools)
+    tool_node = ToolNode(tools, handle_tool_errors=True)
     tool_classes = list(tool_node.tools_by_name.values())
     logger.info(f"tool_classes: {tool_classes}")
 
