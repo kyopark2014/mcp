@@ -2,7 +2,8 @@ import asyncio
 import json
 
 from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client
+from mcp.shared._httpx_utils import create_mcp_http_client
 
 async def test_mcp_tools():
     """Test MCP server tools"""
@@ -14,31 +15,32 @@ async def test_mcp_tools():
     print(f"Connecting to: {mcp_url}")
     
     try:
-        async with streamablehttp_client(mcp_url, headers, timeout=120, terminate_on_close=False) as (
-            read_stream, write_stream, _,):
+        _http = create_mcp_http_client(headers=headers)
+        async with _http:
+            async with streamable_http_client(mcp_url, http_client=_http, terminate_on_close=False) as (read_stream, write_stream):
             
-            async with ClientSession(read_stream, write_stream) as session:
-                await session.initialize()
+                async with ClientSession(read_stream, write_stream) as session:
+                    await session.initialize()
                 
-                # Get list of available tools
-                tool_result = await session.list_tools()
-                print(f"\nAvailable tools: {len(tool_result.tools)}")
-                for tool in tool_result.tools:
-                    print(f"  - {tool.name}: {tool.description[:100]}...")
+                    # Get list of available tools
+                    tool_result = await session.list_tools()
+                    print(f"\nAvailable tools: {len(tool_result.tools)}")
+                    for tool in tool_result.tools:
+                        print(f"  - {tool.name}: {tool.description[:100]}...")
                 
-                # Test add_numbers function
-                print("\n=== Testing add_numbers function ===")
-                params = {
-                    "keyword": "보일러 에러 코드"
-                }
+                    # Test add_numbers function
+                    print("\n=== Testing add_numbers function ===")
+                    params = {
+                        "keyword": "보일러 에러 코드"
+                    }
                 
-                result = await session.call_tool("retrieve", params)
-                print(f"retrieve result: {result}")
+                    result = await session.call_tool("retrieve", params)
+                    print(f"retrieve result: {result}")
                 
-                if hasattr(result, 'content') and result.content:
-                    for content in result.content:
-                        if hasattr(content, 'text'):
-                            print(f"Content: {content.text}")
+                    if hasattr(result, 'content') and result.content:
+                        for content in result.content:
+                            if hasattr(content, 'text'):
+                                print(f"Content: {content.text}")
                                 
     except Exception as e:
         print(f"Error testing MCP server: {e}")

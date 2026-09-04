@@ -5,7 +5,8 @@ import boto3
 import requests
 
 from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client
+from mcp.shared._httpx_utils import create_mcp_http_client
 
 import logging
 import sys
@@ -237,83 +238,84 @@ async def main():
         print(f"Timeout: 120 seconds")
         
         # Now try the MCP connection with better error handling
-        print("1. Attempting streamablehttp_client connection...")
-        async with streamablehttp_client(mcp_url, headers, timeout=120, terminate_on_close=False) as (
-            read_stream, write_stream, _):
+        print("1. Attempting streamable_http_client connection...")
+        _http = create_mcp_http_client(headers=headers)
+        async with _http:
+            async with streamable_http_client(mcp_url, http_client=_http, terminate_on_close=False) as (read_stream, write_stream):
             
-            print("2. streamablehttp_client connection successful!")
-            print("3. Creating ClientSession...")
+                print("2. streamable_http_client connection successful!")
+                print("3. Creating ClientSession...")
             
-            async with ClientSession(read_stream, write_stream) as session:
-                print("4. ClientSession created successfully!")
-                print("5. Calling session.initialize()...")
+                async with ClientSession(read_stream, write_stream) as session:
+                    print("4. ClientSession created successfully!")
+                    print("5. Calling session.initialize()...")
                 
-                # Add timeout for initialize
-                try:
-                    await asyncio.wait_for(session.initialize(), timeout=60)
-                    print("6. session.initialize() successful!")
-                except asyncio.TimeoutError:
-                    print("session.initialize() timeout (60s)")
-                    return
-                except Exception as init_error:
-                    print(f"session.initialize() failed: {init_error}")
-                    print(f"Error type: {type(init_error)}")
-                    return
+                    # Add timeout for initialize
+                    try:
+                        await asyncio.wait_for(session.initialize(), timeout=60)
+                        print("6. session.initialize() successful!")
+                    except asyncio.TimeoutError:
+                        print("session.initialize() timeout (60s)")
+                        return
+                    except Exception as init_error:
+                        print(f"session.initialize() failed: {init_error}")
+                        print(f"Error type: {type(init_error)}")
+                        return
                 
-                print("7. Calling session.list_tools()...")
+                    print("7. Calling session.list_tools()...")
                 
-                # Add timeout for list_tools
-                try:
-                    tool_result = await asyncio.wait_for(session.list_tools(), timeout=60)
-                    print(f"8. session.list_tools() successful!")
-                    print(f"\nAvailable tools: {len(tool_result.tools)}")
-                    for tool in tool_result.tools:
-                        print(f"  - {tool.name}: {tool.description[:100]}...")
-                except asyncio.TimeoutError:
-                    print("session.list_tools() timeout (60s)")
-                    return
-                except Exception as tools_error:
-                    print(f"session.list_tools() failed: {tools_error}")
-                    print(f"Error type: {type(tools_error)}")
-                    return
+                    # Add timeout for list_tools
+                    try:
+                        tool_result = await asyncio.wait_for(session.list_tools(), timeout=60)
+                        print(f"8. session.list_tools() successful!")
+                        print(f"\nAvailable tools: {len(tool_result.tools)}")
+                        for tool in tool_result.tools:
+                            print(f"  - {tool.name}: {tool.description[:100]}...")
+                    except asyncio.TimeoutError:
+                        print("session.list_tools() timeout (60s)")
+                        return
+                    except Exception as tools_error:
+                        print(f"session.list_tools() failed: {tools_error}")
+                        print(f"Error type: {type(tools_error)}")
+                        return
                                 
-                # Test retrieve function
-                print("\n=== Testing retrieve function ===")
+                    # Test retrieve function
+                    print("\n=== Testing retrieve function ===")
 
-                # 내 S3 현황은?
-                params = {
-                    "service_name": "s3",
-                    "operation_name": "list_buckets",
-                    "parameters": {},
-                    "region": "us-west-2",
-                    "label": "S3 버킷 목록 조회"
-                }
+                    # 내 S3 현황은?
+                    params = {
+                        "service_name": "s3",
+                        "operation_name": "list_buckets",
+                        "parameters": {},
+                        "region": "us-west-2",
+                        "label": "S3 버킷 목록 조회"
+                    }
                 
-                try:
-                    targret_name = config['target_name']
+                    try:
+                        targret_name = config['target_name']
 
-                    script_dir = os.path.dirname(os.path.abspath(__file__))
-                    tool_spec = json.load(open(os.path.join(script_dir, "tool_spec.json")))
-                    name = tool_spec['name']
+                        script_dir = os.path.dirname(os.path.abspath(__file__))
+                        tool_spec = json.load(open(os.path.join(script_dir, "tool_spec.json")))
+                        name = tool_spec['name']
 
-                    tool_name = f"{targret_name}___{name.replace('-', '_')}"
-                    print(f"tool_name: {tool_name}")
+                        tool_name = f"{targret_name}___{name.replace('-', '_')}"
+                        print(f"tool_name: {tool_name}")
 
-                    result = await asyncio.wait_for(session.call_tool(tool_name, params), timeout=30)
-                    print(f"retrieve result: {result}")
+                        result = await asyncio.wait_for(session.call_tool(tool_name, params), timeout=30)
+                        print(f"retrieve result: {result}")
                     
-                    if hasattr(result, 'content') and result.content:
-                        for content in result.content:
-                            if hasattr(content, 'text'):
-                                print(f"Content: {content.text}")
-                    else:
-                        print("No content in result")
-                except asyncio.TimeoutError:
-                    print("retrieve function timeout (30s)")
-                except Exception as retrieve_error:
-                    print(f"retrieve function failed: {retrieve_error}")
+                        if hasattr(result, 'content') and result.content:
+                            for content in result.content:
+                                if hasattr(content, 'text'):
+                                    print(f"Content: {content.text}")
+                        else:
+                            print("No content in result")
+                    except asyncio.TimeoutError:
+                        print("retrieve function timeout (30s)")
+                    except Exception as retrieve_error:
+                        print(f"retrieve function failed: {retrieve_error}")
                                 
-                print("\n=== MCP Connection Test Complete ===")
+                    print("\n=== MCP Connection Test Complete ===")
                 
     except Exception as e:
         print(f"MCP connection failed: {e}")
