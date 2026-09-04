@@ -10,7 +10,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 import utils
 
@@ -30,7 +30,7 @@ sharing_url = config.get("sharing_url", None)
 s3_prefix = "docs"
 
 try:
-    mcp = FastMCP(
+    mcp = MCPServer(
         name = "pdf-generator",
         instructions=(
             "You are a helpful assistant. "

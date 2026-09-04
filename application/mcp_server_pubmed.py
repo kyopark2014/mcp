@@ -1,4 +1,4 @@
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 import logging
 import sys
 import time
@@ -20,7 +20,7 @@ PUBMED_RETRY_BASE_DELAY_SEC = 1.5
 PUBMED_REQUEST_TIMEOUT_SEC = 30
 
 try:
-    mcp = FastMCP(
+    mcp = MCPServer(
         name="pubmed_tools",
     )
     logger.info("PubMed MCP server initialized successfully")

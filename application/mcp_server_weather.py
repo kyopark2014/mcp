@@ -14,7 +14,7 @@ import utils
 from botocore.config import Config
 from langchain_aws import ChatBedrock
 from langchain_core.prompts import ChatPromptTemplate
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 logging.basicConfig(
     level=logging.INFO,
@@ -145,7 +145,7 @@ def get_weather_info(city: str) -> str:
 
 
 try:
-    mcp = FastMCP(
+    mcp = MCPServer(
         name="weather",
         instructions=(
             "You are a helpful assistant that provides weather information. "

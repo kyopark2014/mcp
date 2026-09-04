@@ -5,8 +5,7 @@ import re
 import json
 import info
 
-from langchain_mcp_adapters.client import MultiServerMCPClient
-from mcp.server.fastmcp import FastMCP
+from langchain.mcp import MCPAdapter
 from langgraph.graph import START, END, StateGraph
 from typing_extensions import Annotated, TypedDict
 from langgraph.graph.message import add_messages
@@ -15,9 +14,6 @@ from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from typing import Literal
 from langchain_aws import ChatBedrock
 from botocore.config import Config
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
-from langchain_mcp_adapters.tools import load_mcp_tools
 from langgraph.prebuilt import ToolNode
 
 logger = utils.CreateLogger("agent")
@@ -253,30 +249,24 @@ def create_agent(tools):
     
     return buildChatAgent()
 
-server_params = StdioServerParameters(
-  command="python",
-  args=["/Users/ksdyb/Documents/src/mcp/mcp-rag/rag-server.py"],
-)
+MCP_SERVERS = {
+    "mcpServers": {
+        "rag": {
+            "transport": "stdio",
+            "command": "python",
+            "args": ["/Users/ksdyb/Documents/src/mcp/mcp-rag/rag-server.py"],
+        }
+    }
+}
 
 async def mcp_rag_agent(query):
-    async with stdio_client(server_params) as (read, write):
-        # Open an MCP session to interact with the math_server.py tool.
-        async with ClientSession(read, write) as session:
-            # Initialize the session.
-            await session.initialize()
-
-            logger.info(f"query: {query}")
-            
-            # Load tools
-            tools = await load_mcp_tools(session)
-            print(f"tools: {tools}")
-                            
-            agent = create_agent(tools)
-            
-            agent_response = await agent.ainvoke({"messages": query})
-            print(f"agent_response: {agent_response}")
-
-        # Return the response.
+    async with MCPAdapter(MCP_SERVERS) as adapter:
+        logger.info(f"query: {query}")
+        tools = await adapter.list_tools()
+        print(f"tools: {tools}")
+        agent = create_agent(tools)
+        agent_response = await agent.ainvoke({"messages": query})
+        print(f"agent_response: {agent_response}")
         return agent_response["messages"][-1].content
     
 import asyncio

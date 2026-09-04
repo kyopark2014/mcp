@@ -13,7 +13,7 @@ import subprocess
 import sys
 from typing import Optional
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 logging.basicConfig(
     level=logging.INFO,
@@ -23,7 +23,7 @@ logging.basicConfig(
 logger = logging.getLogger("mcp-server-gog")
 
 try:
-    mcp = FastMCP(
+    mcp = MCPServer(
         name="gog",
         instructions=(
             "You are a helpful assistant for Google Workspace (Gmail, Calendar, Drive, Contacts, Sheets, Docs). "

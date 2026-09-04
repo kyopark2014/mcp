@@ -2,10 +2,7 @@ import asyncio
 import info
 import boto3
 
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
-from langchain_mcp_adapters.tools import load_mcp_tools
-from langchain_mcp_adapters.tools import load_mcp_tools
+from langchain.mcp import MCPAdapter
 from langgraph.prebuilt import create_react_agent
 from langchain_aws import ChatBedrock
 from botocore.config import Config
@@ -87,29 +84,24 @@ def get_chat(extended_thinking):
 
 model = get_chat(extended_thinking="Disable")
 
-server_params = StdioServerParameters(
-  command="python",
-  args=["mcp-server.py"],
-)
-
-from mcp.client.stdio import stdio_client
+MCP_SERVERS = {
+  "mcpServers": {
+    "math": {
+      "transport": "stdio",
+      "command": "python",
+      "args": ["mcp-server.py"],
+    }
+  }
+}
 
 async def run_agent():
-  async with stdio_client(server_params) as (read, write):
-    # Open an MCP session to interact with the math_server.py tool.
-    async with ClientSession(read, write) as session:
-      # Initialize the session.
-      await session.initialize()
-      # Load tools
-      tools = await load_mcp_tools(session)
-      print(f"tools: {tools}")
-      # Create a ReAct agent.
-      agent = create_react_agent(model, tools)
-      # Run the agent.
-      agent_response = await agent.ainvoke({"messages": "what's (4 + 6) x 14?"})
-      print(f"agent_response: {agent_response}")
-      # Return the response.
-      return agent_response["messages"][3].content
+  async with MCPAdapter(MCP_SERVERS) as adapter:
+    tools = await adapter.list_tools()
+    print(f"tools: {tools}")
+    agent = create_react_agent(model, tools)
+    agent_response = await agent.ainvoke({"messages": "what's (4 + 6) x 14?"})
+    print(f"agent_response: {agent_response}")
+    return agent_response["messages"][3].content
 
 if __name__ == "__main__":
   result = asyncio.run(run_agent())

@@ -1,4 +1,4 @@
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 import arxiv
 import logging
 import sys
@@ -19,9 +19,9 @@ logger = logging.getLogger("arxiv_mcp")
 # Maximum number of results setting
 MAX_RESULTS = 10
 
-# FastMCP initialization
+# MCPServer initialization
 try:
-    mcp = FastMCP(
+    mcp = MCPServer(
         name="arxiv_tools",
     )
     logger.info("arXiv MCP server initialized successfully")

@@ -4,18 +4,18 @@ WORKDIR /app
 
 # Install npm and graphviz
 RUN apt-get update && apt-get install -y \
-    curl \
-    gnupg \
-    unzip \
-    wget \
-    graphviz \
-    && rm -rf /var/lib/apt/lists/*
+ curl \
+ gnupg \
+ unzip \
+ wget \
+ graphviz \
+ && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get update \
-    && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/*
+ && apt-get update \
+ && apt-get install -y nodejs \
+ && rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g npm@latest 
 
@@ -24,28 +24,28 @@ RUN npm install -g @playwright/mcp@0.0.27
 
 # Install Chrome and Playwright dependencies
 RUN apt-get update && apt-get install -y \
-    libnss3 \
-    libnspr4 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libcups2 \
-    libdrm2 \
-    libxkbcommon0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxfixes3 \
-    libxrandr2 \
-    libgbm1 \
-    libasound2 \
-    && rm -rf /var/lib/apt/lists/*
+ libnss3 \
+ libnspr4 \
+ libatk1.0-0 \
+ libatk-bridge2.0-0 \
+ libcups2 \
+ libdrm2 \
+ libxkbcommon0 \
+ libxcomposite1 \
+ libxdamage1 \
+ libxfixes3 \
+ libxrandr2 \
+ libgbm1 \
+ libasound2 \
+ && rm -rf /var/lib/apt/lists/*
 
 # Install Chrome
 RUN wget -q -O /tmp/google-chrome-key.pub https://dl-ssl.google.com/linux/linux_signing_key.pub \
-    && gpg --dearmor < /tmp/google-chrome-key.pub > /etc/apt/trusted.gpg.d/google-chrome.gpg \
-    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list \
-    && apt-get update \
-    && apt-get install -y google-chrome-stable \
-    && rm -rf /var/lib/apt/lists/* /tmp/google-chrome-key.pub
+ && gpg --dearmor < /tmp/google-chrome-key.pub > /etc/apt/trusted.gpg.d/google-chrome.gpg \
+ && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list \
+ && apt-get update \
+ && apt-get install -y google-chrome-stable \
+ && rm -rf /var/lib/apt/lists/* /tmp/google-chrome-key.pub
 
 # Install MCP packages globally
 RUN npm install -g @modelcontextprotocol/server-filesystem
@@ -58,13 +58,13 @@ RUN pip install terminal-control-mcp
 RUN pip install streamlit streamlit-chat streamlit_paste_button
 RUN pip install pandas numpy
 RUN pip install boto3 langchain_aws langchain langchain_community langgraph langchain_experimental langgraph-supervisor langgraph-swarm langchain-text-splitters
-RUN pip install mcp langchain-mcp-adapters
+RUN pip install "mcp>=2.1.1"
 RUN pip install tavily-python==0.5.0 pytz>=2025.2
 RUN pip install beautifulsoup4==4.12.3 plotly_express==0.4.1 matplotlib==3.10.0 PyPDF2==3.0.1
 RUN pip install opensearch-py wikipedia aioboto3 requests
 RUN pip install uv kaleido diagrams graphviz
 RUN pip install sarif-om==1.0.4 arxiv==2.2.0 chembl-webresource-client==0.10.9 pytrials==1.0.0
-RUN pip install strands-agents strands-agents-tools reportlab arize-phoenix colorama
+RUN pip install "strands-agents[openai,otel] @ git+https://github.com/strands-agents/sdk-python.git@main#subdirectory=strands-py" "strands-agents-tools>=0.8.1"
 RUN pip install rich==13.9.0 bedrock-agentcore claude-agent-sdk nest-asyncio finance-datareader
 RUN pip install nova-act
 RUN pip install browser-use

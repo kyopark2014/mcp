@@ -14,7 +14,7 @@ import boto3
 from botocore.config import Config
 from langchain_aws import ChatBedrock
 from langchain_core.messages import HumanMessage
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from PIL import Image
 
 import info
@@ -36,7 +36,7 @@ model_id = profile["model_id"]
 model_type = profile["model_type"]
 
 try:
-    mcp = FastMCP(
+    mcp = MCPServer(
         name="text_extraction",
         instructions=(
             "Extract text from images using an LLM. "

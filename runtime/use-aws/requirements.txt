@@ -1,5 +1,6 @@
 boto3
-mcp
+mcp>=2.1.1
 uv
 rich
 colorama
+httpx2

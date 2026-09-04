@@ -1,4 +1,4 @@
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 import wikipedia
 import logging
 import sys
@@ -12,7 +12,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("rag")
 
-mcp = FastMCP(
+mcp = MCPServer(
     name="Wikipedia",
     dependencies=["wikipedia"],
 )

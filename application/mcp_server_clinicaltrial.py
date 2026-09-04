@@ -1,5 +1,5 @@
 # REF: https://github.com/JackKuo666/ClinicalTrials-MCP-Server
-from mcp.server.fastmcp import FastMCP, Context
+from mcp.server.mcpserver import MCPServer
 from pytrials.client import ClinicalTrials
 import pandas as pd
 import os
@@ -18,7 +18,7 @@ logging.basicConfig(
 logger = logging.getLogger("chembl_mcp")
 
 try:
-    mcp = FastMCP(
+    mcp = MCPServer(
         name="clinicaltrial_tools",
     )
     logger.info("Clinical Trial MCP server initialized successfully")

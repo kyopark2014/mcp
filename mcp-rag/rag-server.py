@@ -68,9 +68,9 @@ def retrieve_knowledge_base(query):
 
     return payload['response'], []    
 
-from mcp.server.fastmcp import FastMCP 
+from mcp.server.mcpserver import MCPServer 
 
-mcp = FastMCP("Search") 
+mcp = MCPServer("Search") 
 
 @mcp.tool()
 def add(a: int, b: int) -> int:

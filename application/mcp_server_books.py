@@ -5,7 +5,7 @@ import logging
 import sys
 import requests
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from bs4 import BeautifulSoup
 
 logging.basicConfig(
@@ -18,7 +18,7 @@ logging.basicConfig(
 logger = logging.getLogger("mcp-server-books")
 
 try:
-    mcp = FastMCP(
+    mcp = MCPServer(
         name="books",
         instructions=(
             "You are a helpful assistant that searches for books. "

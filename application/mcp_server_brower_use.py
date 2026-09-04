@@ -18,7 +18,7 @@ import base64
 import tempfile
 from typing import Optional, Literal
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,7 +28,7 @@ logging.basicConfig(
 logger = logging.getLogger("mcp-server-browser-use")
 
 try:
-    mcp = FastMCP(
+    mcp = MCPServer(
         name="browser_use",
         instructions=(
             "You are a browser automation assistant using the browser-use CLI. "

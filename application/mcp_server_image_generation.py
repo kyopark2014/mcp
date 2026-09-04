@@ -8,7 +8,7 @@ from typing import Optional
 
 import boto3
 from botocore.config import Config
-from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.mcpserver import Context, MCPServer
 from pydantic import Field
 
 logging.basicConfig(
@@ -124,7 +124,7 @@ def _save_and_upload(result: dict, prefix: str = "sd35l") -> dict:
 
 
 try:
-    mcp = FastMCP(
+    mcp = MCPServer(
         name="image_generation",
         instructions=(
             "You are a helpful assistant that generates images using Stable Diffusion 3.5 Large. "

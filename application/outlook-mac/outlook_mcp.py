@@ -35,7 +35,7 @@ from datetime import datetime
 from functools import wraps
 from typing import Any, Dict, List, Optional, Union
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 # Import our custom modules
 from sqlite_tools import register_tools, cleanup as sqlite_cleanup
@@ -304,7 +304,7 @@ def run_applescript_js(script_path, *args):
         raise
 
 # Create custom MCP class to log all commands
-class LoggingMCP(FastMCP):
+class LoggingMCP(MCPServer):
     def handle_command(self, command: Dict[str, Any]) -> Dict[str, Any]:
         logger.info(f"Received command: {command}")
         try:

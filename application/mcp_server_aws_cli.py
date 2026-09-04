@@ -4,7 +4,7 @@ import os
 import aws_cli as aws_utils
 import sys
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from typing import Any, Dict, List, Optional
 
 import boto3
@@ -23,7 +23,7 @@ logging.basicConfig(
 logger = logging.getLogger("mcp-server-aws-cost")
 
 try:
-    mcp = FastMCP(
+    mcp = MCPServer(
         name = "aws_cli",
         instructions=(
             "You are a helpful assistant. "

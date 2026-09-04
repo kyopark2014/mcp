@@ -3,7 +3,7 @@ import sys
 import mcp_storage as storage
 
 from typing import Dict, Optional, Any
-from mcp.server.fastmcp import FastMCP 
+from mcp.server.mcpserver import MCPServer 
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -15,7 +15,7 @@ logging.basicConfig(
 logger = logging.getLogger("aws-s3")
 
 try:
-    mcp = FastMCP(
+    mcp = MCPServer(
         name = "aws_storage",
         instructions=(
             "You are a helpful assistant. "

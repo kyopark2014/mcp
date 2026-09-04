@@ -3,7 +3,7 @@ import json
 import sys
 import trade_info
 from typing import Dict, Optional, List
-from mcp.server.fastmcp import FastMCP 
+from mcp.server.mcpserver import MCPServer 
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -15,7 +15,7 @@ logging.basicConfig(
 logger = logging.getLogger("mcp_server_trade_info")
 
 try:
-    mcp = FastMCP(
+    mcp = MCPServer(
         name = "trade_info",
         instructions=(
             "You are a helpful assistant that can provide stock information. "

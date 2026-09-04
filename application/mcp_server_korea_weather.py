@@ -8,7 +8,7 @@ import sys
 import re
 import requests
 import traceback
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 logging.basicConfig(
     level=logging.INFO,
@@ -414,7 +414,7 @@ def get_korea_weather_info(location: str) -> str:
 
 
 try:
-    mcp = FastMCP(
+    mcp = MCPServer(
         name="korea-weather",
         instructions=(
             "한국 지역의 날씨 정보를 기상청 날씨누리와 에어코리아에서 조회합니다. "

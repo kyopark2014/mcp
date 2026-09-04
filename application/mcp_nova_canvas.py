@@ -1,4 +1,4 @@
-from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.mcpserver import Context, MCPServer
 import logging
 import os
 import sys

@@ -2,7 +2,7 @@ import logging
 import sys
 import mcp_cost as cost
 
-from mcp.server.fastmcp import FastMCP 
+from mcp.server.mcpserver import MCPServer 
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -14,7 +14,7 @@ logging.basicConfig(
 logger = logging.getLogger("mcp-server-aws-cost")
 
 try:
-    mcp = FastMCP(
+    mcp = MCPServer(
         name = "AWS_Cost",
         instructions=(
             "You are a helpful assistant. "

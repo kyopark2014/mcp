@@ -1,4 +1,4 @@
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 import logging
 import sys
 from typing import Any, List, Dict
@@ -16,7 +16,7 @@ logging.basicConfig(
 logger = logging.getLogger("chembl_mcp")
 
 try:
-    mcp = FastMCP(
+    mcp = MCPServer(
         name="chembl_tools",
     )
     logger.info("ChEMBL MCP server initialized successfully")

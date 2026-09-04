@@ -3,7 +3,7 @@ import sys
 import mcp_repl_coder as coder
 from pydantic import Field
 
-from mcp.server.fastmcp import FastMCP 
+from mcp.server.mcpserver import MCPServer 
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -15,7 +15,7 @@ logging.basicConfig(
 logger = logging.getLogger("coder")
 
 try:
-    mcp = FastMCP(
+    mcp = MCPServer(
         name = "coder",
         instructions=(
             "You are a helpful assistant. "

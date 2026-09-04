@@ -3,7 +3,7 @@ import sys
 import mcp_browser as browser
 
 from typing import Dict, Optional, Any
-from mcp.server.fastmcp import FastMCP 
+from mcp.server.mcpserver import MCPServer 
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -15,7 +15,7 @@ logging.basicConfig(
 logger = logging.getLogger("mcp-server-browser")
 
 try:
-    mcp = FastMCP(
+    mcp = MCPServer(
         name = "mcp-server-browser",
         instructions=(
             "You are a helpful assistant. "

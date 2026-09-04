@@ -4,7 +4,7 @@ import mcp_log as log
 import os
 
 from typing import Dict, Optional, Any
-from mcp.server.fastmcp import FastMCP 
+from mcp.server.mcpserver import MCPServer 
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -18,7 +18,7 @@ logger = logging.getLogger("aws-log")
 aws_region = os.environ.get("AWS_REGION", "us-west-2")
 
 try:
-    mcp = FastMCP(
+    mcp = MCPServer(
         name = "aws_log",
         instructions=(
             "You are a helpful assistant. "

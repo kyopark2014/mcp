@@ -5,7 +5,7 @@ pandas
 numpy
 boto3
 langchain_aws
-langchain
+langchain[mcp]>=1.4.0
 langchain-openai
 openai>=2.41.0
 langchain_community
@@ -23,8 +23,7 @@ plotly_express==0.4.1
 matplotlib==3.10.0
 PyPDF2==3.0.1
 opensearch-py
-mcp
-langchain-mcp-adapters
+mcp>=2.1.1
 wikipedia
 aioboto3
 requests
@@ -36,6 +35,7 @@ sarif-om==1.0.4
 arxiv==2.2.0
 chembl-webresource-client==0.10.9
 pytrials==1.0.0
+# strands-agents: for MCP 2.x _compat, prefer git main if pip pin lacks it
 strands-agents
 strands-agents-tools
 reportlab
@@ -46,3 +46,4 @@ rich==13.9.0
 bedrock-agentcore
 claude-agent-sdk
 nest-asyncio
+httpx2

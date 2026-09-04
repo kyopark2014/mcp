@@ -1,4 +1,4 @@
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 import logging
 import sys
 from typing import List, Literal, Optional
@@ -30,7 +30,7 @@ if not api_key:
     logger.warning(f"{err_msg} - Tavily tools will not be available")
 
 try:
-    mcp = FastMCP(
+    mcp = MCPServer(
         name="tavily_tools",
     )
     logger.info("Tavily MCP server initialized successfully")
