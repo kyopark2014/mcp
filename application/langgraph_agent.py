@@ -216,6 +216,8 @@ def execute_code(code: str) -> str:
         old_stdout, old_stderr = sys.stdout, sys.stderr
         sys.stdout, sys.stderr = stdout_capture, stderr_capture
 
+        _ensure_cli_scripts_on_path()
+        _ensure_user_site_on_sys_path()
         _ensure_matplotlib_runtime()
         exec(code, _exec_globals)
 
@@ -488,16 +490,70 @@ def _ensure_cli_scripts_on_path() -> None:
             parts.insert(0, d)
     os.environ["PATH"] = os.pathsep.join(parts)
 
+
+def _ensure_user_site_on_sys_path() -> None:
+    """Expose pip --user site-packages to this process (and PYTHONPATH for children).
+
+    Runtime runs as appuser, so `pip install` lands under ~/.local. site.py only
+    adds USER_SITE at interpreter startup if that directory already exists; packages
+    installed later (bash/execute_code) stay invisible until we addsitedir here.
+    """
+    import site
+
+    try:
+        user_site = site.getusersitepackages()
+    except Exception:
+        return
+    if not user_site or not os.path.isdir(user_site):
+        return
+
+    # addsitedir also honors .pth files; skip if already on path
+    if user_site not in sys.path:
+        site.addsitedir(user_site)
+
+    py_path = os.environ.get("PYTHONPATH", "")
+    parts = [p for p in py_path.split(os.pathsep) if p]
+    if user_site not in parts:
+        parts.insert(0, user_site)
+        os.environ["PYTHONPATH"] = os.pathsep.join(parts)
+
+
+class _UserSiteRefreshFinder:
+    """Refresh USER_SITE on import so mid-exec `pip install` + `import` works."""
+
+    def find_spec(self, fullname, path=None, target=None):  # noqa: ARG002
+        import site
+
+        try:
+            user_site = site.getusersitepackages()
+        except Exception:
+            return None
+        if user_site and os.path.isdir(user_site) and user_site not in sys.path:
+            _ensure_user_site_on_sys_path()
+        return None
+
+
+def _install_user_site_import_hook() -> None:
+    if any(isinstance(f, _UserSiteRefreshFinder) for f in sys.meta_path):
+        return
+    sys.meta_path.insert(0, _UserSiteRefreshFinder())
+
+
+_install_user_site_import_hook()
+
 @tool
 def bash(command: str) -> str:
     """Execute a bash command and return the result"""
     logger.info(f"###### bash: {command} ######")
     _ensure_cli_scripts_on_path()
+    _ensure_user_site_on_sys_path()
     result = subprocess.run(
         command, shell=True, capture_output=True, text=True,
         cwd=WORKING_DIR, timeout=300,
         env=os.environ,
     )
+    # pip install may have just created ~/.local/.../site-packages
+    _ensure_user_site_on_sys_path()
     parts = []
     if result.stdout:
         parts.append(f"STDOUT:\n{result.stdout}")
@@ -506,6 +562,8 @@ def bash(command: str) -> str:
     if result.returncode != 0:
         parts.append(f"Return code: {result.returncode}")
     return "\n".join(parts) if parts else "(no output)"
+
+
 
 
 def get_builtin_tools() -> list:
