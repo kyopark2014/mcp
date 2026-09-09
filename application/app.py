@@ -307,6 +307,7 @@ with st.sidebar:
             "Claude 4.5 Opus",  
             "OpenAI GPT 5.4",
             "OpenAI GPT 5.5",
+            "OpenAI GPT 6 Astra",
             "OpenAI GPT 5.6 Sol",
             "OpenAI GPT 5.6 Terra",
             "OpenAI GPT 5.6 Luna",
