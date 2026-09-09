@@ -379,7 +379,7 @@ def get_max_output_tokens(model_id: str = "") -> int:
 
 
 def _build_openai_chat(profile: dict, max_output_tokens: int):
-    """Build OpenAI-on-Bedrock chat model (Mantle Responses API or invoke_model)."""
+    """Build OpenAI-on-Bedrock chat model (Mantle Responses API or Converse)."""
     bedrock_region = profile["bedrock_region"]
     model_id = profile["model_id"]
     mantle_api = profile.get("mantle_api", "chat")
@@ -396,24 +396,15 @@ def _build_openai_chat(profile: dict, max_output_tokens: int):
             max_tokens=max_output_tokens,
         )
 
-    boto3_bedrock = boto3.client(
-        service_name="bedrock-runtime",
+    # GPT-5.6 / Astra etc.: Bedrock Converse + inference profile (us.openai.*)
+    converse_chat = ChatBedrockConverse(
+        model=model_id,
         region_name=bedrock_region,
-        config=Config(
-            retries={"max_attempts": 30},
-            read_timeout=300,
-        ),
+        max_tokens=max_output_tokens,
+        provider="openai",
     )
-    chat = ChatBedrock(
-        model_id=model_id,
-        client=boto3_bedrock,
-        model_kwargs={
-            "max_tokens": max_output_tokens,
-        },
-        region_name=bedrock_region,
-    )
-    chat.streaming = False
-    return chat
+    converse_chat.streaming = False
+    return converse_chat
 
 
 def get_chat(extended_thinking):
