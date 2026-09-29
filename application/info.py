@@ -106,6 +106,25 @@ claude_5_0_sonnet_models = [   # Sonnet 5
     }
 ]
 
+# Sonnet 5.5 has no geo inference profile; Bedrock exposes only the global ID.
+claude_5_5_sonnet_models = [   # Sonnet 5.5
+    {
+        "bedrock_region": "us-west-2", # Oregon
+        "model_type": "claude",
+        "model_id": "global.anthropic.claude-sonnet-5-5"
+    },
+    {
+        "bedrock_region": "us-east-1", # N.Virginia
+        "model_type": "claude",
+        "model_id": "global.anthropic.claude-sonnet-5-5"
+    },
+    {
+        "bedrock_region": "us-east-2", # Ohio
+        "model_type": "claude",
+        "model_id": "global.anthropic.claude-sonnet-5-5"
+    }
+]
+
 claude_5_0_opus_models = [   # Opus 5
     {
         "bedrock_region": "us-west-2", # Oregon
@@ -443,6 +462,8 @@ def get_model_info(model_name):
         models = claude_4_6_sonnet_models
     elif model_name == "Claude 5.0 Sonnet":
         models = claude_5_0_sonnet_models
+    elif model_name == "Claude 5.5 Sonnet":
+        models = claude_5_5_sonnet_models
     elif model_name == "Claude 5.0 Opus":
         models = claude_5_0_opus_models
     elif model_name == "Claude 5.5 Opus":
