@@ -742,6 +742,18 @@ def get_parallel_processing_chat(models, selected):
         parameters["temperature"] = 0.1
         parameters["top_k"] = 250
 
+    _mid = (modelId or "").lower()
+    if (
+        "fable" in _mid
+        or "claude-sonnet-5" in _mid
+        or "claude-5-sonnet" in _mid
+        or "claude-opus-5" in _mid
+        or "claude-5-opus" in _mid
+    ):
+        parameters.pop("temperature", None)
+        parameters.pop("top_k", None)
+        parameters.pop("top_p", None)
+        parameters.pop("thinking", None)
     chat = ChatBedrock(   # new chat model
         model_id=modelId,
         client=boto3_bedrock, 
