@@ -765,11 +765,11 @@ def load_config(mcp_type):
         }
 
     elif mcp_type == "websearch":
-        gateway_url = get_agentcore_gateway_mcp_url("gateway-websearch", "us-east-1")
+        gateway_url = get_agentcore_gateway_mcp_url("gateway-websearch", "us-west-2")
         if not gateway_url:
             logger.info(
                 "AgentCore gateway websearch MCP skipped: "
-                "gateway-websearch not found in us-east-1."
+                "gateway-websearch not found in us-west-2."
             )
             return {}
         return {
@@ -778,7 +778,7 @@ def load_config(mcp_type):
                     "type": "streamable_http",
                     "url": gateway_url,
                     "auth_type": "aws_sigv4",
-                    "auth_region": "us-east-1",
+                    "auth_region": "us-west-2",
                     "auth_service": "bedrock-agentcore",
                 }
             }
