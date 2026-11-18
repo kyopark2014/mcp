@@ -315,6 +315,42 @@ openai_gpt_5_5_models = [
     },
 ]
 
+openai_gpt_6_2_astra_models = [   # GPT-6.2 Astra via Bedrock Converse
+    {
+        "bedrock_region": "us-west-2", # Oregon
+        "model_type": "openai",
+        "model_id": "us.openai.gpt-6.2-astra",
+    },
+    {
+        "bedrock_region": "us-east-1", # N.Virginia
+        "model_type": "openai",
+        "model_id": "us.openai.gpt-6.2-astra",
+    },
+    {
+        "bedrock_region": "us-east-2", # Ohio
+        "model_type": "openai",
+        "model_id": "us.openai.gpt-6.2-astra",
+    },
+]
+
+openai_gpt_6_2_sol_models = [   # GPT-6.2 Sol via Bedrock Converse
+    {
+        "bedrock_region": "us-west-2", # Oregon
+        "model_type": "openai",
+        "model_id": "us.openai.gpt-6.2-sol",
+    },
+    {
+        "bedrock_region": "us-east-1", # N.Virginia
+        "model_type": "openai",
+        "model_id": "us.openai.gpt-6.2-sol",
+    },
+    {
+        "bedrock_region": "us-east-2", # Ohio
+        "model_type": "openai",
+        "model_id": "us.openai.gpt-6.2-sol",
+    },
+]
+
 openai_gpt_6_astra_models = [   # GPT-6 Astra via Bedrock Converse
     {
         "bedrock_region": "us-west-2", # Oregon
@@ -500,6 +536,10 @@ def get_model_info(model_name):
         models = openai_gpt_54_models
     elif model_name == "OpenAI GPT 5.5":
         models = openai_gpt_5_5_models
+    elif model_name == "OpenAI GPT 6.2 Astra":
+        models = openai_gpt_6_2_astra_models
+    elif model_name == "OpenAI GPT 6.2 Sol":
+        models = openai_gpt_6_2_sol_models
     elif model_name == "OpenAI GPT 6 Astra":
         models = openai_gpt_6_astra_models
     elif model_name == "OpenAI GPT 6.1 Sol":
